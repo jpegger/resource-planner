@@ -1,0 +1,164 @@
+// ============================================================
+// Resource Planner — Prisma Schema
+// Stack: Next.js 14 + Prisma + PostgreSQL
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum ResourceType {
+  INTERNAL
+  EXTERNAL
+  DIRECT_COST
+}
+
+enum InitiativeStatus {
+  IN_PROGRESS
+  DONE
+  SELECTED_FOR_DEVELOPMENT
+  RFP
+}
+
+enum InitiativeType {
+  RUN
+  EVOLUTION
+  ROLLOUT
+  PROJET
+  NOUVEAU_SERVICE
+  ANALYSE
+  EVOLUTION_TECHNIQUE
+  PRODUCT_ACTIVATION
+  DECOMMISSIONNEMENT
+  LEGAL
+}
+
+// ============================================================
+// RESOURCES
+// ============================================================
+
+model Resource {
+  // Use original MAT-xxxxxxx IDs from your system
+  id          String       @id               // MAT-0000xxx
+  fullName    String
+  firstName   String?
+  lastName    String?
+  function    String?
+  cellule     String?
+  direction   String?
+  type        ResourceType
+
+  rates       Rate[]
+  allocations Allocation[]
+
+  createdOn   DateTime
+  modifiedOn  DateTime
+
+  @@map("resource")
+}
+
+// ============================================================
+// RATES
+// Individual rate per resource per year.
+// Rows with null resourceId in source CSV are skipped (orphaned).
+// ============================================================
+
+model Rate {
+  id             String   @id               // RATE-xxxxxxx
+  resourceId     String
+  resource       Resource @relation(fields: [resourceId], references: [id])
+  year           Int
+  dailyRate      Float
+  // For Direct Costs: always 1.0 (unit cost model)
+  // For Internal/External: null — use RateStandard.nbrDaysPerYear
+  nbrDaysPerYear Float?
+
+  createdOn      DateTime
+  modifiedOn     DateTime
+
+  @@unique([resourceId, year])
+  @@map("rate")
+}
+
+// ============================================================
+// STANDARD RATES
+// Fallback rate by year × type (INTERNAL or EXTERNAL only).
+// Direct Costs always have an individual Rate — no standard fallback.
+// ============================================================
+
+model RateStandard {
+  id             String       @id           // SRATE-x
+  year           Int
+  type           ResourceType              // INTERNAL or EXTERNAL
+  dailyRate      Float
+  nbrDaysPerYear Int                       // 200 internal, 220 external
+
+  createdOn      DateTime
+  modifiedOn     DateTime
+
+  @@unique([year, type])
+  @@map("rate_standard")
+}
+
+// ============================================================
+// INITIATIVES
+// Synced from Jira. jiraKey (RI-xxx) is the natural PK used
+// across all relations. powerId (INI-xxx) is mostly null in
+// practice — kept for reference only.
+// ============================================================
+
+model Initiative {
+  id             String            @id     // jira_key: RI-xxx
+  powerId        String?           @unique // INI-xxx, mostly null
+  summary        String
+  status         String                    // kept as String — Jira values vary
+  year           Int                       // drives which rate year is used
+  components     String?                   // = Product (from Jira components field)
+  productGroup   String?
+  initiativeType String?
+  createdOn      DateTime
+  modifiedOn     DateTime
+
+  allocations    Allocation[]
+
+  @@map("initiative")
+}
+
+// ============================================================
+// ALLOCATIONS
+// One row per resource × initiative assignment.
+// manDays and quantity are mutually exclusive:
+//   - Internal/External + man-days billing → use manDays
+//   - Internal/External + FTE billing      → use quantity (decimal FTE, e.g. 0.5)
+//   - Direct Costs                         → use quantity (units, e.g. 2.0 = 2 licences)
+// Cost is always computed, never stored.
+// ============================================================
+
+model Allocation {
+  id               String     @id           // ASS-xxxxxxx (PowerId)
+  externalId       String?    @unique       // InitiativeRessourceAssignementExternalId
+
+  initiativeId     String
+  initiative       Initiative @relation(fields: [initiativeId], references: [id])
+
+  resourceId       String
+  resource         Resource   @relation(fields: [resourceId], references: [id])
+
+  // Planning values — mutually exclusive in practice (only 2 rows use both)
+  manDays          Float?                   // man-day billing
+  quantity         Float?                   // %FTE (0.5 = 50%) OR units for Direct Costs
+
+  createdOn        DateTime
+  modifiedOn       DateTime
+
+  @@map("allocation")
+}
