@@ -45,7 +45,7 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# Local initiative / assignment exports (keep out of version control)
-scripts/data/Initiatives.csv
-scripts/data/InitiativeRessourceAssignement.csv
-scripts/data-prod/Assignement.csv
+# Seed and prod CSV exports (never push; .gitignore does not untrack already-committed files)
+scripts/data/**
+scripts/data-prod/**
+
