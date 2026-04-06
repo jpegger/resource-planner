@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.2.1 · April 2026**
+**Paradigm · Brussels Capital Region · v1.2.2 · April 2026**
 
 ---
 
@@ -348,8 +348,20 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource |
 | `/api/rates` | GET, POST | GET by resourceId. POST creates new rate. |
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
-| `/api/products` | GET | List products (optional search) |
-| `/api/products/[id]` | GET | One product by id |
+| `/api/products` | GET | List all products (ordered by family, name) |
+| `/api/products/[id]` | GET, PATCH, DELETE | One product by id; PATCH updates catalog fields |
+
+### 6.3 Initiatives page — server props, dynamic client, and product catalog
+
+The initiatives UI is loaded with **`next/dynamic`** and **`ssr: false`** (`initiatives-dynamic-shell.tsx`) so the heavy client bundle does not participate in SSR/hydration (avoids dev-only Turbopack placeholder drift against the real client bundle).
+
+**Trade-off:** props passed from the React Server Component into that dynamic client boundary are not fully reliable for **nested objects** or, in practice, for **some extra scalar fields** on large DTO arrays — `productName` / `productTeam` tended to arrive, while org/SAP/marketing fields on the same initiative sometimes did not.
+
+**Mitigations (implemented):**
+
+1. **`InitiativeDTO` is flat** — catalog fields (`productFamily`, `division`, `subDivision`, `sapEotpCode`, `sapEotpName`, `attractiveness`, `competitiveness`) live as top-level nullable scalars next to `productId`, `productName`, `productTeam` — not nested under a `productDetails` object.
+2. **Stable wire shape** — `initiatives/page.tsx` runs `JSON.parse(JSON.stringify(initiatives))` before passing the list to the shell so every row is a plain object with a consistent JSON-serializable shape.
+3. **Authoritative catalog on selection** — when the user selects an initiative, the client loads the full **`Product`** row via **`GET /api/products/[id]`** when `productId` is set; if `productId` is missing on the client but `productName` is present, it falls back to **`GET /api/products`** and matches by name (case-insensitive). The Product detail card merges this response with the DTO so SAP EOTP and org fields always reflect the database.
 
 ---
 
@@ -359,7 +371,8 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 
 Master-detail layout. Left panel: scrollable filtered list of all initiatives. Right panel: read-only details + editable allocation grid.
 
-- **Filters** — Text search (case-insensitive contains on key/summary/product/group), Year dropdown, Product dropdown, Group dropdown, Reset button
+- **Product card** — Title shows linked catalog **product name** (or “No product linked”). Body shows **product family, division, sub-division, team, SAP EOTP code/name, attractiveness, competitiveness** — sourced from the **`Product`** row via the API when an initiative is selected (see §6.3). Table columns **Product** and **Team** still come from the initiative list DTO for fast filtering.
+- **Filters** — Text search (case-insensitive contains on key/summary/product/group), Year dropdown, Product dropdown, Team dropdown, Reset button
 - **Jira Refresh** — Button calls `/api/jira/sync` — upserts latest initiatives from Jira
 - **Allocation grid** — Assignment ID, Percent (numeric input), Man Days (numeric input), Resource (combobox), Delete button
 - **Resource combobox** — Uses cmdk with `shouldFilter=false` and custom case-insensitive contains filter across 600+ resources
@@ -517,6 +530,7 @@ Consolidated documentation of major changes since the initial design doc:
 - **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `product`.
 - **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost quantity path uses per-unit days from the individual rate or **1** if absent (see §2.6 — avoids treating missing licence rates as 200 “man-days”).
 - **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
+- **Initiatives Product card (v1.2.2)** — Flat `InitiativeDTO` + `JSON.parse(JSON.stringify)` on the server list; client fetches full **`Product`** via `/api/products/[id]` (or list + name match) on selection so SAP/org fields display reliably despite `dynamic(..., { ssr: false })` (see §6.3). `initiatives-dynamic-shell.tsx` wraps the page client.
 - **Migrations** — When altering columns referenced by `v_allocation_costs`, migrations may need `DROP VIEW IF EXISTS v_allocation_costs` first.
 - **Repository** — Large or sensitive production CSVs may be gitignored; initiative/assignment exports are excluded from version control by policy.
 
@@ -528,7 +542,9 @@ Consolidated documentation of major changes since the initial design doc:
 src/
   app/
     layout.tsx                  ← Root layout (nav sidebar, header)
-    initiatives/page.tsx        ← Initiatives master-detail screen (complete)
+    initiatives/page.tsx              ← Server: loads initiatives + products → DTO list
+    initiatives/initiatives-dynamic-shell.tsx  ← dynamic(ssr:false) wrapper for initiatives UI
+    initiatives/initiatives-client.tsx ← Client: filters, Product card + API catalog fetch, allocations
     resources/page.tsx          ← Resources screen (in progress)
     api/
       jira/sync/route.ts        ← Jira sync (in progress)
@@ -553,4 +569,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.2.1 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.2.2 (see §11.3 changelog)*

@@ -24,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -43,6 +42,20 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+/** Subset of Product from GET /api/products/[id] — used to bypass RSC→dynamic prop loss for catalog fields. */
+export type ProductCatalogDTO = {
+  id: string;
+  name: string;
+  productFamily: string | null;
+  division: string | null;
+  subDivision: string | null;
+  team: string | null;
+  sapEotpCode: string | null;
+  sapEotpName: string | null;
+  attractiveness: number | null;
+  competitiveness: number | null;
+};
+
 export type InitiativeDTO = {
   id: string;
   powerId: string | null;
@@ -51,6 +64,20 @@ export type InitiativeDTO = {
   year: number;
   components: string | null;
   productGroup: string | null;
+  /** FK to Product.id when linked. */
+  productId: string | null;
+  /** From linked Product row (productId); not Jira `components`. */
+  productName: string | null;
+  /** From linked Product.team; not Jira `productGroup`. */
+  productTeam: string | null;
+  /** Flat catalog fields (must stay top-level — nested objects are dropped in RSC → dynamic client). */
+  productFamily: string | null;
+  division: string | null;
+  subDivision: string | null;
+  sapEotpCode: string | null;
+  sapEotpName: string | null;
+  attractiveness: number | null;
+  competitiveness: number | null;
   initiativeType: string | null;
   createdOn: string;
   modifiedOn: string;
@@ -73,6 +100,29 @@ type Props = {
 };
 
 const ALL = "all";
+/** Filter value for initiatives with no linked Product */
+const UNASSIGNED = "__unassigned__";
+
+function parseProductJson(o: Record<string, unknown>): ProductCatalogDTO {
+  return {
+    id: String(o.id),
+    name: typeof o.name === "string" ? o.name : "",
+    productFamily: o.productFamily == null ? null : String(o.productFamily),
+    division: o.division == null ? null : String(o.division),
+    subDivision: o.subDivision == null ? null : String(o.subDivision),
+    team: o.team == null ? null : String(o.team),
+    sapEotpCode: o.sapEotpCode == null ? null : String(o.sapEotpCode),
+    sapEotpName: o.sapEotpName == null ? null : String(o.sapEotpName),
+    attractiveness:
+      typeof o.attractiveness === "number" && Number.isFinite(o.attractiveness)
+        ? o.attractiveness
+        : null,
+    competitiveness:
+      typeof o.competitiveness === "number" && Number.isFinite(o.competitiveness)
+        ? o.competitiveness
+        : null,
+  };
+}
 
 async function patchAllocation(id: string, body: Record<string, unknown>) {
   const res = await fetch(`/api/allocations/${encodeURIComponent(id)}`, {
@@ -94,6 +144,11 @@ function FieldReadonly({ label, value }: { label: string; value: string }) {
       <div className="rounded-md border border-input bg-muted/40 px-2.5 py-1.5 text-sm">{value || "—"}</div>
     </div>
   );
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "";
+  return Number.isInteger(n) ? String(n) : String(n);
 }
 
 function ResourceCombobox({
@@ -315,11 +370,13 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState<string>(ALL);
   const [productFilter, setProductFilter] = useState<string>(ALL);
-  const [groupFilter, setGroupFilter] = useState<string>(ALL);
+  const [teamFilter, setTeamFilter] = useState<string>(ALL);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationDTO[]>([]);
   const [allocLoading, setAllocLoading] = useState(false);
+  const [catalogProduct, setCatalogProduct] = useState<ProductCatalogDTO | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const years = useMemo(
@@ -329,28 +386,50 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
   const products = useMemo(() => {
     const s = new Set<string>();
     for (const i of initiatives) {
-      if (i.components?.trim()) s.add(i.components.trim());
+      if (i.productName?.trim()) s.add(i.productName.trim());
     }
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [initiatives]);
-  const groups = useMemo(() => {
+  const teams = useMemo(() => {
     const s = new Set<string>();
     for (const i of initiatives) {
-      if (i.productGroup?.trim()) s.add(i.productGroup.trim());
+      if (i.productTeam?.trim()) s.add(i.productTeam.trim());
     }
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [initiatives]);
+  const hasUnassignedProduct = useMemo(
+    () => initiatives.some((i) => !i.productName?.trim()),
+    [initiatives]
+  );
+  const hasUnassignedTeam = useMemo(
+    () => initiatives.some((i) => !i.productTeam?.trim()),
+    [initiatives]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initiatives.filter((i) => {
       if (yearFilter !== ALL && String(i.year) !== yearFilter) return false;
-      if (productFilter !== ALL && (i.components?.trim() ?? "") !== productFilter) return false;
-      if (groupFilter !== ALL && (i.productGroup?.trim() ?? "") !== groupFilter) return false;
+      if (productFilter !== ALL) {
+        if (productFilter === UNASSIGNED) {
+          if (i.productName?.trim()) return false;
+        } else if ((i.productName?.trim() ?? "") !== productFilter) {
+          return false;
+        }
+      }
+      if (teamFilter !== ALL) {
+        if (teamFilter === UNASSIGNED) {
+          if (i.productTeam?.trim()) return false;
+        } else if ((i.productTeam?.trim() ?? "") !== teamFilter) {
+          return false;
+        }
+      }
       if (!q) return true;
       const hay = [
         i.id,
         i.summary,
+        i.productName ?? "",
+        i.productTeam ?? "",
         i.components ?? "",
         i.productGroup ?? "",
         i.initiativeType ?? "",
@@ -359,12 +438,80 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [initiatives, search, yearFilter, productFilter, groupFilter]);
+  }, [initiatives, search, yearFilter, productFilter, teamFilter]);
 
   const selected = useMemo(
     () => (selectedId ? initiatives.find((i) => i.id === selectedId) ?? null : null),
     [initiatives, selectedId]
   );
+
+  useEffect(() => {
+    const pid = selected?.productId?.trim();
+    const pname = selected?.productName?.trim();
+    if (!pid && !pname) {
+      setCatalogProduct(null);
+      setCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCatalogLoading(true);
+    setCatalogProduct(null);
+
+    const loadById = () =>
+      fetch(`/api/products/${encodeURIComponent(pid!)}`).then((r) => (r.ok ? r.json() : null));
+
+    const loadByName = () =>
+      fetch(`/api/products`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((list: unknown) => {
+          if (!Array.isArray(list)) return null;
+          const row = list.find(
+            (x) =>
+              x &&
+              typeof x === "object" &&
+              "name" in x &&
+              typeof (x as { name: unknown }).name === "string" &&
+              (x as { name: string }).name.trim().toLowerCase() === pname!.toLowerCase()
+          );
+          return row && typeof row === "object" ? (row as Record<string, unknown>) : null;
+        });
+
+    const promise = pid ? loadById() : loadByName();
+
+    promise
+      .then((data: unknown) => {
+        if (cancelled || data == null || typeof data !== "object" || !("id" in data)) {
+          if (!cancelled) setCatalogProduct(null);
+          return;
+        }
+        setCatalogProduct(parseProductJson(data as Record<string, unknown>));
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProduct(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.productId, selected?.productName, selected?.id]);
+
+  const productCardFields = useMemo(() => {
+    if (!selected) return null;
+    const c = catalogProduct;
+    return {
+      name: (c?.name ?? selected.productName)?.trim() ?? "",
+      productFamily: c?.productFamily ?? selected.productFamily,
+      division: c?.division ?? selected.division,
+      subDivision: c?.subDivision ?? selected.subDivision,
+      team: c?.team ?? selected.productTeam,
+      sapEotpCode: c?.sapEotpCode ?? selected.sapEotpCode,
+      sapEotpName: c?.sapEotpName ?? selected.sapEotpName,
+      attractiveness: c?.attractiveness ?? selected.attractiveness,
+      competitiveness: c?.competitiveness ?? selected.competitiveness,
+    };
+  }, [selected, catalogProduct]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -396,7 +543,7 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
     setSearch("");
     setYearFilter(ALL);
     setProductFilter(ALL);
-    setGroupFilter(ALL);
+    setTeamFilter(ALL);
   };
 
   const refreshJira = async () => {
@@ -440,7 +587,7 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
         <aside className="flex w-[520px] shrink-0 flex-col border-r">
           <div className="flex flex-col gap-2 border-b border-neutral-200/80 bg-white p-3">
             <Input
-              placeholder="Search key, summary, product…"
+              placeholder="Search key, summary, product, team…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-8"
@@ -465,6 +612,9 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>All products</SelectItem>
+                  {hasUnassignedProduct ? (
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                  ) : null}
                   {products.map((p) => (
                     <SelectItem key={p} value={p}>
                       <span className="line-clamp-1">{p}</span>
@@ -472,15 +622,18 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v ?? ALL)}>
+              <Select value={teamFilter} onValueChange={(v) => setTeamFilter(v ?? ALL)}>
                 <SelectTrigger size="sm" className="min-w-[120px] max-w-[180px]">
-                  <SelectValue placeholder="Group" />
+                  <SelectValue placeholder="Team" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All groups</SelectItem>
-                  {groups.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      {g}
+                  <SelectItem value={ALL}>All teams</SelectItem>
+                  {hasUnassignedTeam ? (
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                  ) : null}
+                  {teams.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -504,7 +657,8 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
             </div>
           </div>
 
-          <ScrollArea className="min-h-0 flex-1">
+          {/* Native overflow avoids Base UI ScrollArea SSR/client DOM mismatches (hydration errors). */}
+          <div className="min-h-0 flex-1 overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -513,7 +667,7 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
                   <TableHead className="max-w-[100px]">Product</TableHead>
                   <TableHead className="w-14">Year</TableHead>
                   <TableHead className="max-w-[80px]">Type</TableHead>
-                  <TableHead className="max-w-[80px]">Group</TableHead>
+                  <TableHead className="max-w-[80px]">Team</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -530,15 +684,18 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
                         {i.summary}
                       </span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[100px] truncate text-xs" title={i.components ?? ""}>
-                      {i.components ?? "—"}
+                    <TableCell
+                      className="text-muted-foreground max-w-[100px] truncate text-xs"
+                      title={i.productName ?? ""}
+                    >
+                      {i.productName ?? "—"}
                     </TableCell>
                     <TableCell>{i.year}</TableCell>
                     <TableCell className="max-w-[80px] truncate text-xs" title={i.initiativeType ?? ""}>
                       {i.initiativeType ?? "—"}
                     </TableCell>
-                    <TableCell className="max-w-[80px] truncate text-xs" title={i.productGroup ?? ""}>
-                      {i.productGroup ?? "—"}
+                    <TableCell className="max-w-[80px] truncate text-xs" title={i.productTeam ?? ""}>
+                      {i.productTeam ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -547,7 +704,7 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
             {filtered.length === 0 ? (
               <p className="text-muted-foreground p-4 text-center text-sm">No initiatives match.</p>
             ) : null}
-          </ScrollArea>
+          </div>
         </aside>
 
         <main className="min-w-0 flex-1 overflow-auto p-4">
@@ -559,24 +716,70 @@ export function InitiativesPageClient({ initiatives, resources }: Props) {
             <div className="mx-auto max-w-5xl space-y-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{selected.id}</Badge>
-                <span className="text-muted-foreground text-sm">{selected.summary}</span>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Initiative details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <FieldReadonly label="Product Group" value={selected.productGroup ?? ""} />
-                    <FieldReadonly label="Product" value={selected.components ?? ""} />
-                    <FieldReadonly label="Jira identifier" value={selected.id} />
-                    <FieldReadonly label="Year" value={String(selected.year)} />
-                    <FieldReadonly label="Type of initiative" value={selected.initiativeType ?? ""} />
-                    <FieldReadonly label="Status" value={selected.status} />
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="space-y-4">
+                <Card className="border-[color:var(--primary-blue)]/20 bg-[color:var(--primary-blue)]/[0.04] ring-[color:var(--primary-blue)]/15">
+                  <CardHeader className="border-b border-[color:var(--primary-blue)]/15 pb-3">
+                    <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+                      Product
+                    </p>
+                    <CardTitle className="text-base leading-snug sm:text-lg">
+                      {productCardFields?.name ? (
+                        <span title={productCardFields.name}>{productCardFields.name}</span>
+                      ) : (
+                        <span className="text-muted-foreground font-normal">No product linked</span>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    {catalogLoading &&
+                    (selected.productId?.trim() || selected.productName?.trim()) ? (
+                      <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                        <Loader2 className="size-4 animate-spin" />
+                        Loading product catalog…
+                      </div>
+                    ) : productCardFields?.name || selected.productId?.trim() ? (
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <FieldReadonly label="Product family" value={productCardFields?.productFamily ?? ""} />
+                        <FieldReadonly label="Division" value={productCardFields?.division ?? ""} />
+                        <FieldReadonly label="Sub-division" value={productCardFields?.subDivision ?? ""} />
+                        <FieldReadonly label="Team" value={productCardFields?.team ?? ""} />
+                        <FieldReadonly label="SAP EOTP code" value={productCardFields?.sapEotpCode ?? ""} />
+                        <FieldReadonly label="SAP EOTP name" value={productCardFields?.sapEotpName ?? ""} />
+                        <FieldReadonly label="Attractiveness" value={fmtNum(productCardFields?.attractiveness)} />
+                        <FieldReadonly label="Competitiveness" value={fmtNum(productCardFields?.competitiveness)} />
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">
+                        No catalog row linked — sync Jira or seed products to show SAP EOTP and org fields.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b border-neutral-200/90 pb-3">
+                    <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+                      Initiative
+                    </p>
+                    <CardTitle className="text-base leading-snug sm:text-lg">
+                      <span className="line-clamp-3" title={selected.summary}>
+                        {selected.summary}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <FieldReadonly label="Jira identifier" value={selected.id} />
+                      <FieldReadonly label="Year" value={String(selected.year)} />
+                      <FieldReadonly label="Type of initiative" value={selected.initiativeType ?? ""} />
+                      <FieldReadonly label="Status" value={selected.status} />
+                      <FieldReadonly label="Jira components (raw)" value={selected.components ?? ""} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
               <div>
                 <div className="mb-3 flex items-center justify-between gap-2">
