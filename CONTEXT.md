@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.2 · April 2026**
+**Paradigm · Brussels Capital Region · v1.2.1 · April 2026**
 
 ---
 
@@ -110,9 +110,9 @@ The cost is then split into three non-overlapping columns in the view: `internal
 The view exposes a unified `calculated_man_days` column for capacity-style reporting:
 
 - **INTERNAL / EXTERNAL** — If `manDays` > 0: raw man-days. If FTE (`quantity` > 0): `quantity × nbrDaysPerYear` (individual rate or standard).
-- **DIRECT_COST** — Man-days path uses `manDays` directly; quantity path uses `quantity ×` per-unit days from the rate row (`> 0` fallback to `rate_standard` INTERNAL for the initiative year), **not** a blind fallback to ~200 days when the rate row holds `1.0` (unit model).
+- **DIRECT_COST** — Man-days path uses `manDays` directly. Quantity path uses `quantity ×` per-unit days from the **individual** `Rate` row when `nbrDaysPerYear` > 0 (usually **1.0** for licences). If there is **no rate row** for `(resource, initiative year)` or `nbrDaysPerYear` is missing, the multiplier defaults to **1** — it must **not** fall back to INTERNAL `RateStandard` (200 days), or a single licence is reported as 200 “man-days”.
 
-So `SUM(calculated_man_days)` is comparable across assignment methods for staff; direct-cost rows use the same cost driver logic as `computed_cost`.
+So `SUM(calculated_man_days)` is comparable across assignment methods for staff; direct-cost quantity and cost use the same per-unit multiplier as in `computed_cost` (cost still needs a `Rate.dailyRate` for a non-zero EUR amount).
 
 ### 2.7 FTE % in the Power BI View
 
@@ -313,7 +313,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `cellule` | Resource cell |
 | `direction` | Resource direction |
 | `effective_rate` | Resolved daily rate (individual or standard fallback) |
-| `effective_days_per_year` | `nbrDaysPerYear` used for this row (`COALESCE` individual rate, then standard) — drives FTE/man-days consistency |
+| `effective_days_per_year` | Staff: individual `Rate`, then `RateStandard` for type/year. **DIRECT_COST:** individual `Rate.nbrDaysPerYear`, else **1** (not INTERNAL 200). |
 | `computed_cost` | Total cost — all types |
 | `internal_cost` | Cost if INTERNAL, else 0 |
 | `external_cost` | Cost if EXTERNAL, else 0 |
@@ -321,7 +321,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `fte_decimal` / `fte_percent` | See §2.7 — FTE from % or implied from man-days (staff only) |
 | `calculated_man_days` | See §2.6 — unified man-days / direct-cost quantity path |
 
-**Cost safeguards (implementation):** Staff FTE cost uses `effective_days_per_year` with a guard so invalid/zero days do not inflate cost. Direct-cost quantity uses a per-unit day multiplier only when `> 0` (avoids multiplying licences by ~200 when the rate row is `1.0`).
+**Cost safeguards (implementation):** Staff FTE cost uses `nbrDaysPerYear` from the individual rate or type standard. Direct-cost quantity uses `COALESCE(individual nbrDaysPerYear when > 0, 1)` — never INTERNAL’s 200-day standard when the rate row is missing.
 
 **Key guarantee:** `internal_cost + external_cost + direct_cost = computed_cost` for every row.
 
@@ -515,7 +515,8 @@ Consolidated documentation of major changes since the initial design doc:
 - **Single production seed** — One `scripts/seed-production.ts` (merged former alternate script): CSV merge rules, `RateStandard` fallback path, `createCostView()` with product join and corrected cost/FTE/`calculated_man_days` logic.
 - **Allocations CSV merge** — Duplicate MAT×RI rows: **sum** `quantity` (%); **first positive man-days** in CSV order wins (not summed).
 - **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `product`.
-- **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost cost and man-days use guarded multipliers (`COALESCE` rate/standard days, `> 0` checks).
+- **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost quantity path uses per-unit days from the individual rate or **1** if absent (see §2.6 — avoids treating missing licence rates as 200 “man-days”).
+- **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
 - **Migrations** — When altering columns referenced by `v_allocation_costs`, migrations may need `DROP VIEW IF EXISTS v_allocation_costs` first.
 - **Repository** — Large or sensitive production CSVs may be gitignored; initiative/assignment exports are excluded from version control by policy.
 
@@ -552,4 +553,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.2 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.2.1 (see §11.3 changelog)*

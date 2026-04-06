@@ -551,20 +551,22 @@ async function createCostView(): Promise<void> {
       CAST(rs."nbrDaysPerYear" AS double precision)
     ) AS double precision)`;
 
+  // Direct costs: unit model (nbrDaysPerYear on the rate row, usually 1). Never fall back to
+  // INTERNAL RateStandard (200) — missing rate row must not inflate quantity into 200 "man-days".
   const directCostQtyDays = `CAST(
     COALESCE(
       CASE
         WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
         THEN CAST(rt."nbrDaysPerYear" AS numeric)
       END,
-      CAST(rs_dc."nbrDaysPerYear" AS numeric)
+      CAST(1 AS double precision)
     ) AS double precision)`;
 
   const effectiveDaysPerYear = `CASE
     WHEN r.type IN ('INTERNAL', 'EXTERNAL') THEN ${fteDaysPerYear}
     ELSE COALESCE(
       CAST(rt."nbrDaysPerYear" AS double precision),
-      CAST(rs_dc."nbrDaysPerYear" AS double precision)
+      CAST(1 AS double precision)
     )
   END`;
 
@@ -698,9 +700,6 @@ async function createCostView(): Promise<void> {
       ON rs.year = i.year
      AND rs.type = r.type
      AND r.type <> 'DIRECT_COST'
-    LEFT JOIN rate_standard rs_dc
-      ON rs_dc.year = i.year
-     AND rs_dc.type = 'INTERNAL'
   `);
 
   console.log("  ✓ v_allocation_costs created\n");

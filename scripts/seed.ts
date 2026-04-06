@@ -371,7 +371,7 @@ SELECT
     ELSE
       COALESCE(
         CAST(rt."nbrDaysPerYear" AS double precision),
-        CAST(rs_dc."nbrDaysPerYear" AS double precision)
+        CAST(1 AS double precision)
       )
   END                                             AS effective_days_per_year,
 
@@ -384,10 +384,10 @@ SELECT
           a.quantity * CAST(
             COALESCE(
               CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 1
+                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
                 THEN CAST(rt."nbrDaysPerYear" AS numeric)
               END,
-              CAST(rs_dc."nbrDaysPerYear" AS numeric)
+              CAST(1 AS double precision)
             ) AS double precision
           )
         ELSE 0
@@ -413,10 +413,10 @@ SELECT
           * CAST(
             COALESCE(
               CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 1
+                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
                 THEN CAST(rt."nbrDaysPerYear" AS numeric)
               END,
-              CAST(rs_dc."nbrDaysPerYear" AS numeric)
+              CAST(1 AS double precision)
             ) AS double precision
           )
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
@@ -473,10 +473,10 @@ SELECT
           * CAST(
             COALESCE(
               CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 1
+                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
                 THEN CAST(rt."nbrDaysPerYear" AS numeric)
               END,
-              CAST(rs_dc."nbrDaysPerYear" AS numeric)
+              CAST(1 AS double precision)
             ) AS double precision
           )
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
@@ -517,9 +517,6 @@ LEFT JOIN rate_standard rs
   ON rs.year = i.year
  AND rs.type = r.type
  AND r.type <> 'DIRECT_COST'
-LEFT JOIN rate_standard rs_dc
-  ON rs_dc.year = i.year
- AND rs_dc.type = 'INTERNAL'
 `);
 
   console.log("  ✓ View v_allocation_costs created\n");
