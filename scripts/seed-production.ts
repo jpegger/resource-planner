@@ -1,23 +1,17 @@
 /**
- * Production seed — loads CSVs from `scripts/data-prod/`.
+ * Production seed — ID-linked CSVs under `scripts/data-prod/`.
  *
- * Linking model (IDs only, no text matching):
- *   • Initiatives     JIRA.csv `Key`                    ↔ Assignement `InitiativeId`
- *   • Resources       RESSOURCES.csv `ID`               ↔ Assignement `RessourceId`, RATES `RessourceId`
- *   • Rates           RATES.csv `RessourceId` + `Year`   ↔ resource + initiative year (via view)
- *   • Allocations     `InitiativeId` + `RessourceId`    → FK to initiative.id and resource.id
+ * JIRA / RESSOURCES: latin-1 · RATES / Assignement / RateStandard: utf-8 (BOM stripped).
+ * Initiatives get `productId` from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
+ * Duplicate Assignement rows (same resource + initiative): % summed across lines. Man-days: if
+ * several lines have man-days > 0, the first line in CSV order wins (avoids double-counting
+ * duplicate exports such as 12 + 7 for the same assignment). Existing DB pairs still get CSV
+ * deltas added (additive re-import).
  *
- * Usage: `npm run db:seed:prod`  (see package.json)
+ * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `product` rows).
+ * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod`
  *
- * Full reload (truncate then import): `SEED_PROD_RESET=1 npm run db:seed:prod`
- * Without that, rows are upserted and old allocations not in CSV are left in place.
- *
- * View only (no CSV import): `npm run db:view:prod` or `SEED_VIEW_ONLY=1 tsx scripts/seed-production.ts`
- *
- * Files required under scripts/data-prod/:
- *   JIRA.csv, RESSOURCES.csv, RATES.csv, Assignement.csv
- *
- * Optional: RateStandard.csv in data-prod; else falls back to scripts/data/RateStandard.csv.
+ * RateStandard.csv: required in data-prod, or falls back to `scripts/data/RateStandard.csv`.
  */
 
 import "dotenv/config";
@@ -32,96 +26,40 @@ const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
 });
 const prisma = new PrismaClient({ adapter });
-
 const DATA_DIR = path.join(__dirname, "data-prod");
 const DEV_DATA_DIR = path.join(__dirname, "data");
 
-function t(): Date {
-  return new Date();
+function resolveRateStandardPath(): string | null {
+  const prod = path.join(DATA_DIR, "RateStandard.csv");
+  if (fs.existsSync(prod)) return prod;
+  const dev = path.join(DEV_DATA_DIR, "RateStandard.csv");
+  return fs.existsSync(dev) ? dev : null;
 }
 
-// ─── CSV ─────────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Papa Parse calls transformHeader twice while building the header row.
- * Do not use a stateful “dedupe” Map here — it would rename every column to Name__2
- * and break lookups (row["Key"] → undefined → all rows skipped).
- */
-function transformHeaderTrim(header: string): string {
-  const trimmed = header.replace(/^\uFEFF/, "").trim();
-  return trimmed === "" ? "__empty" : trimmed;
+function readCsv(filename: string, encoding: "latin1" | "utf8"): Record<string, string>[] {
+  const content = fs.readFileSync(path.join(DATA_DIR, filename), { encoding });
+  // Strip BOM if present
+  const cleaned = content.replace(/^\uFEFF/, "");
+  const result = Papa.parse(cleaned, { header: true, skipEmptyLines: true });
+  return result.data as Record<string, string>[];
 }
 
-function parseWithHeaders(csvBody: string): Record<string, string>[] {
-  const result = Papa.parse(csvBody, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: transformHeaderTrim,
-  });
-  return (result.data as Record<string, string>[]).map((row) => {
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(row)) {
-      out[k.replace(/^\uFEFF/, "").trim()] =
-        typeof v === "string" ? v : String(v ?? "");
-    }
-    return out;
-  });
-}
-
-/** Find first line index within `lines` where `predicate` is true (header row). */
-function findHeaderLine(
-  lines: string[],
-  predicate: (line: string) => boolean,
-  maxScan = 15
-): number {
-  for (let i = 0; i < Math.min(maxScan, lines.length); i++) {
-    if (predicate(lines[i])) return i;
-  }
-  return 0;
-}
-
-function readDataProdCsv(filename: string): string {
-  let s = fs.readFileSync(path.join(DATA_DIR, filename), { encoding: "utf-8" });
-  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
-  return s;
-}
-
-/** First non-empty cell value for common column aliases (trimmed). */
-function cell(
-  row: Record<string, string>,
-  ...aliases: string[]
-): string | undefined {
-  for (const name of aliases) {
-    const v = row[name]?.trim();
-    if (v) return v;
-  }
-  const want = new Set(aliases.map((a) => a.trim().toLowerCase()));
-  for (const [k, v] of Object.entries(row)) {
-    if (want.has(k.trim().toLowerCase())) {
-      const t = (v ?? "").trim();
-      if (t) return t;
-    }
-  }
-  return undefined;
-}
-
-function parseFloat_(value: string | undefined): number | null {
-  if (!value || value.trim() === "" || value.trim() === "NaN") return null;
-  const cleaned = value.replace(/'/g, "").replace(/\s/g, "").trim();
+/** Strip Swiss apostrophe thousands separator and trailing % or spaces, then parse float */
+function parseNum(value: string | undefined): number | null {
+  if (!value || value.trim() === "" || value.trim() === "-") return null;
+  const cleaned = value
+    .replace(/'/g, "")   // 1'100 → 1100
+    .replace(/%/g, "")   // trailing % on both columns
+    .replace(/\s/g, "")
+    .trim();
   const n = parseFloat(cleaned);
-  return Number.isNaN(n) ? null : n;
-}
-
-function parsePercent(value: string | undefined): number | null {
-  if (!value || value.trim() === "") return null;
-  const cleaned = value.replace("%", "").trim();
-  const n = parseFloat(cleaned);
-  return Number.isNaN(n) ? null : n / 100;
+  return isNaN(n) ? null : n;
 }
 
 function parseResourceType(raw: string | undefined): ResourceType | null {
-  const key = raw?.toLowerCase()?.trim() ?? "";
-  if (!key) return null;
+  const key = (raw ?? "").toLowerCase().trim();
   const map: Record<string, ResourceType> = {
     internal: ResourceType.INTERNAL,
     external: ResourceType.EXTERNAL,
@@ -131,69 +69,34 @@ function parseResourceType(raw: string | undefined): ResourceType | null {
   return map[key] ?? null;
 }
 
-function csvRowIsAllEmpty(row: Record<string, string>): boolean {
-  return Object.values(row).every((v) => !String(v ?? "").trim());
-}
+const NOW = new Date();
 
-/** Excel exports often end the header row with `,,,,` — Papa treats those as duplicate "" columns. */
-function fixCsvHeaderEmptyTrailingFields(headerLine: string): string {
-  const parts = headerLine.split(",");
-  let emptySeq = 0;
-  return parts
-    .map((p) => {
-      const t = p.replace(/^\uFEFF/, "").trim();
-      if (t === "") {
-        emptySeq++;
-        return `__empty_${emptySeq}`;
-      }
-      return p.replace(/^\uFEFF/, "").trimEnd();
-    })
-    .join(",");
-}
-
-function allocationIdFromRow(parts: string[]): string {
-  const h = createHash("sha256").update(parts.join("|"), "utf8").digest("hex");
+/** Stable id: one allocation row per (resourceId, initiativeId). */
+function allocationIdFromPair(resourceId: string, initiativeId: string): string {
+  const h = createHash("sha256")
+    .update(`${resourceId}|${initiativeId}`, "utf8")
+    .digest("hex");
   return `ASS-${h.slice(0, 32)}`;
 }
 
-/** Primary key for rate rows — CSV RateId is not unique; @@unique is [resourceId, year]. */
-function rateIdFromResourceYear(resourceId: string, year: number): string {
-  const h = createHash("sha256")
-    .update(`${resourceId}|${year}`, "utf8")
-    .digest("hex");
-  return `RATE-${h.slice(0, 32)}`;
-}
-
-function resolveRateStandardPath(): string | null {
-  const prod = path.join(DATA_DIR, "RateStandard.csv");
-  if (fs.existsSync(prod)) return prod;
-  const dev = path.join(DEV_DATA_DIR, "RateStandard.csv");
-  return fs.existsSync(dev) ? dev : null;
-}
-
-// ─── Wipe (full reload from CSV) ─────────────────────────────────────────────
-
-async function clearPlannerTables(): Promise<void> {
-  await prisma.allocation.deleteMany({});
-  await prisma.rate.deleteMany({});
-  await prisma.initiative.deleteMany({});
-  await prisma.rateStandard.deleteMany({});
-  await prisma.resource.deleteMany({});
-}
-
-// ─── 1. Initiatives — id = Jira key (Key) ────────────────────────────────────
+// ─── 1. Initiatives ──────────────────────────────────────────────────────────
 
 async function seedInitiatives(): Promise<void> {
-  console.log("Seeding initiatives (id = JIRA Key → matches Assignement InitiativeId)...");
+  console.log("Seeding initiatives from JIRA.csv...");
+  const rows = readCsv("JIRA.csv", "latin1");
 
-  const content = readDataProdCsv("JIRA.csv");
-  const rows = parseWithHeaders(content);
+  const productMap = new Map<string, string>();
+  const allProducts = await prisma.product.findMany({ select: { id: true, name: true } });
+  for (const p of allProducts) {
+    productMap.set(p.name.trim().toLowerCase(), p.id);
+  }
+  console.log(`  Product lookup map: ${productMap.size} entries`);
 
-  let n = 0;
+  let upserted = 0;
   let skipped = 0;
 
   for (const row of rows) {
-    const id = cell(row, "Key")?.trim();
+    const id = row["Key"]?.trim();
     if (!id) {
       skipped++;
       continue;
@@ -205,316 +108,270 @@ async function seedInitiatives(): Promise<void> {
       continue;
     }
 
-    const summary = row["Summary"]?.trim() ?? "";
-    const components = row["Components"]?.trim() ?? null;
-    const productGroup = row["(RI) Product Group"]?.trim() ?? null;
-    const status = row["Status"]?.trim() ?? "";
-    const initiativeType = row["(RI) Type"]?.trim() ?? null;
+    const componentValues: string[] = [
+      row["Components"],
+      row["Components_1"],
+      row["Components_2"],
+      row["Components_3"],
+    ]
+      .map((v) => (v ?? "").trim())
+      .filter(Boolean);
+
+    let productId: string | null = null;
+    for (const comp of componentValues) {
+      const found = productMap.get(comp.toLowerCase());
+      if (found) {
+        productId = found;
+        break;
+      }
+    }
 
     await prisma.initiative.upsert({
       where: { id },
       update: {
-        summary,
-        status,
+        summary: row["Summary"]?.trim() ?? "",
+        status: row["Status"]?.trim() ?? "",
         year,
-        components,
-        productGroup,
-        initiativeType,
-        modifiedOn: t(),
+        components: row["Components"]?.trim() || null,
+        productGroup: row["(RI) Product Group"]?.trim() || null,
+        initiativeType: row["(RI) Type"]?.trim() || null,
+        productId,
+        modifiedOn: NOW,
       },
       create: {
         id,
         powerId: null,
-        summary,
-        status,
+        summary: row["Summary"]?.trim() ?? "",
+        status: row["Status"]?.trim() ?? "",
         year,
-        components,
-        productGroup,
-        initiativeType,
-        createdOn: t(),
-        modifiedOn: t(),
+        components: row["Components"]?.trim() || null,
+        productGroup: row["(RI) Product Group"]?.trim() || null,
+        initiativeType: row["(RI) Type"]?.trim() || null,
+        productId,
+        createdOn: NOW,
+        modifiedOn: NOW,
       },
     });
-    n++;
+    upserted++;
   }
 
-  console.log(`  ✓ Initiatives: ${n} rows (${skipped} skipped)\n`);
+  console.log(`  ✓ Initiatives: ${upserted} upserted, ${skipped} skipped\n`);
 }
 
-// ─── 2. Resources — id = ID column (MAT-…) ───────────────────────────────────
+// ─── 2. Resources ────────────────────────────────────────────────────────────
 
 async function seedResources(): Promise<void> {
-  console.log("Seeding resources (id = ID → matches RessourceId in RATES & Assignement)...");
+  console.log("Seeding resources from RESSOURCES.csv...");
+  const rows = readCsv("RESSOURCES.csv", "latin1");
 
-  const raw = readDataProdCsv("RESSOURCES.csv");
-  const lines = raw.split("\n");
-  const headerIdx = findHeaderLine(
-    lines,
-    (l) => l.includes("ID") && (l.includes("Full Name") || l.includes("Nom"))
-  );
-  const rows = parseWithHeaders(lines.slice(headerIdx).join("\n"));
-
-  let n = 0;
-  let ignoredEmptyRows = 0;
-  let skippedNoId = 0;
-  let skippedBadType = 0;
-  let skippedNoName = 0;
+  let upserted = 0;
+  let skipped = 0;
 
   for (const row of rows) {
-    if (csvRowIsAllEmpty(row)) {
-      ignoredEmptyRows++;
-      continue;
-    }
+    // Only rows with an ID are real resources — 1108 blank rows skipped here
+    const id = row["ID"]?.trim();
+    if (!id || id === "ID") { skipped++; continue; }
 
-    const id = cell(row, "ID", "             ID")?.trim();
-    if (!id || id === "ID") {
-      skippedNoId++;
-      continue;
-    }
-
-    const rawType = row["Internal or External"]?.trim();
-    const type = parseResourceType(rawType);
+    const type = parseResourceType(row["Internal or External"]);
     if (!type) {
-      skippedBadType++;
+      console.warn(`  ⚠ Skipping ${id} — unknown type: "${row["Internal or External"]}"`);
+      skipped++;
       continue;
     }
 
-    const fullName = (row["Full Name"] ?? row["Nom"] ?? "").trim();
-    if (!fullName) {
-      skippedNoName++;
-      continue;
-    }
+    const fullName = row["Full Name"]?.trim() || row["Nom"]?.trim() || "";
+    if (!fullName) { skipped++; continue; }
 
     await prisma.resource.upsert({
       where: { id },
       update: {
         fullName,
-        firstName: row["Prénom"]?.trim() || null,
-        lastName: row["Nom"]?.trim() || null,
-        function: row["Fonction"]?.trim() || null,
-        cellule: row["Cellule"]?.trim() || null,
-        direction: row["Pôle"]?.trim() || null,
+        firstName:  row["Prénom"]?.trim() || null,
+        lastName:   row["Nom"]?.trim() || null,
+        function:   row["Fonction"]?.trim() || null,
+        cellule:    row["Cellule"]?.trim() || null,
+        direction:  row["Pôle"]?.trim() || null,
         type,
-        modifiedOn: t(),
+        modifiedOn: NOW,
       },
       create: {
         id,
         fullName,
-        firstName: row["Prénom"]?.trim() || null,
-        lastName: row["Nom"]?.trim() || null,
-        function: row["Fonction"]?.trim() || null,
-        cellule: row["Cellule"]?.trim() || null,
-        direction: row["Pôle"]?.trim() || null,
+        firstName:  row["Prénom"]?.trim() || null,
+        lastName:   row["Nom"]?.trim() || null,
+        function:   row["Fonction"]?.trim() || null,
+        cellule:    row["Cellule"]?.trim() || null,
+        direction:  row["Pôle"]?.trim() || null,
         type,
-        createdOn: t(),
-        modifiedOn: t(),
+        createdOn:  NOW,
+        modifiedOn: NOW,
       },
     });
-    n++;
+    upserted++;
   }
 
-  console.log(`  ✓ Resources: ${n} upserted`);
-  if (ignoredEmptyRows > 0) {
-    console.log(
-      `     (${ignoredEmptyRows} blank Excel rows ignored — trailing commas / empty lines)`
-    );
-  }
-  const realSkips = skippedNoId + skippedBadType + skippedNoName;
-  if (realSkips > 0) {
-    console.log(
-      `     (${realSkips} skipped: ${skippedNoId} no ID, ${skippedBadType} unknown type, ${skippedNoName} no name)`
-    );
-  }
-  console.log("");
+  console.log(`  ✓ Resources: ${upserted} upserted, ${skipped} skipped (${skipped - upserted < 0 ? 0 : skipped} blank rows)\n`);
 }
 
-// ─── 3. Rate standards (INTERNAL / EXTERNAL year defaults) ───────────────────
-
-async function seedRateStandards(): Promise<void> {
+async function seedRateStandard(): Promise<void> {
   const csvPath = resolveRateStandardPath();
   if (!csvPath) {
     console.warn(
-      "  ⚠ No RateStandard.csv — rate_standard empty (add to data-prod or scripts/data).\n"
+      "  ⚠ No RateStandard.csv in data-prod or scripts/data — rate_standard skipped\n"
     );
     return;
   }
 
-  console.log(
-    `Seeding rate_standard from ${path.relative(process.cwd(), csvPath)}...`
-  );
-
+  console.log(`Seeding standard rates from ${path.relative(process.cwd(), csvPath)}...`);
   const content = fs.readFileSync(csvPath, { encoding: "utf-8" });
-  const rows = parseWithHeaders(content);
+  const cleaned = content.replace(/^\uFEFF/, "");
+  const result = Papa.parse(cleaned, { header: true, skipEmptyLines: true });
+  const rows = result.data as Record<string, string>[];
 
-  let n = 0;
+  let upserted = 0;
   let skipped = 0;
 
   for (const row of rows) {
-    const type = parseResourceType(row["IsInternalOrExternal"]);
-    if (!type || type === ResourceType.DIRECT_COST) {
-      skipped++;
-      continue;
-    }
-
     const id = row["RateStandardPrimaryId"]?.trim();
     const year = parseInt(row["Year"] ?? "", 10);
-    const dailyRate = parseFloat_(row["DailyRate"]);
+    const dailyRate = parseNum(row["DailyRate"]);
     const nbrDaysPerYear = parseInt(row["NbrOfDaysPerYear"] ?? "", 10);
+
     if (!id || Number.isNaN(year) || dailyRate === null || Number.isNaN(nbrDaysPerYear)) {
       skipped++;
       continue;
     }
 
+    const rawType = row["IsInternalOrExternal"]?.trim();
+    const type = parseResourceType(rawType);
+    if (!type || type === ResourceType.DIRECT_COST) {
+      skipped++;
+      continue;
+    }
+
+    const createdOn = row["Created On"]?.trim()
+      ? new Date(row["Created On"])
+      : NOW;
+    const modifiedOn = row["Modified On"]?.trim()
+      ? new Date(row["Modified On"])
+      : NOW;
+
     await prisma.rateStandard.upsert({
       where: { year_type: { year, type } },
-      update: { dailyRate, nbrDaysPerYear, modifiedOn: t() },
+      update: { dailyRate, nbrDaysPerYear, modifiedOn: NOW },
       create: {
         id,
         year,
         type,
         dailyRate,
         nbrDaysPerYear,
-        createdOn: t(),
-        modifiedOn: t(),
+        createdOn,
+        modifiedOn,
       },
     });
-    n++;
+    upserted++;
   }
 
-  console.log(`  ✓ Rate standards: ${n} rows (${skipped} skipped)\n`);
+  console.log(`  ✓ Standard rates: ${upserted} upserted, ${skipped} skipped\n`);
 }
 
-// ─── 4. Rates — RessourceId + Year ─────────────────────────────────────────
+async function clearPlannerTables(): Promise<void> {
+  await prisma.allocation.deleteMany({});
+  await prisma.rate.deleteMany({});
+  await prisma.initiative.deleteMany({});
+  await prisma.rateStandard.deleteMany({});
+  await prisma.resource.deleteMany({});
+}
+
+// ─── 3. Rates ────────────────────────────────────────────────────────────────
 
 async function seedRates(): Promise<void> {
-  console.log("Seeding rates (RessourceId → resource.id, Year → matches initiative year)...");
+  console.log("Seeding rates from RATES.csv...");
+  const rows = readCsv("RATES.csv", "utf8");
 
-  const raw = readDataProdCsv("RATES.csv");
-  const lines = raw.split("\n");
-  const headerIdx = findHeaderLine(
-    lines,
-    (l) => l.includes("RateId") || l.includes("RessourceId")
-  );
-  const rows = parseWithHeaders(lines.slice(headerIdx).join("\n"));
-
-  const resourceIds = new Set(
-    (await prisma.resource.findMany({ select: { id: true } })).map((r) => r.id)
-  );
-
-  let n = 0;
-  let ignoredEmptyRows = 0;
-  let skippedNoResourceId = 0;
-  let skippedInvalidNumbers = 0;
-  let skippedNoResource = 0;
+  let upserted = 0;
+  let skipped = 0;
 
   for (const row of rows) {
-    if (csvRowIsAllEmpty(row)) {
-      ignoredEmptyRows++;
-      continue;
-    }
+    const rateId     = row["RateId"]?.trim();
+    const resourceId = row["RessourceId"]?.trim();
 
-    const resourceId = cell(row, "RessourceId", "ResourceId")?.trim();
-    if (!resourceId) {
-      skippedNoResourceId++;
-      continue;
-    }
+    // Skip orphaned rows, header echoes, and dirty resourceId values
+if (!rateId || !resourceId || resourceId === "RessourceId" || resourceId === "0") {
+  skipped++;
+  continue;
+}
 
-    const year = parseInt(row["Year"] ?? "", 10);
-    const dailyRate = parseFloat_(
-      cell(row, "Daily Cost", "Daily Cost ") ?? row["Daily Cost"]
-    );
-    const nbrDays = parseFloat_(
-      cell(row, "Nbr of Days per Year", "Nbr of Days per Year ") ??
-        row["Nbr of Days per Year"]
-    );
+    const year      = parseInt(row["Year"]);
+    const dailyRate = parseNum(row["Daily Cost "]);  // note trailing space in column name
+    const nbrDays   = parseNum(row["Nbr of Days per Year "]);
 
-    if (Number.isNaN(year) || dailyRate === null) {
-      skippedInvalidNumbers++;
-      continue;
-    }
+    if (isNaN(year) || dailyRate === null) { skipped++; continue; }
 
-    if (!resourceIds.has(resourceId)) {
-      skippedNoResource++;
-      continue;
-    }
-
-    const id = rateIdFromResourceYear(resourceId, year);
+    // Verify the resource exists (was not skipped above due to missing ID)
+    const exists = await prisma.resource.findUnique({
+      where: { id: resourceId },
+      select: { id: true },
+    });
+    if (!exists) { skipped++; continue; }
 
     await prisma.rate.upsert({
       where: { resourceId_year: { resourceId, year } },
-      update: { dailyRate, nbrDaysPerYear: nbrDays, modifiedOn: t() },
+      update: {
+        dailyRate,
+        nbrDaysPerYear: nbrDays,
+        modifiedOn:     NOW,
+      },
       create: {
-        id,
+        id: `RATE-${resourceId}-${year}`,
         resourceId,
         year,
         dailyRate,
         nbrDaysPerYear: nbrDays,
-        createdOn: t(),
-        modifiedOn: t(),
+        createdOn:      NOW,
+        modifiedOn:     NOW,
       },
     });
-    n++;
+    upserted++;
   }
 
-  console.log(`  ✓ Rates: ${n} upserted`);
-  if (ignoredEmptyRows > 0) {
-    console.log(`     (${ignoredEmptyRows} blank rows ignored)`);
-  }
-  const rs = skippedNoResourceId + skippedInvalidNumbers + skippedNoResource;
-  if (rs > 0) {
-    console.log(
-      `     (${rs} skipped: ${skippedNoResourceId} no RessourceId, ${skippedInvalidNumbers} bad year/cost, ${skippedNoResource} MAT id not in resources)`
-    );
-  }
-  console.log("");
+  console.log(`  ✓ Rates: ${upserted} upserted, ${skipped} skipped\n`);
 }
 
-// ─── 5. Allocations — InitiativeId + RessourceId ─────────────────────────────
+// ─── 4. Allocations ──────────────────────────────────────────────────────────
 
 async function seedAllocations(): Promise<void> {
   console.log(
-    "Seeding allocations (InitiativeId → initiative.id, RessourceId → resource.id)..."
+    "Seeding allocations from Assignement.csv (merged by pair: % summed; first man-days line wins)..."
   );
-
-  const raw = readDataProdCsv("Assignement.csv");
-  const lines = raw.split("\n");
-  const headerIdx = findHeaderLine(
-    lines,
-    (l) =>
-      l.includes("RessourceId") ||
-      (l.includes("Resource") && l.includes("InitiativeId"))
-  );
-  const bodyLines = lines.slice(headerIdx);
-  if (bodyLines.length > 0) {
-    bodyLines[0] = fixCsvHeaderEmptyTrailingFields(bodyLines[0]);
-  }
-  const rows = parseWithHeaders(bodyLines.join("\n"));
+  const rows = readCsv("Assignement.csv", "utf8");
 
   const [initiativeIds, resourceIds] = await Promise.all([
     prisma.initiative.findMany({ select: { id: true } }).then((r) => new Set(r.map((x) => x.id))),
     prisma.resource.findMany({ select: { id: true } }).then((r) => new Set(r.map((x) => x.id))),
   ]);
 
-  let n = 0;
-  let ignoredEmptyRows = 0;
-  let skippedMissingIds = 0;
+  let skipped = 0;
   let unknownInitiative = 0;
   let unknownResource = 0;
   const missingInit = new Set<string>();
 
+  type MergeAcc = { sumQuantity: number; manDaysFirst: number | null };
+  const mergeMap = new Map<string, MergeAcc>();
+  let validCsvLines = 0;
+
   for (const row of rows) {
-    if (csvRowIsAllEmpty(row)) {
-      ignoredEmptyRows++;
-      continue;
-    }
+    const resourceId = row["RessourceId"]?.trim();
+    const initiativeId = row["InitiativeId"]?.trim();
 
-    const resourceId =
-      cell(row, "RessourceId", "ResourceId", "Ressource ID", "Resource ID")?.trim() ?? "";
-    const initiativeId =
-      cell(row, "InitiativeId", "Initiative ID")?.trim() ?? "";
-
-    if (!resourceId || !initiativeId) {
-      skippedMissingIds++;
+    if (
+      !resourceId ||
+      !initiativeId ||
+      resourceId === "RessourceId" ||
+      resourceId === "-" ||
+      initiativeId === "-"
+    ) {
+      skipped++;
       continue;
     }
 
@@ -529,80 +386,175 @@ async function seedAllocations(): Promise<void> {
       continue;
     }
 
-    const percentRaw =
-      cell(row, "Percent assignement", "Percent assignement ", "Percent assignment") ?? "";
-    const manDaysRaw =
-      cell(row, "Man Days Assignement", "Man Days Assignement ", "Man Days Assignment") ?? "";
+    validCsvLines++;
 
-    const quantity = parsePercent(percentRaw);
-    const manDaysVal = parseFloat_(manDaysRaw);
-    const manDays = manDaysVal && manDaysVal > 0 ? manDaysVal : null;
-    const quantityClean = quantity && quantity > 0 ? quantity : null;
+    // Percent column: 0-100 scale → decimal; ManDays: day count (parseNum strips %)
+    const percentRaw = parseNum(row["Percent assignement "]);
+    const manDaysRaw = parseNum(row["Man Days Assignement"]);
 
-    const id = allocationIdFromRow([
-      resourceId,
-      initiativeId,
-      percentRaw,
-      manDaysRaw,
-    ]);
+    const dq =
+      percentRaw !== null && percentRaw > 0 ? percentRaw / 100 : 0;
+    const dm =
+      manDaysRaw !== null && manDaysRaw > 0 ? manDaysRaw : null;
 
-    await prisma.allocation.upsert({
-      where: { id },
-      create: {
-        id,
-        initiativeId,
-        resourceId,
-        manDays,
-        quantity: quantityClean,
-        createdOn: t(),
-        modifiedOn: t(),
-      },
-      update: {
-        initiativeId,
-        resourceId,
-        manDays,
-        quantity: quantityClean,
-        modifiedOn: t(),
-      },
-    });
-    n++;
+    const pairKey = `${resourceId}\t${initiativeId}`;
+    let acc = mergeMap.get(pairKey);
+    if (!acc) {
+      acc = { sumQuantity: 0, manDaysFirst: null };
+      mergeMap.set(pairKey, acc);
+    }
+    acc.sumQuantity += dq;
+    if (dm !== null && acc.manDaysFirst === null) {
+      acc.manDaysFirst = dm;
+    }
   }
 
-  if (ignoredEmptyRows > 0) {
-    console.log(`  (${ignoredEmptyRows} blank rows ignored)`);
+  const mergedRows: {
+    resourceId: string;
+    initiativeId: string;
+    quantity: number | null;
+    manDays: number | null;
+  }[] = [];
+
+  for (const [pairKey, acc] of mergeMap) {
+    const [resourceId, initiativeId] = pairKey.split("\t");
+    const quantity = acc.sumQuantity > 0 ? acc.sumQuantity : null;
+    const manDays = acc.manDaysFirst;
+    if (quantity == null && manDays == null) continue;
+    mergedRows.push({ resourceId, initiativeId, quantity, manDays });
   }
+
+  const duplicateLinesMerged = validCsvLines - mergedRows.length;
+
+  const ALLOC_BATCH = 500;
+  const UPDATE_CONCURRENCY = 64;
+  let allocationCreated = 0;
+  let allocationUpdated = 0;
+
+  if (mergedRows.length > 0) {
+    const ids = mergedRows.map((row) =>
+      allocationIdFromPair(row.resourceId, row.initiativeId)
+    );
+    const existingById = new Map<
+      string,
+      { quantity: number | null; manDays: number | null }
+    >();
+    for (let i = 0; i < ids.length; i += ALLOC_BATCH) {
+      const chunkIds = ids.slice(i, i + ALLOC_BATCH);
+      const found = await prisma.allocation.findMany({
+        where: { id: { in: chunkIds } },
+        select: { id: true, quantity: true, manDays: true },
+      });
+      for (const r of found) {
+        existingById.set(r.id, { quantity: r.quantity, manDays: r.manDays });
+      }
+    }
+
+    type CreateRow = {
+      id: string;
+      initiativeId: string;
+      resourceId: string;
+      manDays: number | null;
+      quantity: number | null;
+      createdOn: Date;
+      modifiedOn: Date;
+    };
+    const createRows: CreateRow[] = [];
+    const updateOps: { id: string; quantity: number | null; manDays: number | null }[] = [];
+
+    for (const row of mergedRows) {
+      const id = allocationIdFromPair(row.resourceId, row.initiativeId);
+      const addQ = row.quantity ?? 0;
+      const addM = row.manDays ?? 0;
+      const ex = existingById.get(id);
+      const baseQ = ex?.quantity ?? 0;
+      const baseM = ex?.manDays ?? 0;
+      const finalQ = baseQ + addQ;
+      const finalM = baseM + addM;
+      const quantity = finalQ > 0 ? finalQ : null;
+      const manDays = finalM > 0 ? finalM : null;
+
+      if (quantity == null && manDays == null) {
+        continue;
+      }
+
+      if (ex) {
+        updateOps.push({ id, quantity, manDays });
+      } else {
+        createRows.push({
+          id,
+          initiativeId: row.initiativeId,
+          resourceId: row.resourceId,
+          manDays,
+          quantity,
+          createdOn: NOW,
+          modifiedOn: NOW,
+        });
+      }
+    }
+
+    for (let i = 0; i < createRows.length; i += ALLOC_BATCH) {
+      await prisma.allocation.createMany({
+        data: createRows.slice(i, i + ALLOC_BATCH),
+      });
+    }
+
+    for (let i = 0; i < updateOps.length; i += UPDATE_CONCURRENCY) {
+      const slice = updateOps.slice(i, i + UPDATE_CONCURRENCY);
+      await Promise.all(
+        slice.map((op) =>
+          prisma.allocation.update({
+            where: { id: op.id },
+            data: {
+              quantity: op.quantity,
+              manDays: op.manDays,
+              modifiedOn: NOW,
+            },
+          })
+        )
+      );
+    }
+
+    allocationCreated = createRows.length;
+    allocationUpdated = updateOps.length;
+  }
+
   if (missingInit.size > 0) {
     console.log(
-      `  ⚠ ${unknownInitiative} rows skipped: InitiativeId not in JIRA.csv (sample):`
+      `  ⚠ ${unknownInitiative} rows skipped: InitiativeId not in JIRA (sample):`
     );
     [...missingInit].slice(0, 12).forEach((id) => console.log(`      ${id}`));
-    if (missingInit.size > 12) console.log(`      … +${missingInit.size - 12} more keys`);
+    if (missingInit.size > 12) {
+      console.log(`      … +${missingInit.size - 12} more`);
+    }
   }
   if (unknownResource > 0) {
     console.log(`  ⚠ ${unknownResource} rows skipped: RessourceId not in RESSOURCES`);
   }
+  if (duplicateLinesMerged > 0) {
+    console.log(
+      `  (${duplicateLinesMerged} CSV lines merged into duplicate resource+initiative pairs)`
+    );
+  }
 
   console.log(
-    `  ✓ Allocations: ${n} upserted (${skippedMissingIds} missing resource/initiative id, ${unknownInitiative} initiative not in JIRA, ${unknownResource} resource not in RESSOURCES)\n`
+    `  ✓ Allocations: ${allocationCreated} created, ${allocationUpdated} updated (additive on existing pairs; ${skipped} skipped, ${unknownInitiative} bad initiative, ${unknownResource} bad resource)\n`
   );
 }
 
-// ─── 6. Cost view ────────────────────────────────────────────────────────────
+// ─── 5. Cost View ────────────────────────────────────────────────────────────
 
 async function createCostView(): Promise<void> {
   const fteDaysPerYear = `CAST(
     COALESCE(
-      CASE
-        WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 1
-        THEN CAST(rt."nbrDaysPerYear" AS numeric)
-      END,
-      CAST(rs."nbrDaysPerYear" AS numeric)
+      rt."nbrDaysPerYear",
+      CAST(rs."nbrDaysPerYear" AS double precision)
     ) AS double precision)`;
 
   const directCostQtyDays = `CAST(
     COALESCE(
       CASE
-        WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 1
+        WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
         THEN CAST(rt."nbrDaysPerYear" AS numeric)
       END,
       CAST(rs_dc."nbrDaysPerYear" AS numeric)
@@ -629,10 +581,19 @@ async function createCostView(): Promise<void> {
       i.summary,
       i.year                                                        AS initiative_year,
       i.components                                                  AS product,
-      i."productGroup"                          
       COALESCE(REPLACE(i."productGroup", '&', 'and'),
                 'Unassigned'
               )                                                     AS product_group,
+
+      COALESCE(p."name", 'Unassigned')                              AS product_name,
+      COALESCE(REPLACE(p."productFamily", '&', 'and'), 'Unassigned') AS product_family,
+      COALESCE(p."division", 'Unassigned')                          AS division,
+      COALESCE(p."subDivision", 'Unassigned')                     AS sub_division,
+      COALESCE(p."team", 'Unassigned')                            AS team,
+      COALESCE(p."sapEotpCode", 'Unassigned')                     AS sap_eotp_code,
+      COALESCE(p."sapEotpName", 'Unassigned')                     AS sap_eotp_name,
+      p."attractiveness"                                          AS attractiveness,
+      p."competitiveness"                                         AS competitiveness,
 
       i."initiativeType"                                            AS initiative_type,
       i.status,
@@ -690,23 +651,27 @@ async function createCostView(): Promise<void> {
         ELSE 0
       END                                                           AS direct_cost,
 
+      -- FTE as decimal 0–1: quantity when FTE-billing; if man-days only, implied FTE = man_days ÷ days/year
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
+         AND a."manDays" IS NOT NULL AND a."manDays" > 0
+        THEN COALESCE(a."manDays" / NULLIF(${fteDaysPerYear}, 0), 0)
+        WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
-         AND (a."manDays" IS NULL OR a."manDays" = 0)
         THEN a.quantity
         ELSE 0
       END                                                           AS fte_decimal,
 
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
+         AND a."manDays" IS NOT NULL AND a."manDays" > 0
+        THEN COALESCE(a."manDays" / NULLIF(${fteDaysPerYear}, 0), 0) * 100
+        WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
-         AND (a."manDays" IS NULL OR a."manDays" = 0)
         THEN a.quantity * 100
         ELSE 0
       END                                                           AS fte_percent,
 
-      -- DIRECT_COST: man-days or quantity×days/year (aligned with quantity cost)
       CASE
         WHEN r.type = 'DIRECT_COST' THEN
           CASE
@@ -724,6 +689,7 @@ async function createCostView(): Promise<void> {
 
     FROM allocation a
     JOIN initiative i   ON i.id = a."initiativeId"
+    LEFT JOIN product p ON p.id = i."productId"
     JOIN resource r     ON r.id = a."resourceId"
     LEFT JOIN rate rt
       ON rt."resourceId" = r.id
@@ -754,6 +720,9 @@ async function main(): Promise<void> {
     return;
   }
 
+  console.log("🌱 Production seed\n");
+  console.log(`   ${DATA_DIR}\n`);
+
   const required = ["JIRA.csv", "RESSOURCES.csv", "RATES.csv", "Assignement.csv"];
   for (const f of required) {
     if (!fs.existsSync(path.join(DATA_DIR, f))) {
@@ -761,25 +730,26 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   }
-
-  console.log("🌱 Production seed (data-prod, ID-linked)\n");
-  console.log(`   ${DATA_DIR}\n`);
+  if (!resolveRateStandardPath()) {
+    console.error("Missing: RateStandard.csv in scripts/data-prod or scripts/data/RateStandard.csv");
+    process.exit(1);
+  }
 
   const fullReset =
     process.env["SEED_PROD_RESET"] === "1" ||
     process.env["SEED_PROD_RESET"] === "true";
   if (fullReset) {
-    console.log("SEED_PROD_RESET: clearing planner tables…\n");
+    console.log("SEED_PROD_RESET: clearing planner tables (product table preserved)…\n");
     await clearPlannerTables();
   } else {
     console.log(
-      "(Upsert mode — set SEED_PROD_RESET=1 to truncate tables before import)\n"
+      "(Upsert mode — set SEED_PROD_RESET=1 to truncate before import; allocations add to existing pairs)\n"
     );
   }
 
   await seedInitiatives();
   await seedResources();
-  await seedRateStandards();
+  await seedRateStandard();
   await seedRates();
   await seedAllocations();
   await createCostView();
@@ -788,10 +758,5 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((e) => {
-    console.error("Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error("❌ Seed failed:", e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });

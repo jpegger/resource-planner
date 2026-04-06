@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.1 · April 2026**
+**Paradigm · Brussels Capital Region · v1.2 · April 2026**
 
 ---
 
@@ -107,26 +107,23 @@ The cost is then split into three non-overlapping columns in the view: `internal
 
 ### 2.6 Calculated Man Days in the Power BI View
 
-To enable capacity reporting in Power BI regardless of how the allocation was entered, the view exposes a single `calculated_man_days` column:
+The view exposes a unified `calculated_man_days` column for capacity-style reporting:
 
-```
-If DIRECT_COST        → 0 (not applicable)
-If manDays > 0        → use manDays directly
-If quantity > 0 (FTE) → quantity × nbrDaysPerYear
-```
+- **INTERNAL / EXTERNAL** — If `manDays` > 0: raw man-days. If FTE (`quantity` > 0): `quantity × nbrDaysPerYear` (individual rate or standard).
+- **DIRECT_COST** — Man-days path uses `manDays` directly; quantity path uses `quantity ×` per-unit days from the rate row (`> 0` fallback to `rate_standard` INTERNAL for the initiative year), **not** a blind fallback to ~200 days when the rate row holds `1.0` (unit model).
 
-This means Power BI can always `SUM(calculated_man_days)` across a team or initiative without needing to know how each allocation was entered.
+So `SUM(calculated_man_days)` is comparable across assignment methods for staff; direct-cost rows use the same cost driver logic as `computed_cost`.
 
 ### 2.7 FTE % in the Power BI View
 
-FTE % is exposed in two columns for Internal and External resources only (0 for Direct Costs):
+For **INTERNAL** and **EXTERNAL** only (`fte_decimal` / `fte_percent` are 0 for **DIRECT_COST**):
 
-```
-fte_decimal = quantity        (e.g. 0.5)  — only when FTE method used, else 0
-fte_percent = quantity × 100  (e.g. 50)   — only when FTE method used, else 0
-```
+| Entry method | `fte_decimal` (0–1) | `fte_percent` |
+|---|---|---|
+| **FTE / %** (`quantity` > 0, man-days not used) | `quantity` | `quantity × 100` |
+| **Man-days** (`manDays` > 0) | `manDays ÷ effective_days_per_year` (same `nbrDaysPerYear` resolution as costing) | implied FTE × 100 |
 
-When the man-days method is used, these columns are 0 — Power BI should derive FTE % from `calculated_man_days / nbrDaysPerYear × 100` if needed.
+If **both** are present (rare), **man-days** take precedence for FTE so the same row can be summed in `SUM(fte_decimal)` with FTE-only rows. Missing rate days → `COALESCE` to 0 to avoid NULLs in DirectQuery.
 
 ### 2.8 Power BI Compatibility Notes
 
@@ -174,7 +171,7 @@ Prisma 7 introduced significant breaking changes from v6. Key adaptations:
 
 ## 4. Database Schema
 
-Five models. All IDs are preserved from the source systems (PowerApps/Jira) to maintain traceability. Cost is never stored — always computed at query time.
+Six models (plus **Product** for SAP / reporting). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Cost is never stored — always computed at query time.
 
 ### 4.1 Resource
 
@@ -209,7 +206,21 @@ Individual daily rate per resource per year. Unique on `(resourceId, year)`. Tak
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.3 RateStandard
+### 4.3 Product
+
+Canonical product catalog (Jira **Components** ↔ `Product`). Seeded from `scripts/data-prod/PRODUCTS.csv` via `npm run db:seed:products` (prod seed also upserts products when the file exists). `Initiative.productId` links here for reporting and Jira sync.
+
+| Field | Type | Req | Notes |
+|---|---|---|---|
+| `id` | String | ✓ | PK (e.g. `PRD-xxx` from CSV) |
+| `name` | String | ✓ | Unique — must match Jira Components value for resolution |
+| `productFamily` | String? | | Grouping (SALES, WORKPLACE, …) |
+| `division` / `subDivision` / `team` | String? | | Org metadata |
+| `sapEotpCode` / `sapEotpName` | String? | | SAP EOTP split (code vs label) |
+| `attractiveness` / `competitiveness` | Float? | | Optional marketing-matrix scores |
+| `initiatives` | Initiative[] | | Reverse relation |
+
+### 4.4 RateStandard
 
 Fallback rate by year × resource type. Only INTERNAL and EXTERNAL — no standard fallback exists for DIRECT_COST. Unique on `(year, type)`. Contains working days per year (200 internal, 220 external).
 
@@ -223,7 +234,7 @@ Fallback rate by year × resource type. Only INTERNAL and EXTERNAL — no standa
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.4 Initiative
+### 4.5 Initiative
 
 Synced from Jira via the `/api/jira/sync` route. The `jiraKey` (RI-xxx) is the natural primary key used across all relations. `powerId` (INI-xxx) is mostly null in practice and kept for reference only. The `year` field is critical — it drives rate resolution for all allocations on this initiative.
 
@@ -234,20 +245,22 @@ Synced from Jira via the `/api/jira/sync` route. The `jiraKey` (RI-xxx) is the n
 | `summary` | String | ✓ | Initiative title from Jira |
 | `status` | String | ✓ | Kept as String — Jira values vary (Done, In Progress, RFP, etc.) |
 | `year` | Int | ✓ | Planning year. CRITICAL — drives all rate resolution. |
-| `components` | String? | | Jira components field = Product (CRM, BOS, IRISBOX, etc.) |
+| `components` | String? | | Jira components field (product name; used to resolve `productId`) |
+| `productId` | String? | | FK → `Product.id` — set by Jira sync from first matching component, or by seed |
 | `productGroup` | String? | | Higher grouping (SALES, SMART ADMIN, eCITIZEN, etc.) |
 | `initiativeType` | String? | | Run, Evolution, Rollout, Projet, Analyse, etc. |
 | `allocations` | Allocation[] | | Relation — all resource assignments for this initiative |
+| `product` | Product? | | Optional relation when `productId` set |
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.5 Allocation
+### 4.6 Allocation
 
 One row per resource × initiative assignment. The `manDays` and `quantity` fields are mutually exclusive in practice. Cost is never stored — derived at query time using the initiative's year to resolve the applicable rate. Direct Costs use `quantity` as unit count, not FTE %.
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
-| `id` | String | ✓ | PK. ASS-{hash} — generated from resourceId + initiativeId + values |
+| `id` | String | ✓ | PK. `ASS-{hash(resourceId\|initiativeId)}` — one row per resource×initiative after merge |
 | `externalId` | String? | | Unique. Original external ID from PowerApps system. |
 | `initiativeId` | String | ✓ | FK → Initiative.id (RI-xxx) |
 | `resourceId` | String | ✓ | FK → Resource.id (MAT-xxx) |
@@ -256,13 +269,14 @@ One row per resource × initiative assignment. The `manDays` and `quantity` fiel
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.6 Entity Relationship Summary
+### 4.7 Entity Relationship Summary
 
 ```
+Product (1) ───── (N) Initiative    [productId optional]
 Resource (1) ──── (N) Rate          [resourceId + year — unique]
-Resource (1) ──── (N) Allocation    [resourceId]
+Resource (1) ──── (N) Allocation   [resourceId]
 Initiative (1) ── (N) Allocation    [initiativeId]
-RateStandard     ── (no FK)         [joined by type + year at query time]
+RateStandard     ── (no FK)       [joined by type + year at query time]
 ```
 
 ---
@@ -281,23 +295,33 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 |---|---|
 | `jira_key` | Initiative identifier (RI-xxx) |
 | `summary` | Initiative title |
-| `initiative_year` | Planning year — drove rate resolution |
-| `product` | Jira components field |
-| `product_group` | Higher product grouping (`&` replaced with `and`, NULL → `Unassigned`) |
+| `initiative_year` | Planning year — drives rate resolution |
+| `allocation_id` | Primary key of the allocation row |
+| `power_id` | Initiative `powerId` (INI-xxx), often null |
+| `product` | Initiative `components` (Jira text) |
+| `product_name` | `LEFT JOIN product` — `COALESCE(name,'Unassigned')` |
+| `product_family` / `division` / `sub_division` / `team` | From `Product` with `Unassigned` fallbacks (`&` → `and` on family) |
+| `sap_eotp_code` / `sap_eotp_name` | From `Product` (`Unassigned` if null) |
+| `attractiveness` / `competitiveness` | Raw floats from `Product` (nullable) |
+| `man_days` / `quantity` | Raw allocation fields (for validation / BI) |
+| `product_group` | Higher grouping (`&` → `and`, NULL → `Unassigned`) |
 | `initiative_type` | Run / Evolution / Rollout / etc. |
 | `status` | Initiative status from Jira |
+| `resource_id` | Resource PK (MAT-xxx) |
 | `resource_name` | Full name of resource |
 | `resource_type` | INTERNAL \| EXTERNAL \| DIRECT_COST |
 | `cellule` | Resource cell |
 | `direction` | Resource direction |
 | `effective_rate` | Resolved daily rate (individual or standard fallback) |
+| `effective_days_per_year` | `nbrDaysPerYear` used for this row (`COALESCE` individual rate, then standard) — drives FTE/man-days consistency |
 | `computed_cost` | Total cost — all types |
 | `internal_cost` | Cost if INTERNAL, else 0 |
 | `external_cost` | Cost if EXTERNAL, else 0 |
 | `direct_cost` | Cost if DIRECT_COST, else 0 |
-| `fte_decimal` | FTE as decimal (0.5) — Internal/External FTE method only, else 0 |
-| `fte_percent` | FTE as percent (50) — Internal/External FTE method only, else 0 |
-| `calculated_man_days` | Unified man-days — direct or derived from FTE. 0 for Direct Costs. |
+| `fte_decimal` / `fte_percent` | See §2.7 — FTE from % or implied from man-days (staff only) |
+| `calculated_man_days` | See §2.6 — unified man-days / direct-cost quantity path |
+
+**Cost safeguards (implementation):** Staff FTE cost uses `effective_days_per_year` with a guard so invalid/zero days do not inflate cost. Direct-cost quantity uses a per-unit day multiplier only when `> 0` (avoids multiplying licences by ~200 when the rate row is `1.0`).
 
 **Key guarantee:** `internal_cost + external_cost + direct_cost = computed_cost` for every row.
 
@@ -309,7 +333,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 
 ```
 Jira API  →  /api/jira/sync  →  Initiative table (upsert by jira_key)
-Excel CSVs  →  seed-production.ts  →  All 5 tables (one-time migration)
+Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); products seeded first
 Browser  →  Next.js API routes  →  Prisma  →  PostgreSQL
 Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 ```
@@ -324,6 +348,8 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource |
 | `/api/rates` | GET, POST | GET by resourceId. POST creates new rate. |
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
+| `/api/products` | GET | List products (optional search) |
+| `/api/products/[id]` | GET | One product by id |
 
 ---
 
@@ -363,6 +389,7 @@ To be defined. Likely a link to Power BI Service or an embedded report. No in-ap
 | Source | Single JQL filter ID covering all relevant initiatives |
 | Pagination | 100 results per page, loop with startAt until all fetched (~1,200 initiatives) |
 | Strategy | Upsert — create new, update existing matched by jira_key |
+| Product link | After upsert, `productId` is set when a Jira **component** string (split on comma) **case-insensitively matches** `Product.name` (first match wins) |
 
 Required environment variables:
 
@@ -382,37 +409,38 @@ JIRA_FILTER_ID=12345
 | Script | Command | Source Files | Purpose |
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
-| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod seed from Excel exports using ID fields for linking |
+| `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert `Product` rows only (SAP fields, scores) |
+| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`** |
+
+**Order for a full prod load:** run migrations, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert products), then **`db:seed:prod`**. The prod script upserts products from `PRODUCTS.csv` when that file exists.
 
 ### 9.1 Production Seed — Run Modes
 
 ```bash
-# Full reload (truncate then import)
+# Full reload: clears planner tables (allocations, rates, initiatives, resources — NOT products), then import
 SEED_PROD_RESET=1 npm run db:seed:prod
 
-# Upsert only (leave existing data not in CSV untouched)
+# Upsert only (leave existing rows not touched by CSV logic)
 npm run db:seed:prod
 
-# Recreate view only — no CSV import
+# Recreate Power BI view only — no CSV import
 SEED_VIEW_ONLY=1 npm run db:seed:prod
 ```
 
 ### 9.2 Production Seed Notes
 
-- **Files required** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv` in `scripts/data-prod/`
-- **ID-based linking** — All linking uses ID fields directly: `InitiativeId` (RI-xxx) → `initiative.id`, `RessourceId` (MAT-xxx) → `resource.id`. No string matching.
-- **Number format** — Swiss apostrophe thousands separator (`1'100`) stripped before parsing
-- **Percent & ManDays format** — Both columns carry a trailing `%` sign in the source CSV and are stored on a ×100 scale. Both are divided by 100 before storing: `34%` → `0.34`, `22000%` → `220 man-days`.
-- **Rate ID uniqueness** — The CSV `RateId` field is not unique (duplicate IDs assigned to different resources). The seed generates a deterministic ID from `hash(resourceId|year)` instead.
-- **RESSOURCES blank rows** — Only 613 of 1,721 rows have an ID. The other 1,108 are blank Excel rows — skipped automatically.
-- **Truncate before reseed** — Run this before `SEED_PROD_RESET=1` if needed:
+- **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for product master data. `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
+- **ID-based linking** — `InitiativeId` (RI-xxx), `RessourceId` (MAT-xxx), etc.
+- **Duplicate assignment rows** — CSV can list the same resource×initiative twice (e.g. % line + man-days line). The seed **merges** into one DB row: **percent values are summed**; **man-days** — **first line with a positive man-days value wins** (CSV order), not the sum. This matches business rules for split Excel exports.
+- **Allocation IDs** — Deterministic `ASS-{hash(resourceId|initiativeId)}` after merge (one row per pair).
+- **Number format** — Swiss apostrophe thousands separator (`1'100`) stripped before parsing.
+- **Percent & ManDays** — Trailing `%`; values divided by 100 for storage (`34%` → `0.34` FTE decimal; large “%” man-days columns → man-days).
+- **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
+- **RESSOURCES blank rows** — Rows without an ID are skipped.
+- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete **`Product`** — product master survives full reloads.
+- **View** — `createCostView()` in `seed-production.ts` defines `v_allocation_costs` (product join, SAP columns, cost/FTE formulas). Migrations that alter columns depended on by the view may need **`DROP VIEW IF EXISTS v_allocation_costs`** before column changes — apply before `migrate deploy` if Prisma reports dependency errors.
 
-```bash
-npx prisma db execute --stdin <<< "
-TRUNCATE TABLE allocation, rate, rate_standard, initiative, resource
-RESTART IDENTITY CASCADE;
-"
-```
+**Manual truncate (rare)** — If you need a clean slate including products, truncate `product` explicitly or use SQL; default reset keeps products.
 
 ---
 
@@ -473,9 +501,23 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 1. **Complete Resources screen** (`/resources`) — API routes + UI per Section 7.2
 2. **Apply be.brussels colour scheme** globally (sidebar `#1a2f4e`, primary `#185FA5`, background `#f4f6f8`)
-3. **Discover Jira custom field IDs** then build Jira sync route using jira.js
-4. **Validate Power BI reports** against `v_allocation_costs` on local Docker Postgres
+3. **Discover Jira custom field IDs** then finish field mapping in Jira sync (`year`, `initiativeType`, etc.)
+4. **Validate Power BI reports** against `v_allocation_costs` on local Docker Postgres (refresh model after view changes)
 5. **Production deployment** — Dockerfile + K8s manifests with DevOps team
+
+### 11.3 Changelog — v1.2 (April 2026)
+
+Consolidated documentation of major changes since the initial design doc:
+
+- **Product model** — `Product` table + `Initiative.productId`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
+- **API** — `GET /api/products`, `GET /api/products/[id]`.
+- **Jira sync** — Resolves `productId` from components ↔ `Product.name` (case-insensitive).
+- **Single production seed** — One `scripts/seed-production.ts` (merged former alternate script): CSV merge rules, `RateStandard` fallback path, `createCostView()` with product join and corrected cost/FTE/`calculated_man_days` logic.
+- **Allocations CSV merge** — Duplicate MAT×RI rows: **sum** `quantity` (%); **first positive man-days** in CSV order wins (not summed).
+- **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `product`.
+- **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost cost and man-days use guarded multipliers (`COALESCE` rate/standard days, `> 0` checks).
+- **Migrations** — When altering columns referenced by `v_allocation_costs`, migrations may need `DROP VIEW IF EXISTS v_allocation_costs` first.
+- **Repository** — Large or sensitive production CSVs may be gitignored; initiative/assignment exports are excluded from version control by policy.
 
 ---
 
@@ -502,11 +544,12 @@ prisma/
   config.ts                     ← Prisma 7 config (datasource URL)
 scripts/
   seed.ts                       ← Dev seed from PowerApps CSV exports
-  seed-production.ts            ← Prod seed from Excel exports
+  seed-products.ts              ← Upsert Product rows from PRODUCTS.csv
+  seed-production.ts            ← Prod seed + v_allocation_costs definition
   data/                         ← PowerApps CSV files (dev)
   data-prod/                    ← Excel CSV files (production migration)
 ```
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.1*
+*Last updated: April 2026 — Resource Planner v1.2 (see §11.3 changelog)*

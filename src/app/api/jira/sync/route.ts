@@ -55,6 +55,20 @@ function firstComponentName(fields: JiraIssueFields): string | null {
   return null;
 }
 
+/** All Jira component names in order (for Product lookup — first match wins). */
+function componentNamesFromFields(fields: JiraIssueFields): string[] {
+  const c = fields.components;
+  if (!Array.isArray(c) || c.length === 0) return [];
+  const names: string[] = [];
+  for (const x of c) {
+    if (x && typeof x === "object" && x !== null && "name" in x) {
+      const n = (x as { name: unknown }).name;
+      if (typeof n === "string" && n.trim()) names.push(n.trim());
+    }
+  }
+  return names;
+}
+
 function statusName(fields: JiraIssueFields): string {
   const s = fields.status;
   if (s && typeof s === "object" && s !== null && "name" in s) {
@@ -430,6 +444,12 @@ export async function GET() {
   let updated = 0;
   let skipped = 0;
 
+  const productMap = new Map<string, string>();
+  const allProducts = await prisma.product.findMany({ select: { id: true, name: true } });
+  for (const p of allProducts) {
+    productMap.set(p.name.trim().toLowerCase(), p.id);
+  }
+
   for (const issue of issues) {
     const id = issue.key;
     const f = issue.fields;
@@ -448,6 +468,15 @@ export async function GET() {
     const jiraInitiativeType = readScalarField(f, resolvedInitiativeTypeFieldId);
     const componentsStr = firstComponentName(f);
 
+    let productId: string | null = null;
+    for (const comp of componentNamesFromFields(f)) {
+      const found = productMap.get(comp.toLowerCase());
+      if (found) {
+        productId = found;
+        break;
+      }
+    }
+
     /** Check immediately before upsert so counts match DB (avoids `in`-list / key mismatch issues). */
     const existedBefore =
       (await prisma.initiative.findUnique({ where: { id }, select: { id: true } })) != null;
@@ -465,6 +494,7 @@ export async function GET() {
         components: componentsStr,
         productGroup: null,
         initiativeType: resolvedInitiativeTypeFieldId ? jiraTypeTrimmed : null,
+        productId,
         createdOn,
         modifiedOn,
       },
@@ -473,6 +503,7 @@ export async function GET() {
         status: statusName(f),
         year,
         components: componentsStr,
+        productId,
         ...(resolvedInitiativeTypeFieldId ? { initiativeType: jiraTypeTrimmed } : {}),
         modifiedOn,
       },

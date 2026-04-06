@@ -153,6 +153,22 @@ In Power BI Desktop:
 
 ---
 
+## Production seed (`scripts/data-prod/`)
+
+Order matters: **products** must exist before initiatives so Jira `Components` resolve to `productId`.
+
+```bash
+# 1. Products first (requires scripts/data-prod/PRODUCTS.csv)
+npm run db:seed:products
+
+# 2. Full production seed (resources, rates, initiatives, allocations)
+SEED_PROD_RESET=1 npm run db:seed:prod
+```
+
+Recreate the Power BI view only (no CSV import): `npm run db:view:prod` or `SEED_VIEW_ONLY=1 npm run db:seed:prod`.
+
+---
+
 ## What's Next (Session 2)
 
 Build the Jira sync API route:

@@ -110,6 +110,29 @@ model RateStandard {
 }
 
 // ============================================================
+// PRODUCTS
+// Canonical product catalog (Jira Components ↔ PRD-xxx id).
+// ============================================================
+
+model Product {
+  id               String       @id // PRD-XXXX — generated slug
+  name             String       @unique // Jira Components value, exact match
+  productFamily    String? // Product family (SALES, WORKPLACE, SMART ADMIN, etc.)
+  division         String? // Division (e.g. CRPS, PDS)
+  subDivision      String? // Sub-division within the division
+  team             String? // Team responsible
+  sapEotpCode      String? // SAP EOTP identifier (e.g. 7D0032001) — part before " - "
+  sapEotpName      String? // SAP EOTP label — part after first " - "
+  attractiveness   Float? // Marketing matrix — attractiveness axis (Y)
+  competitiveness  Float? // Marketing matrix — competitiveness axis (X)
+  initiatives      Initiative[]
+  createdOn        DateTime     @default(now())
+  modifiedOn       DateTime     @updatedAt
+
+  @@map("product")
+}
+
+// ============================================================
 // INITIATIVES
 // Synced from Jira. jiraKey (RI-xxx) is the natural PK used
 // across all relations. powerId (INI-xxx) is mostly null in
@@ -125,6 +148,8 @@ model Initiative {
   components     String?                   // = Product (from Jira components field)
   productGroup   String?
   initiativeType String?
+  productId      String?
+  product        Product?          @relation(fields: [productId], references: [id])
   createdOn      DateTime
   modifiedOn     DateTime
 
