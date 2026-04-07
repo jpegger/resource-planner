@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
   const rows = await prisma.allocation.findMany({
     where: { initiativeId },
-    include: { resource: { select: { id: true, fullName: true } } },
+    include: { resource: { select: { id: true, fullName: true, type: true } } },
     orderBy: { id: "asc" },
   });
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       createdOn: now,
       modifiedOn: now,
     },
-    include: { resource: { select: { id: true, fullName: true } } },
+    include: { resource: { select: { id: true, fullName: true, type: true } } },
   });
 
   return Response.json(allocation, { status: 201 });

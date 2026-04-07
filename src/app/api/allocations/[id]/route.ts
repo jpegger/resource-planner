@@ -56,7 +56,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const updated = await prisma.allocation.update({
       where: { id },
       data,
-      include: { resource: { select: { id: true, fullName: true } } },
+      include: { resource: { select: { id: true, fullName: true, type: true } } },
     });
     return Response.json(updated);
   } catch {

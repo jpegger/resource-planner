@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.2.2 · April 2026**
+**Paradigm · Brussels Capital Region · v1.2.3 · April 2026**
 
 ---
 
@@ -350,6 +350,12 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
 | `/api/products` | GET | List all products (ordered by family, name) |
 | `/api/products/[id]` | GET, PATCH, DELETE | One product by id; PATCH updates catalog fields |
+| `/api/test/products-with-budget` | GET | Per-product INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via `productId`) |
+| `/api/test/products/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups for one product (same view) |
+| `/api/test/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
+| `/api/test/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation `internal_cost`, `external_cost`, `direct_cost`, `computed_cost` from `v_allocation_costs` |
+
+**Prototype note:** routes under `/api/test/*` and UI under `/test/*` are the **product navigation prototype** (budget-by-initiative + assignment editor). They depend on `v_allocation_costs` existing in the DB (seed / `SEED_VIEW_ONLY`).
 
 ### 6.3 Initiatives page — server props, dynamic client, and product catalog
 
@@ -390,6 +396,14 @@ Same master-detail pattern as initiatives.
 ### 7.3 Report — Planned
 
 To be defined. Likely a link to Power BI Service or an embedded report. No in-app charts planned — Power BI handles all analytics.
+
+### 7.4 Products prototype (`/test/products`, `/test/products/[id]`) — Prototype
+
+UX experiment for navigating **product → initiatives → allocations** using the same cost model as Power BI (`v_allocation_costs`). Not a replacement for `/initiatives` yet.
+
+- **`/test/products`** — Table of products (`GET /api/products`) with INT/EXT/DIR in €k from `GET /api/test/products-with-budget` (list still loads if the budget call fails). Search and product-family filter. Row opens detail.
+- **`/test/products/[id]`** — Left: product card (catalog fields). **Budget by initiative:** year filter (All / year), header totals + initiative rows aligned on a fixed `FINANCIALS_4COL` grid, amounts in €k (`formatK`). **Right (selected initiative):** allocation table — no assignment ID column; rows grouped by **resource.type** (Internal / External / Direct) with section subtotals; **one cost column** showing the amount for that type only; summary at top of the panel repeats INT/EXT/DIR/Tot with grey labels above a pill (same pattern as the initiative list header). **Totals row at the bottom of the assignment table was removed** — rollups live in the top summary and section headers only.
+- **Allocations API** — `GET`/`POST` `/api/allocations` and `PATCH` `/api/allocations/[id]` include **`resource.type`** in the embedded `resource` object so the client can group rows without an extra lookup.
 
 ---
 
@@ -522,6 +536,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Products prototype (v1.2.3)** — `src/app/test/products/**` and `src/app/api/test/**`: product list with budget columns; product detail with budget-by-initiative and initiative allocation editor; test APIs read from `v_allocation_costs` and Prisma; allocation responses include `resource.type` for grouping; assignment UI uses €k abbreviation (`formatK`) aligned with initiative list styling.
 - **Product model** — `Product` table + `Initiative.productId`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
 - **API** — `GET /api/products`, `GET /api/products/[id]`.
 - **Jira sync** — Resolves `productId` from components ↔ `Product.name` (case-insensitive).
@@ -546,11 +561,18 @@ src/
     initiatives/initiatives-dynamic-shell.tsx  ← dynamic(ssr:false) wrapper for initiatives UI
     initiatives/initiatives-client.tsx ← Client: filters, Product card + API catalog fetch, allocations
     resources/page.tsx          ← Resources screen (in progress)
+    test/products/page.tsx      ← Prototype: product list + budget columns
+    test/products/[id]/page.tsx  ← Prototype: product detail + budget + allocations
+    test/products/[id]/product-detail-client.tsx  ← Prototype: main client UI
     api/
       jira/sync/route.ts        ← Jira sync (in progress)
       allocations/route.ts      ← GET by initiative, POST
-      allocations/[id]/route.ts ← PATCH, DELETE
+      allocations/[id]/route.ts ← PATCH, DELETE (includes resource.type on PATCH response)
       resources/[id]/route.ts   ← GET, PATCH, DELETE
+      test/products-with-budget/route.ts   ← Prototype: per-product INT/EXT/DIR
+      test/products/[id]/budget/route.ts   ← Prototype: per-initiative costs for product
+      test/resources/route.ts   ← Prototype: resources for combobox (+ type)
+      test/initiative-allocation-costs/route.ts ← Prototype: per-allocation costs per initiative
       rates/route.ts            ← GET by resource, POST
       rates/[id]/route.ts       ← PATCH, DELETE
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
@@ -569,4 +591,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.2.2 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.2.3 (see §11.3 changelog)*
