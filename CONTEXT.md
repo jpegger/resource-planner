@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.2.3 · April 2026**
+**Paradigm · Brussels Capital Region · v1.2.5 · April 2026**
 
 ---
 
@@ -131,6 +131,11 @@ If **both** are present (rare), **man-days** take precedence for FTE so the same
 - NULL values in slicer fields also break DirectQuery button slicers. The view uses `COALESCE(..., 'Unassigned')` on `product_group`.
 - The `::` cast syntax is avoided in the view — `CAST(... AS float)` is used instead for ODBC compatibility.
 - `<>` is used instead of `!=` for the same reason.
+- **Enum columns must always be cast to `VARCHAR` in any view exposed to Power BI.** PostgreSQL enum types are not foldable by the ODBC driver. Apply `CAST(col AS VARCHAR)` to every enum column in every Power BI-facing view.
+
+### 2.9 EOTP exception routing (summary)
+
+Financial initiative costs (INT / EXT / DIR) for a product can be **split across SAP EOTP codes** for a given year. The **`eotp_routing`** table holds **exceptions only**: each row fixes how many **EUR** go to a **target EOTP** for each of the three buckets. Anything not explicitly routed remains on **`Product.sapEotpCode`**. There are **no percentage fields** in the current model — amounts are EUR. Schema and Power BI view: **§4.7**, **§5.2**.
 
 ---
 
@@ -171,7 +176,7 @@ Prisma 7 introduced significant breaking changes from v6. Key adaptations:
 
 ## 4. Database Schema
 
-Six models (plus **Product** for SAP / reporting). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Cost is never stored — always computed at query time.
+Seven Prisma models on the planner side (Resource, Rate, RateStandard, Product, Initiative, Allocation, **EotpRouting**). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Allocation cost is never stored — computed at query time. **EotpRouting** stores explicit EUR splits (exception rows only).
 
 ### 4.1 Resource
 
@@ -219,6 +224,7 @@ Canonical product catalog (Jira **Components** ↔ `Product`). Seeded from `scri
 | `sapEotpCode` / `sapEotpName` | String? | | SAP EOTP split (code vs label) |
 | `attractiveness` / `competitiveness` | Float? | | Optional marketing-matrix scores |
 | `initiatives` | Initiative[] | | Reverse relation |
+| `eotpRoutings` | EotpRouting[] | | Optional exception routing rows (see §4.7) |
 
 ### 4.4 RateStandard
 
@@ -269,10 +275,35 @@ One row per resource × initiative assignment. The `manDays` and `quantity` fiel
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.7 Entity Relationship Summary
+### 4.7 EotpRouting (SAP EOTP exception routing)
+
+Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (internal / external / direct) directed to a **target EOTP** for a given **product × planning year**. Rows are **not** percentages. If no row exists for a bucket, that spend stays on the product’s default **`Product.sapEotpCode`** (no database row required for the “main” EOTP).
+
+| Field | Type | Req | Notes |
+|---|---|---|---|
+| `id` | String | ✓ | PK (`cuid`) |
+| `productId` | String | ✓ | FK → `Product.id` |
+| `year` | Int | ✓ | Planning year (aligned with initiative / budget year) |
+| `eotp` | String | ✓ | Target SAP EOTP code |
+| `eopLabel` | String? | | Display label |
+| `internalAmount` | Float | ✓ | EUR routed to this EOTP from the **internal** bucket (default 0) |
+| `externalAmount` | Float | ✓ | EUR from the **external** bucket |
+| `directAmount` | Float | ✓ | EUR from the **direct** bucket |
+| `comment` | String? | | Optional |
+
+**Unique:** `(productId, year, eotp)` — one combined row per target code per year.
+
+**App rule:** POST/PATCH must **not** set `eotp` equal to the product’s **`sapEotpCode`** (main bucket is the computed remainder, not a stored routing row). Enforced in **`src/lib/eotp-routing-validation.ts`** (case-insensitive trim).
+
+**Downstream:** `src/lib/eotp.ts` — `computeEotpBreakdown(mainEotp, costs, routings)` rolls initiative **internal / external / direct** costs into per–EOTP amounts (main EOTP gets the remainder after subtracting non-main targets). The test **budget** API attaches `eotpBreakdown` per initiative row.
+
+**Power BI:** use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/products/[id]/eotp-routing`.
+
+### 4.8 Entity Relationship Summary
 
 ```
 Product (1) ───── (N) Initiative    [productId optional]
+Product (1) ───── (N) EotpRouting   [productId]
 Resource (1) ──── (N) Rate          [resourceId + year — unique]
 Resource (1) ──── (N) Allocation   [resourceId]
 Initiative (1) ── (N) Allocation    [initiativeId]
@@ -325,6 +356,16 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 
 **Key guarantee:** `internal_cost + external_cost + direct_cost = computed_cost` for every row.
 
+### 5.2 View `v_eotp_costs` (EOTP rollups for reporting)
+
+Created by the same production seed path as `v_allocation_costs` (after `eotp_routing` exists). SQL lives in **`scripts/eotp-views.ts`**: **`product_costs`** (per product × year from `v_allocation_costs`), **`routed_non_main`** (sums of exception routing where `eotp <> main_eotp`), then **`UNION ALL`** of exception lines plus one **main** line per product × year (remainders after subtracting `routed_non_main`).
+
+- **Non-main EOTP** rows — one line per routing row targeting a code other than **`sapEotpCode`**, with `internal_cost` / `external_cost` / `direct_cost` from the three amount columns.
+- **Main EOTP** row (`is_main_eotp = true`) — `eotp` = main code, `eop_label` = **`sapEotpName`**, amounts = product-year totals minus non-main routing.
+- **Derived columns (every row):** **`cash_out`** = `external_cost + direct_cost`; **`total_cost`** = `internal_cost + external_cost + direct_cost`.
+
+**There is no `v_eotp_routing` view** — listing raw exception rows = query **`eotp_routing`** or use the app APIs. To recreate only this view after SQL changes: **`npm run db:recreate:eotp-costs`** (requires **`v_allocation_costs`**). Full planner views: **`SEED_VIEW_ONLY=1 npm run db:seed:prod`** (same as §5 command).
+
 ---
 
 ## 6. Application Architecture
@@ -350,8 +391,11 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
 | `/api/products` | GET | List all products (ordered by family, name) |
 | `/api/products/[id]` | GET, PATCH, DELETE | One product by id; PATCH updates catalog fields |
+| `/api/products/[id]/eotp-routing` | GET, POST | List or create **EotpRouting** rows for the product (`GET` optional `?year=`). POST rejects targets equal to **`sapEotpCode`**. |
+| `/api/products/[id]/eotp-routing/[routingId]` | PATCH, DELETE | Update or delete one routing row (PATCH rejects effective `eotp` = main SAP code). |
+| `/api/products/[id]/eotp-main-from-view` | GET | Main-bucket rows from **`v_eotp_costs`** (`is_main_eotp = true`); optional `?year=` |
 | `/api/test/products-with-budget` | GET | Per-product INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via `productId`) |
-| `/api/test/products/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups for one product (same view) |
+| `/api/test/products/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups; includes **`eotpBreakdown`** (from `computeEotpBreakdown` + `eotp_routing`) when `sapEotpCode` is set |
 | `/api/test/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
 | `/api/test/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation `internal_cost`, `external_cost`, `direct_cost`, `computed_cost` from `v_allocation_costs` |
 
@@ -401,8 +445,8 @@ To be defined. Likely a link to Power BI Service or an embedded report. No in-ap
 
 UX experiment for navigating **product → initiatives → allocations** using the same cost model as Power BI (`v_allocation_costs`). Not a replacement for `/initiatives` yet.
 
-- **`/test/products`** — Table of products (`GET /api/products`) with INT/EXT/DIR in €k from `GET /api/test/products-with-budget` (list still loads if the budget call fails). Search and product-family filter. Row opens detail.
-- **`/test/products/[id]`** — Left: product card (catalog fields). **Budget by initiative:** year filter (All / year), header totals + initiative rows aligned on a fixed `FINANCIALS_4COL` grid, amounts in €k (`formatK`). **Right (selected initiative):** allocation table — no assignment ID column; rows grouped by **resource.type** (Internal / External / Direct) with section subtotals; **one cost column** showing the amount for that type only; summary at top of the panel repeats INT/EXT/DIR/Tot with grey labels above a pill (same pattern as the initiative list header). **Totals row at the bottom of the assignment table was removed** — rollups live in the top summary and section headers only.
+- **`/test/products`** — Table of products (`GET /api/products`) with internal / external / direct totals in €k from `GET /api/test/products-with-budget` (list still loads if the budget call fails). Search and product-family filter. Row opens detail.
+- **`/test/products/[id]`** — **Left column:** product card (name, family, catalog fields only). **Year** control (**All** + year chips) sits **between** the product card and the **EOTP routing** card, right-aligned in the column; it drives **budget** (`/api/test/.../budget`), **EOTP routing** list (`GET .../eotp-routing`), and **`/api/products/.../eotp-main-from-view`** together (year options merge initiative years and routing years). **EOTP routing** table: first row(s) are the **main SAP remainder** from **`v_eotp_costs`** (read-only); below, editable **exception** rows (Internal / External / Direct / **Total** in primary blue, **Cash out**, Comment, Actions). **Budget by initiative:** header totals + rows on a shared **`FINANCIALS_4COL`** grid; column labels **Internal / External / Direct / Total** (same wording as EOTP). **Right (selected initiative):** allocation editor — resource-type sections; table headers and the Internal/External/Direct/Total summary line use the same **label style** (muted, uppercase tracking, optional `bg-muted/40` on header bands) as EOTP and initiative lists. **Totals row at the bottom of the assignment table was removed** — rollups live in the top summary and section headers only.
 - **Allocations API** — `GET`/`POST` `/api/allocations` and `PATCH` `/api/allocations/[id]` include **`resource.type`** in the embedded `resource` object so the client can group rows without an extra lookup.
 
 ---
@@ -437,9 +481,12 @@ JIRA_FILTER_ID=12345
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
 | `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert `Product` rows only (SAP fields, scores) |
-| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`** |
+| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`** |
+| `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → `Product.name`, columns: internal / external / direct EUR) |
+| `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
+| `rebuild-eotp-routing-csv.ts` | `npm run db:rebuild:routing-csv` | `EOTP_ROUTING_SOURCE.csv` | Rebuild **`EOTP_ROUTING.csv`** from wide export (outputs merged EUR columns) |
 
-**Order for a full prod load:** run migrations, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert products), then **`db:seed:prod`**. The prod script upserts products from `PRODUCTS.csv` when that file exists.
+**Order for a full prod load:** run migrations, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert products), then **`db:seed:prod`**. The prod script upserts products from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
 
 ### 9.1 Production Seed — Run Modes
 
@@ -450,8 +497,11 @@ SEED_PROD_RESET=1 npm run db:seed:prod
 # Upsert only (leave existing rows not touched by CSV logic)
 npm run db:seed:prod
 
-# Recreate Power BI view only — no CSV import
+# Recreate Power BI views only — no CSV import (`v_allocation_costs` + `v_eotp_costs`)
 SEED_VIEW_ONLY=1 npm run db:seed:prod
+
+# Recreate only v_eotp_costs (requires v_allocation_costs)
+npm run db:recreate:eotp-costs
 ```
 
 ### 9.2 Production Seed Notes
@@ -465,7 +515,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
 - **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete **`Product`** — product master survives full reloads.
-- **View** — `createCostView()` in `seed-production.ts` defines `v_allocation_costs` (product join, SAP columns, cost/FTE formulas). Migrations that alter columns depended on by the view may need **`DROP VIEW IF EXISTS v_allocation_costs`** before column changes — apply before `migrate deploy` if Prisma reports dependency errors.
+- **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
 **Manual truncate (rare)** — If you need a clean slate including products, truncate `product` explicitly or use SQL; default reset keeps products.
 
@@ -536,6 +586,8 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Products prototype & EOTP polish (v1.2.5)** — Single **year** strip (between product card and EOTP card) drives budget, routing, and **`eotp-main-from-view`**. **`v_eotp_costs`** adds **`cash_out`** and **`total_cost`**; view SQL simplified (**`routed_non_main`** + **`UNION ALL`**); main row uses **`sapEotpName`** as label. API **`GET /api/products/[id]/eotp-main-from-view`**; POST/PATCH **eotp-routing** rejects targeting the **main SAP EOTP** (**`eotp-routing-validation.ts`**). Prototype EOTP table: main remainder row from the view, then exceptions; columns align with **Internal / External / Direct / Total / Cash out**; unified table header styling with initiative and assignment tables; budget/assignment grids use the same **Internal / External / Direct / Total** labels as EOTP.
+- **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(productId, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
 - **Products prototype (v1.2.3)** — `src/app/test/products/**` and `src/app/api/test/**`: product list with budget columns; product detail with budget-by-initiative and initiative allocation editor; test APIs read from `v_allocation_costs` and Prisma; allocation responses include `resource.type` for grouping; assignment UI uses €k abbreviation (`formatK`) aligned with initiative list styling.
 - **Product model** — `Product` table + `Initiative.productId`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
 - **API** — `GET /api/products`, `GET /api/products/[id]`.
@@ -573,10 +625,15 @@ src/
       test/products/[id]/budget/route.ts   ← Prototype: per-initiative costs for product
       test/resources/route.ts   ← Prototype: resources for combobox (+ type)
       test/initiative-allocation-costs/route.ts ← Prototype: per-allocation costs per initiative
+      products/[id]/eotp-routing/route.ts     ← GET, POST — EotpRouting rows
+      products/[id]/eotp-routing/[routingId]/route.ts ← PATCH, DELETE
+      products/[id]/eotp-main-from-view/route.ts ← GET — main rows from v_eotp_costs
       rates/route.ts            ← GET by resource, POST
       rates/[id]/route.ts       ← PATCH, DELETE
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
+  lib/eotp.ts                   ← computeEotpBreakdown (budget / reporting)
+  lib/eotp-routing-validation.ts ← reject routing target = main SAP EOTP
 prisma/
   schema.prisma                 ← Database schema (source of truth)
   migrations/                   ← Migration history
@@ -584,11 +641,16 @@ prisma/
 scripts/
   seed.ts                       ← Dev seed from PowerApps CSV exports
   seed-products.ts              ← Upsert Product rows from PRODUCTS.csv
-  seed-production.ts            ← Prod seed + v_allocation_costs definition
+  seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs
+  eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
+  seed-eotp-routing.ts          ← Seed eotp_routing from EOTP_ROUTING.csv
+  convert-eotp-routing-csv.ts   ← Legacy CSV → three-column EUR format
+  rebuild-eotp-routing-csv.ts   ← Rebuild EOTP_ROUTING.csv from source export
+  recreate-eotp-costs-view.ts    ← Recreate v_eotp_costs only
   data/                         ← PowerApps CSV files (dev)
-  data-prod/                    ← Excel CSV files (production migration)
+  data-prod/                    ← Excel CSV files (production migration); EOTP_ROUTING.csv
 ```
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.2.3 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.2.5 (see §11.3 changelog)*

@@ -126,10 +126,29 @@ model Product {
   attractiveness   Float? // Marketing matrix — attractiveness axis (Y)
   competitiveness  Float? // Marketing matrix — competitiveness axis (X)
   initiatives      Initiative[]
+  eotpRoutings     EotpRouting[]
   createdOn        DateTime     @default(now())
   modifiedOn       DateTime     @updatedAt
 
   @@map("product")
+}
+
+model EotpRouting {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  year            Int // Planning year (2025, 2026…)
+  eotp            String // Target EOTP code, e.g. "7D0079001"
+  eopLabel        String? // Human label
+  internalAmount  Float    @default(0) // EUR routed to this EOTP (internal bucket)
+  externalAmount  Float    @default(0) // EUR routed to this EOTP (external bucket)
+  directAmount    Float    @default(0) // EUR routed to this EOTP (direct bucket)
+  comment         String?
+  createdOn       DateTime @default(now())
+  modifiedOn      DateTime @updatedAt
+
+  @@unique([productId, year, eotp])
+  @@map("eotp_routing")
 }
 
 // ============================================================

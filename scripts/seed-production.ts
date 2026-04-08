@@ -10,6 +10,7 @@
  *
  * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `product` rows).
  * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod`
+ * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
  *
  * RateStandard.csv: required in data-prod, or falls back to `scripts/data/RateStandard.csv`.
  */
@@ -21,6 +22,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
+import { createEotpCostsView } from "./eotp-views";
 
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
@@ -572,6 +574,10 @@ async function createCostView(): Promise<void> {
 
   console.log("Creating v_allocation_costs...");
 
+  // If additional views depend on v_allocation_costs (e.g. v_eotp_costs),
+  // drop them first to keep the seed idempotent.
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_routing`);
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_costs`);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs`);
 
   await prisma.$executeRawUnsafe(`
@@ -715,6 +721,7 @@ async function main(): Promise<void> {
   if (viewOnly) {
     console.log("SEED_VIEW_ONLY: recreating v_allocation_costs (no CSV import)…\n");
     await createCostView();
+    await createEotpCostsView(prisma);
     console.log("Done.");
     return;
   }
@@ -752,6 +759,7 @@ async function main(): Promise<void> {
   await seedRates();
   await seedAllocations();
   await createCostView();
+  await createEotpCostsView(prisma);
 
   console.log("Done.");
 }

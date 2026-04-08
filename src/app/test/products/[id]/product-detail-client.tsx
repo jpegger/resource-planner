@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Popover,
   PopoverContent,
@@ -80,13 +81,31 @@ const formatK = (n: number) => {
   return "€\u00a0" + Math.round(n / 1000) + "k";
 };
 
-/** Shared fixed columns (~20% narrower than 4.25/3.5rem) so amounts align across rows. */
+/** external + direct (matches v_eotp_costs.cash_out). */
+function eotpCashOut(ext: number, dir: number) {
+  return ext + dir;
+}
+
+/** internal + external + direct (matches v_eotp_costs.total_cost). */
+function eotpTotal(int: number, ext: number, dir: number) {
+  return int + ext + dir;
+}
+
+/** Shared fixed columns so amounts align; wide enough for INTERNAL / EXTERNAL / DIRECT / TOTAL labels. */
 const FINANCIALS_4COL =
-  "grid grid-cols-[3.4rem_3.4rem_3.4rem_2.8rem] items-baseline justify-items-end gap-x-2 text-xs tabular-nums sm:gap-x-3";
+  "grid grid-cols-[4.75rem_4.75rem_4.75rem_3.75rem] items-baseline justify-items-end gap-x-2 text-xs tabular-nums sm:gap-x-3";
 
 /** Bold figures in a soft grey–blue pill (budget header, assignment costs, footer). */
 const FINANCIALS_PILL =
   "rounded-lg border border-[color:var(--primary-blue)]/20 bg-[color:var(--primary-blue)]/[0.06] px-2.5 py-1.5 font-bold text-foreground shadow-sm dark:border-[color:var(--primary-blue)]/30 dark:bg-[color:var(--primary-blue)]/[0.12]";
+
+/** Column headers: same family as product field labels, slightly pronounced (uppercase / tracking). */
+const TABLE_HEAD_CLASS =
+  "text-muted-foreground text-xs font-medium uppercase tracking-wider";
+const TABLE_HEAD_TOTAL_CLASS =
+  "text-xs font-medium uppercase tracking-wider text-[color:var(--primary-blue)]";
+/** Subtle band behind header rows so labels read like form field labels. */
+const TABLE_HEAD_ROW_BG = "";
 
 const RESOURCE_GROUP_ORDER = ["INTERNAL", "EXTERNAL", "DIRECT_COST"] as const;
 type ResourceGroupKey = (typeof RESOURCE_GROUP_ORDER)[number];
@@ -143,6 +162,565 @@ function statusClass(status: string): string {
     return "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-100";
   }
   return "bg-muted text-muted-foreground";
+}
+
+type EotpRoutingRow = {
+  id: string;
+  productId: string;
+  year: number;
+  eotp: string;
+  eopLabel: string | null;
+  internalAmount: number;
+  externalAmount: number;
+  directAmount: number;
+  comment: string | null;
+};
+
+type RoutingDraft = {
+  year: string;
+  eotp: string;
+  eopLabel: string;
+  internal: string;
+  external: string;
+  direct: string;
+  comment: string;
+};
+
+function emptyDraft(defaultYear: number): RoutingDraft {
+  return {
+    year: String(defaultYear),
+    eotp: "",
+    eopLabel: "",
+    internal: "0",
+    external: "0",
+    direct: "0",
+    comment: "",
+  };
+}
+
+/** One row from v_eotp_costs where is_main_eotp = true (remainder on main SAP EOTP). */
+type MainEotpFromViewRow = {
+  year: number;
+  eotp: string | null;
+  eopLabel: string | null;
+  internalCost: number;
+  externalCost: number;
+  directCost: number;
+};
+
+function eotpIsMainSapCode(rowEotp: string, mainSapEotp: string | null): boolean {
+  if (!mainSapEotp?.trim()) return false;
+  return rowEotp.trim().toLowerCase() === mainSapEotp.trim().toLowerCase();
+}
+
+function EotpRoutingSection({
+  productId,
+  mainSapEotpCode,
+  filterYear,
+  onChanged,
+}: {
+  productId: string;
+  /** Product SAP EOTP code — rows with the same target EOTP are highlighted as the main bucket. */
+  mainSapEotpCode: string | null;
+  /** Same as budget / product year filter — null = show all routing years. */
+  filterYear: number | null;
+  onChanged: () => void;
+}) {
+  const [rows, setRows] = useState<EotpRoutingRow[]>([]);
+  const [mainFromView, setMainFromView] = useState<MainEotpFromViewRow[]>([]);
+  const [mainViewError, setMainViewError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [draft, setDraft] = useState<RoutingDraft>(() => emptyDraft(new Date().getFullYear()));
+
+  const productIdDecoded = useMemo(() => decodeURIComponent(productId.trim()), [productId]);
+
+  const yearsInData = useMemo(
+    () => [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a),
+    [rows]
+  );
+
+  const displayRows = useMemo(() => {
+    if (filterYear === null) return rows;
+    return rows.filter((r) => r.year === filterYear);
+  }, [rows, filterYear]);
+
+  const defaultYear = filterYear ?? yearsInData[0] ?? new Date().getFullYear();
+
+  const loadMainFromView = useCallback(async () => {
+    setMainViewError(null);
+    try {
+      const q =
+        filterYear === null
+          ? ""
+          : `?year=${encodeURIComponent(String(filterYear))}`;
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-main-from-view${q}`
+      );
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        const msg =
+          typeof errBody?.message === "string"
+            ? errBody.message
+            : typeof errBody?.error === "string"
+              ? errBody.error
+              : null;
+        setMainFromView([]);
+        if (res.status === 503 && msg) {
+          setMainViewError(msg);
+        } else if (!msg) {
+          setMainViewError(`Could not load main EOTP from view (${res.status}).`);
+        } else {
+          setMainViewError(msg);
+        }
+        return;
+      }
+      const data = (await res.json()) as unknown;
+      setMainFromView(Array.isArray(data) ? (data as MainEotpFromViewRow[]) : []);
+    } catch {
+      setMainFromView([]);
+      setMainViewError("Network error loading v_eotp_costs main row.");
+    }
+  }, [productIdDecoded, filterYear]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`
+      );
+      if (!res.ok) {
+        setRows([]);
+        const errBody = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        const msg =
+          typeof errBody?.message === "string"
+            ? errBody.message
+            : typeof errBody?.error === "string"
+              ? errBody.error
+              : null;
+        setLoadError(
+          msg ??
+            (res.status === 404
+              ? "Product not found."
+              : `Could not load routing (${res.status}).`)
+        );
+        return;
+      }
+      const data = (await res.json()) as unknown;
+      setRows(Array.isArray(data) ? (data as EotpRoutingRow[]) : []);
+    } catch {
+      setRows([]);
+      setLoadError("Network error loading routing.");
+    } finally {
+      setLoading(false);
+    }
+  }, [productIdDecoded]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    void loadMainFromView();
+  }, [loadMainFromView]);
+
+  const startNew = () => {
+    setEditingId("new");
+    setDraft(emptyDraft(defaultYear));
+  };
+
+  const startEdit = (r: EotpRoutingRow) => {
+    setEditingId(r.id);
+    setDraft({
+      year: String(r.year),
+      eotp: r.eotp,
+      eopLabel: r.eopLabel ?? "",
+      internal: String(r.internalAmount),
+      external: String(r.externalAmount),
+      direct: String(r.directAmount),
+      comment: r.comment ?? "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const save = async () => {
+    const year = Number.parseInt(draft.year, 10);
+    const internalAmount = Number.parseFloat(String(draft.internal).replace(",", "."));
+    const externalAmount = Number.parseFloat(String(draft.external).replace(",", "."));
+    const directAmount = Number.parseFloat(String(draft.direct).replace(",", "."));
+    if (
+      !Number.isFinite(year) ||
+      !draft.eotp.trim() ||
+      !Number.isFinite(internalAmount) ||
+      !Number.isFinite(externalAmount) ||
+      !Number.isFinite(directAmount)
+    ) {
+      alert("Year, EOTP code and internal / external / direct amounts (EUR) are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editingId === "new") {
+        const res = await fetch(`/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            year,
+            eotp: draft.eotp.trim(),
+            eopLabel: draft.eopLabel.trim() || null,
+            internalAmount,
+            externalAmount,
+            directAmount,
+            comment: draft.comment.trim() || null,
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert((j as { error?: string }).error ?? "Could not create routing");
+          return;
+        }
+      } else if (editingId) {
+        const res = await fetch(
+          `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing/${encodeURIComponent(editingId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              eotp: draft.eotp.trim(),
+              eopLabel: draft.eopLabel.trim() || null,
+              internalAmount,
+              externalAmount,
+              directAmount,
+              comment: draft.comment.trim() || null,
+            }),
+          }
+        );
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert((j as { error?: string }).error ?? "Could not save routing");
+          return;
+        }
+      }
+      setEditingId(null);
+      await load();
+      await loadMainFromView();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm("Delete this routing row?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing/${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        alert("Could not delete");
+        return;
+      }
+      if (editingId === id) setEditingId(null);
+      await load();
+      await loadMainFromView();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const draftForm = (opts: { isNew: boolean }) => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Year</Label>
+        <Input
+          className="h-8 text-sm"
+          type="number"
+          value={draft.year}
+          disabled={!opts.isNew || saving}
+          onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5 lg:col-span-2">
+        <Label className="text-xs">EOTP code</Label>
+        <Input
+          className="h-8 font-mono text-sm"
+          value={draft.eotp}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, eotp: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5 lg:col-span-3">
+        <Label className="text-xs">Label</Label>
+        <Input
+          className="h-8 text-sm"
+          value={draft.eopLabel}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, eopLabel: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Internal (EUR)</Label>
+        <Input
+          className="h-8 text-sm"
+          inputMode="decimal"
+          value={draft.internal}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, internal: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">External (EUR)</Label>
+        <Input
+          className="h-8 text-sm"
+          inputMode="decimal"
+          value={draft.external}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, external: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Direct (EUR)</Label>
+        <Input
+          className="h-8 text-sm"
+          inputMode="decimal"
+          value={draft.direct}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, direct: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5 sm:col-span-2 lg:col-span-6">
+        <Label className="text-xs">Comment</Label>
+        <Textarea
+          className="min-h-[52px] text-sm"
+          value={draft.comment}
+          disabled={saving}
+          onChange={(e) => setDraft((d) => ({ ...d, comment: e.target.value }))}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-6">
+        <Button type="button" size="sm" onClick={() => void save()} disabled={saving}>
+          {saving ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
+          Save
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">EOTP routing</CardTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={startNew}
+            disabled={saving || editingId !== null}
+          >
+            <Plus className="mr-1 size-3.5" />
+            Add row
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loadError ? (
+          <p className="text-destructive text-sm">{loadError}</p>
+        ) : null}
+        {mainViewError ? (
+          <p className="text-amber-700 dark:text-amber-500/90 text-sm">{mainViewError}</p>
+        ) : null}
+        {loading ? (
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin" /> Loading routing…
+          </div>
+        ) : (
+          <>
+            {!loadError &&
+            !loading &&
+            rows.length === 0 &&
+            mainFromView.length === 0 &&
+            editingId !== "new" ? (
+              <p className="text-muted-foreground text-sm">No routing rows for this product.</p>
+            ) : null}
+            {rows.length > 0 &&
+            displayRows.length === 0 &&
+            editingId !== "new" &&
+            mainFromView.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No routing rows for year {filterYear}. Choose &quot;All&quot; or another year in the product
+                panel.
+              </p>
+            ) : null}
+            {(mainFromView.length > 0 || displayRows.length > 0 || editingId === "new") && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className={cn(TABLE_HEAD_ROW_BG, "[&_tr]:border-border")}>
+                    <TableRow>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[72px]")}>Year</TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "min-w-[100px]")}>EOTP</TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "min-w-[120px]")}>Label</TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[88px] text-right")}>
+                        Internal
+                      </TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[88px] text-right")}>
+                        External
+                      </TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[88px] text-right")}>
+                        Direct
+                      </TableHead>
+                      <TableHead className={cn(TABLE_HEAD_TOTAL_CLASS, "w-[88px] text-right")}>
+                        Total
+                      </TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[88px] text-right")}>
+                        Cash out
+                      </TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "min-w-[100px]")}>Comment</TableHead>
+                      <TableHead className={cn(TABLE_HEAD_CLASS, "w-[96px] text-right")}>
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mainFromView.map((m) => (
+                      <TableRow
+                        key={`main-view-${m.year}`}
+                        className="bg-muted/40 text-muted-foreground"
+                      >
+                        <TableCell className="tabular-nums">{m.year}</TableCell>
+                        <TableCell className="text-xs">
+                          {m.eotp && eotpIsMainSapCode(m.eotp, mainSapEotpCode) ? (
+                            <span
+                              className="inline-block rounded-full border border-[color:var(--primary-blue)]/30 bg-[color:var(--primary-blue)]/[0.08] px-2.5 py-0.5 font-mono tabular-nums dark:bg-[color:var(--primary-blue)]/[0.14]"
+                              title="Product SAP EOTP (main)"
+                            >
+                              {m.eotp}
+                            </span>
+                          ) : (
+                            <span className="font-mono">{m.eotp ?? "—"}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-[180px] truncate text-xs" title={m.eopLabel ?? ""}>
+                          {m.eopLabel ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-foreground">
+                          {formatK(m.internalCost)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-foreground">
+                          {formatK(m.externalCost)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-foreground">
+                          {formatK(m.directCost)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums font-medium text-[color:var(--primary-blue)]">
+                          {formatK(eotpTotal(m.internalCost, m.externalCost, m.directCost))}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-foreground">
+                          {formatK(eotpCashOut(m.externalCost, m.directCost))}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] text-xs italic">
+                          Remainder from <span className="font-mono">v_eotp_costs</span> (not editable)
+                        </TableCell>
+                        <TableCell className="text-right text-xs">—</TableCell>
+                      </TableRow>
+                    ))}
+                    {displayRows.map((r) =>
+                      editingId === r.id ? (
+                        <TableRow key={r.id}>
+                          <TableCell colSpan={10} className="bg-muted/30 p-3">
+                            {draftForm({ isNew: false })}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <TableRow key={r.id}>
+                          <TableCell className="tabular-nums">{r.year}</TableCell>
+                          <TableCell className="text-xs">
+                            {eotpIsMainSapCode(r.eotp, mainSapEotpCode) ? (
+                              <span
+                                className="inline-block rounded-full border border-[color:var(--primary-blue)]/30 bg-[color:var(--primary-blue)]/[0.08] px-2.5 py-0.5 font-mono tabular-nums dark:bg-[color:var(--primary-blue)]/[0.14]"
+                                title="Product SAP EOTP (main)"
+                              >
+                                {r.eotp}
+                              </span>
+                            ) : (
+                              <span className="font-mono">{r.eotp}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-[180px] truncate text-xs" title={r.eopLabel ?? ""}>
+                            {r.eopLabel ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {formatK(r.internalAmount)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {formatK(r.externalAmount)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {formatK(r.directAmount)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums font-medium text-[color:var(--primary-blue)]">
+                            {formatK(eotpTotal(r.internalAmount, r.externalAmount, r.directAmount))}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {formatK(eotpCashOut(r.externalAmount, r.directAmount))}
+                          </TableCell>
+                          
+                          <TableCell className="max-w-[160px] truncate text-xs" title={r.comment ?? ""}>
+                            {r.comment ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={() => startEdit(r)}
+                              disabled={saving || editingId !== null}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-destructive"
+                              onClick={() => void remove(r.id)}
+                              disabled={saving || editingId !== null}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    )}
+                    {editingId === "new" ? (
+                      <TableRow>
+                        <TableCell colSpan={10} className="bg-muted/30 p-3">
+                          {draftForm({ isNew: true })}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 async function patchAllocation(id: string, body: Record<string, unknown>) {
@@ -396,7 +974,33 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
   const [resources, setResources] = useState<ResourceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [budgetLoading, setBudgetLoading] = useState(false);
-  const [yearOptions, setYearOptions] = useState<number[]>([]);
+  const [budgetYearOptions, setBudgetYearOptions] = useState<number[]>([]);
+  const [routingYearOptions, setRoutingYearOptions] = useState<number[]>([]);
+
+  const productIdDecoded = useMemo(() => decodeURIComponent(productId.trim()), [productId]);
+
+  const loadRoutingYears = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`
+      );
+      if (!res.ok) {
+        setRoutingYearOptions([]);
+        return;
+      }
+      const data = (await res.json()) as unknown;
+      const rows = Array.isArray(data) ? (data as { year: number }[]) : [];
+      const ys = [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a);
+      setRoutingYearOptions(ys);
+    } catch {
+      setRoutingYearOptions([]);
+    }
+  }, [productIdDecoded]);
+
+  const yearOptions = useMemo(() => {
+    const s = new Set([...budgetYearOptions, ...routingYearOptions]);
+    return [...s].sort((a, b) => b - a);
+  }, [budgetYearOptions, routingYearOptions]);
 
   const loadBudget = useCallback(async () => {
     setBudgetLoading(true);
@@ -406,12 +1010,22 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
           ? ""
           : `?year=${encodeURIComponent(String(selectedYear))}`;
       const res = await fetch(`/api/test/products/${encodeURIComponent(productId)}/budget${q}`);
-      const data = (await res.json()) as BudgetInitiative[];
-      const list = Array.isArray(data) ? data : [];
+      if (!res.ok) {
+        setInitiatives([]);
+        return;
+      }
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
+        setInitiatives([]);
+        return;
+      }
+      const list = Array.isArray(data) ? (data as BudgetInitiative[]) : [];
       setInitiatives(list);
       if (selectedYear === null) {
         const ys = [...new Set(list.map((i) => i.initiative_year))].sort((a, b) => b - a);
-        setYearOptions(ys);
+        setBudgetYearOptions(ys);
       }
     } finally {
       setBudgetLoading(false);
@@ -451,6 +1065,10 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
   useEffect(() => {
     void loadBudget();
   }, [loadBudget]);
+
+  useEffect(() => {
+    void loadRoutingYears();
+  }, [loadRoutingYears]);
 
   useEffect(() => {
     setSelectedInitiative(null);
@@ -620,7 +1238,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
         <div className="flex min-h-0 min-w-0 flex-col gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <CardTitle className="text-base">{product.name}</CardTitle>
                 {product.productFamily ? (
                   <Badge variant="secondary">{product.productFamily}</Badge>
@@ -642,40 +1260,56 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
             </CardContent>
           </Card>
 
+          <div className="mt-5 flex w-full justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Label className="text-muted-foreground shrink-0 text-xs">Year</Label>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedYear(null)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs",
+                    selectedYear === null
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  )}
+                >
+                  All
+                </button>
+                {yearOptions.map((y) => (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setSelectedYear(y)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs",
+                      selectedYear === y
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <EotpRoutingSection
+            productId={productId}
+            mainSapEotpCode={product.sapEotpCode}
+            filterYear={selectedYear}
+            onChanged={() => {
+              void loadBudget();
+              void loadRoutingYears();
+            }}
+          />
+
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader className="pb-2">
               <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <div className="min-w-0">
                   <CardTitle className="text-base">Budget by initiative</CardTitle>
-                  <div className="flex flex-wrap gap-1.5 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedYear(null)}
-                      className={cn(
-                        "rounded-full border px-2.5 py-1 text-xs",
-                        selectedYear === null
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-background"
-                      )}
-                    >
-                      All
-                    </button>
-                    {yearOptions.map((y) => (
-                      <button
-                        key={y}
-                        type="button"
-                        onClick={() => setSelectedYear(y)}
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-xs",
-                          selectedYear === y
-                            ? "border-primary bg-primary/10"
-                            : "border-border bg-background"
-                        )}
-                      >
-                        {y}
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 <div className="text-foreground min-w-0 shrink-0 overflow-x-auto sm:w-auto">
                   {budgetLoading ? (
@@ -703,13 +1337,18 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
                 <p className="text-muted-foreground text-sm">No allocation costs for this product.</p>
               ) : (
                 <div className="flex min-h-0 flex-col">
-                  <div className="border-border text-muted-foreground mb-1 grid w-full grid-cols-1 gap-3 border-b px-3 pb-2 text-xs font-medium sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                    <div className="min-w-0">Initiative</div>
+                  <div
+                    className={cn(
+                      "border-border mb-1 grid w-full grid-cols-1 gap-3 border-b px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
+                      TABLE_HEAD_ROW_BG
+                    )}
+                  >
+                    <div className={cn(TABLE_HEAD_CLASS, "min-w-0")}>Initiative</div>
                     <div className={`${FINANCIALS_4COL} min-w-0 overflow-x-auto`}>
-                      <span>INT</span>
-                      <span>EXT</span>
-                      <span>DIR</span>
-                      <span className="font-medium text-[color:var(--primary-blue)]">Tot</span>
+                      <span className={TABLE_HEAD_CLASS}>Internal</span>
+                      <span className={TABLE_HEAD_CLASS}>External</span>
+                      <span className={TABLE_HEAD_CLASS}>Direct</span>
+                      <span className={TABLE_HEAD_TOTAL_CLASS}>Total</span>
                     </div>
                   </div>
                   <ul className="space-y-0 divide-y divide-border">
@@ -798,56 +1437,57 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
               </div>
 
               <div className="min-h-0 flex-1">
-                <div className="mb-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-foreground text-sm font-medium">Allocations</h3>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void addAllocation()}
-                      disabled={resources.length === 0}
-                      className="bg-[#185FA5] text-white hover:bg-[#185FA5]/90"
-                    >
-                      + New
-                    </Button>
-                  </div>
-                  <div className="flex w-full flex-col items-stretch gap-1 sm:items-end">
-                    <div
-                      className={`${FINANCIALS_4COL} text-muted-foreground w-full min-w-0 justify-items-end text-xs font-medium sm:w-auto`}
-                    >
-                      <span>INT</span>
-                      <span>EXT</span>
-                      <span>DIR</span>
-                      <span className="font-medium text-[color:var(--primary-blue)]">Tot</span>
+                <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-end gap-4 sm:gap-6">
+                    <h3 className="text-foreground shrink-0 text-sm font-medium">Allocations</h3>
+                    <div className="flex min-w-0 flex-col gap-1 sm:items-end">
+                      <div className={cn(FINANCIALS_4COL, "min-w-0 justify-items-end")}>
+                        <span className={TABLE_HEAD_CLASS}>Internal</span>
+                        <span className={TABLE_HEAD_CLASS}>External</span>
+                        <span className={TABLE_HEAD_CLASS}>Direct</span>
+                        <span className={TABLE_HEAD_TOTAL_CLASS}>Total</span>
+                      </div>
+                      {allocLoading ? (
+                        <div className="text-muted-foreground flex min-h-[2.25rem] items-center justify-end gap-2 text-xs">
+                          <Loader2 className="size-4 shrink-0 animate-spin" />
+                          <span className="sm:hidden">Totals…</span>
+                        </div>
+                      ) : (
+                        <div className={cn(FINANCIALS_4COL, FINANCIALS_PILL, "min-w-0 justify-items-end")}>
+                          <span className="block text-right">{formatK(allocationTotals.internal)}</span>
+                          <span className="block text-right">{formatK(allocationTotals.external)}</span>
+                          <span className="block text-right">{formatK(allocationTotals.direct)}</span>
+                          <span className="block text-right font-bold text-[color:var(--primary-blue)]">
+                            {formatK(allocationTotals.total)}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {allocLoading ? (
-                      <div className="text-muted-foreground flex min-h-[2.25rem] w-full items-center justify-end gap-2 text-xs sm:w-auto">
-                        <Loader2 className="size-4 shrink-0 animate-spin" />
-                        <span className="sm:hidden">Totals…</span>
-                      </div>
-                    ) : (
-                      <div className={cn(FINANCIALS_4COL, FINANCIALS_PILL, "w-full min-w-0 justify-items-end sm:w-auto")}>
-                        <span className="block text-right">{formatK(allocationTotals.internal)}</span>
-                        <span className="block text-right">{formatK(allocationTotals.external)}</span>
-                        <span className="block text-right">{formatK(allocationTotals.direct)}</span>
-                        <span className="block text-right font-bold text-[color:var(--primary-blue)]">
-                          {formatK(allocationTotals.total)}
-                        </span>
-                      </div>
-                    )}
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void addAllocation()}
+                    disabled={resources.length === 0}
+                    className="bg-[#185FA5] shrink-0 text-white hover:bg-[#185FA5]/90"
+                  >
+                    + New
+                  </Button>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Percent</TableHead>
-                      <TableHead>Man days</TableHead>
-                      <TableHead>Resource</TableHead>
-                      <TableHead className="min-w-[7rem] text-right">Cost</TableHead>
-                      <TableHead className="w-28" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <div className="border-border mt-5 border-t pt-5">
+                  <Table>
+                    <TableHeader className={cn(TABLE_HEAD_ROW_BG, "[&_tr]:border-border")}>
+                      <TableRow>
+                        <TableHead className={TABLE_HEAD_CLASS}>Percent</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Man days</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Resource</TableHead>
+                        <TableHead className={cn(TABLE_HEAD_CLASS, "min-w-[7rem] text-right")}>
+                          Cost
+                        </TableHead>
+                        <TableHead className={cn(TABLE_HEAD_CLASS, "w-28")} aria-label="Actions" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                     {allocLoading ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-muted-foreground py-8 text-center text-sm">
@@ -900,11 +1540,12 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
                         </Fragment>
                       ))
                     )}
-                  </TableBody>
-                </Table>
-                {!allocLoading && allocations.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No allocations yet.</p>
-                ) : null}
+                    </TableBody>
+                  </Table>
+                  {!allocLoading && allocations.length === 0 ? (
+                    <p className="text-muted-foreground mt-3 text-sm">No allocations yet.</p>
+                  ) : null}
+                </div>
               </div>
             </div>
           )}

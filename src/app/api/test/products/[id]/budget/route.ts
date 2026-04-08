@@ -1,6 +1,8 @@
 import { type NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { computeEotpBreakdown } from "@/lib/eotp";
+import type { EotpRoutingRow } from "@/lib/eotp";
 
 export const runtime = "nodejs";
 
@@ -68,16 +70,52 @@ export async function GET(
           ORDER BY i.year DESC, i.summary ASC
         `;
 
-  const body = rows.map((r) => ({
-    jira_key: r.jira_key,
-    summary: r.summary,
-    status: r.status,
-    initiative_year: Number(r.initiative_year),
-    internal_cost: Number(r.internal_cost),
-    external_cost: Number(r.external_cost),
-    direct_cost: Number(r.direct_cost),
-    total_cost: Number(r.total_cost),
-  }));
+  const product = await prisma.product.findUnique({
+    where: { id: productId.trim() },
+    select: { sapEotpCode: true, sapEotpName: true },
+  });
+
+  let routings: EotpRoutingRow[] = [];
+  if (product?.sapEotpCode) {
+    try {
+      routings = await prisma.eotpRouting.findMany({
+        where: {
+          productId: productId.trim(),
+          ...(yearFilter === null ? {} : { year: yearFilter }),
+        },
+      });
+    } catch {
+      // e.g. migration not applied yet (`eotp_routing` missing) — still return budget rows without EOTP breakdown
+      routings = [];
+    }
+  }
+
+  const body = rows.map((r) => {
+    const initiativeYear = Number(r.initiative_year);
+    const internal = Number(r.internal_cost);
+    const external = Number(r.external_cost);
+    const direct = Number(r.direct_cost);
+
+    return {
+      jira_key: r.jira_key,
+      summary: r.summary,
+      status: r.status,
+      initiative_year: initiativeYear,
+      internal_cost: internal,
+      external_cost: external,
+      direct_cost: direct,
+      total_cost: Number(r.total_cost),
+      eotpBreakdown:
+        product?.sapEotpCode
+          ? computeEotpBreakdown(
+              product.sapEotpCode,
+              product.sapEotpName ?? product.sapEotpCode,
+              { internal, external, direct },
+              routings.filter((x) => x.year === initiativeYear)
+            )
+          : [],
+    };
+  });
 
   return Response.json(body);
 }

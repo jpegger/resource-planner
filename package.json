@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -12,8 +13,12 @@
     "db:down": "docker compose down",
     "db:seed:products": "tsx scripts/seed-products.ts",
     "db:seed:prod": "tsx scripts/seed-production.ts",
+    "db:seed:routing": "tsx scripts/seed-eotp-routing.ts",
+    "db:convert:eotp-csv": "tsx scripts/convert-eotp-routing-csv.ts",
+    "db:rebuild:routing-csv": "tsx scripts/rebuild-eotp-routing-csv.ts",
     "db:view": "SEED_VIEW_ONLY=1 tsx scripts/seed.ts",
-    "db:view:prod": "SEED_VIEW_ONLY=1 tsx scripts/seed-production.ts"
+    "db:view:prod": "SEED_VIEW_ONLY=1 tsx scripts/seed-production.ts",
+    "db:recreate:eotp-costs": "tsx scripts/recreate-eotp-costs-view.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

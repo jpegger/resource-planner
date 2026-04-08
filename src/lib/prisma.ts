@@ -12,8 +12,22 @@ function createClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+function getPrisma(): PrismaClient {
+  let client = globalForPrisma.prisma;
+  if (client && typeof (client as { eotpRouting?: unknown }).eotpRouting !== "undefined") {
+    return client;
+  }
+  if (client) {
+    globalForPrisma.prisma = undefined;
+  }
+  client = createClient();
+  if (typeof (client as { eotpRouting?: unknown }).eotpRouting === "undefined") {
+    throw new Error(
+      "Prisma Client is missing EotpRouting. Run `npx prisma generate`, then restart the dev server."
+    );
+  }
+  globalForPrisma.prisma = client;
+  return client;
 }
+
+export const prisma = getPrisma();
