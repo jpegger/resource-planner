@@ -91,7 +91,7 @@ export async function GET(
         { status: 503 }
       );
     }
-    console.error("[GET /api/products/.../eotp-main-from-view]", e);
+    console.error("[GET /api/allocation-entities/.../eotp-main-from-view]", e);
     return Response.json({ error: "Could not load EOTP main row from view" }, { status: 500 });
   }
 }

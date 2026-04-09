@@ -2,7 +2,7 @@
  * Production seed — ID-linked CSVs under `scripts/data-prod/`.
  *
  * JIRA / RESSOURCES: latin-1 · RATES / Assignement / RateStandard: utf-8 (BOM stripped).
- * Initiatives get `productId` from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
+ * Initiatives get `allocationEntityId` (DB column `productId`) from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
  * Duplicate Assignement rows (same resource + initiative): % summed across lines. Man-days: if
  * several lines have man-days > 0, the first line in CSV order wins (avoids double-counting
  * duplicate exports such as 12 + 7 for the same assignment). Existing DB pairs still get CSV
@@ -87,12 +87,12 @@ async function seedInitiatives(): Promise<void> {
   console.log("Seeding initiatives from JIRA.csv...");
   const rows = readCsv("JIRA.csv", "latin1");
 
-  const productMap = new Map<string, string>();
-  const allProducts = await prisma.product.findMany({ select: { id: true, name: true } });
-  for (const p of allProducts) {
-    productMap.set(p.name.trim().toLowerCase(), p.id);
+  const allocationEntityMap = new Map<string, string>();
+  const allEntities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
+  for (const p of allEntities) {
+    allocationEntityMap.set(p.name.trim().toLowerCase(), p.id);
   }
-  console.log(`  Product lookup map: ${productMap.size} entries`);
+  console.log(`  Allocation entity lookup map: ${allocationEntityMap.size} entries`);
 
   let upserted = 0;
   let skipped = 0;
@@ -119,11 +119,11 @@ async function seedInitiatives(): Promise<void> {
       .map((v) => (v ?? "").trim())
       .filter(Boolean);
 
-    let productId: string | null = null;
+    let allocationEntityId: string | null = null;
     for (const comp of componentValues) {
-      const found = productMap.get(comp.toLowerCase());
+      const found = allocationEntityMap.get(comp.toLowerCase());
       if (found) {
-        productId = found;
+        allocationEntityId = found;
         break;
       }
     }
@@ -137,7 +137,7 @@ async function seedInitiatives(): Promise<void> {
         components: row["Components"]?.trim() || null,
         productGroup: row["(RI) Product Group"]?.trim() || null,
         initiativeType: row["(RI) Type"]?.trim() || null,
-        productId,
+        allocationEntityId,
         modifiedOn: NOW,
       },
       create: {
@@ -149,7 +149,7 @@ async function seedInitiatives(): Promise<void> {
         components: row["Components"]?.trim() || null,
         productGroup: row["(RI) Product Group"]?.trim() || null,
         initiativeType: row["(RI) Type"]?.trim() || null,
-        productId,
+        allocationEntityId,
         createdOn: NOW,
         modifiedOn: NOW,
       },

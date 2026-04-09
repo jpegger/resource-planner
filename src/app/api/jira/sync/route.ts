@@ -444,10 +444,10 @@ export async function GET() {
   let updated = 0;
   let skipped = 0;
 
-  const productMap = new Map<string, string>();
-  const allProducts = await prisma.product.findMany({ select: { id: true, name: true } });
-  for (const p of allProducts) {
-    productMap.set(p.name.trim().toLowerCase(), p.id);
+  const allocationEntityMap = new Map<string, string>();
+  const allEntities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
+  for (const p of allEntities) {
+    allocationEntityMap.set(p.name.trim().toLowerCase(), p.id);
   }
 
   for (const issue of issues) {
@@ -468,11 +468,11 @@ export async function GET() {
     const jiraInitiativeType = readScalarField(f, resolvedInitiativeTypeFieldId);
     const componentsStr = firstComponentName(f);
 
-    let productId: string | null = null;
+    let allocationEntityId: string | null = null;
     for (const comp of componentNamesFromFields(f)) {
-      const found = productMap.get(comp.toLowerCase());
+      const found = allocationEntityMap.get(comp.toLowerCase());
       if (found) {
-        productId = found;
+        allocationEntityId = found;
         break;
       }
     }
@@ -494,7 +494,7 @@ export async function GET() {
         components: componentsStr,
         productGroup: null,
         initiativeType: resolvedInitiativeTypeFieldId ? jiraTypeTrimmed : null,
-        productId,
+        allocationEntityId,
         createdOn,
         modifiedOn,
       },
@@ -503,7 +503,7 @@ export async function GET() {
         status: statusName(f),
         year,
         components: componentsStr,
-        productId,
+        allocationEntityId,
         ...(resolvedInitiativeTypeFieldId ? { initiativeType: jiraTypeTrimmed } : {}),
         modifiedOn,
       },

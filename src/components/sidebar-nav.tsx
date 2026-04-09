@@ -15,11 +15,11 @@ export function SidebarNav() {
       style={{ backgroundColor: "var(--sidebar-dark)" }}
     >
       <Link
-        href="/initiatives"
-        title="Initiative"
+        href="/investments"
+        title="Investments / portfolio"
         className={cn(
           "flex h-10 w-10 items-center justify-center rounded-md text-white transition-colors hover:bg-white/10",
-          pathname.startsWith("/initiatives") && "bg-white/15"
+          pathname.startsWith("/investments") && "bg-white/15"
         )}
       >
         <LayoutDashboard className="size-5" aria-hidden />

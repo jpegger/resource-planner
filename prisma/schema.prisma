@@ -42,6 +42,15 @@ enum InitiativeType {
   LEGAL
 }
 
+/// Cost attribution target: product, project, program, infrastructure, or team (UI: "Investment").
+enum AllocationEntityType {
+  PRODUCT
+  PROJECT
+  PROGRAM
+  INFRASTRUCTURE
+  TEAM
+}
+
 // ============================================================
 // RESOURCES
 // ============================================================
@@ -110,14 +119,15 @@ model RateStandard {
 }
 
 // ============================================================
-// PRODUCTS
-// Canonical product catalog (Jira Components ↔ PRD-xxx id).
+// ALLOCATION ENTITIES (table: product)
+// Canonical catalog: Jira Components ↔ id; cost attribution / EOTP / reporting.
 // ============================================================
 
-model Product {
-  id               String       @id // PRD-XXXX — generated slug
-  name             String       @unique // Jira Components value, exact match
-  productFamily    String? // Product family (SALES, WORKPLACE, SMART ADMIN, etc.)
+model AllocationEntity {
+  id               String                @id // PRD-XXXX — generated slug
+  name             String                @unique // Jira Components value, exact match
+  type             AllocationEntityType  @default(PRODUCT) @map("entity_type")
+  productFamily    String? // Portfolio family (SALES, WORKPLACE, SMART ADMIN, etc.)
   division         String? // Division (e.g. CRPS, PDS)
   subDivision      String? // Sub-division within the division
   team             String? // Team responsible
@@ -127,27 +137,27 @@ model Product {
   competitiveness  Float? // Marketing matrix — competitiveness axis (X)
   initiatives      Initiative[]
   eotpRoutings     EotpRouting[]
-  createdOn        DateTime     @default(now())
-  modifiedOn       DateTime     @updatedAt
+  createdOn        DateTime              @default(now())
+  modifiedOn       DateTime              @updatedAt
 
   @@map("product")
 }
 
 model EotpRouting {
-  id              String   @id @default(cuid())
-  productId       String
-  product         Product  @relation(fields: [productId], references: [id])
-  year            Int // Planning year (2025, 2026…)
-  eotp            String // Target EOTP code, e.g. "7D0079001"
-  eopLabel        String? // Human label
-  internalAmount  Float    @default(0) // EUR routed to this EOTP (internal bucket)
-  externalAmount  Float    @default(0) // EUR routed to this EOTP (external bucket)
-  directAmount    Float    @default(0) // EUR routed to this EOTP (direct bucket)
-  comment         String?
-  createdOn       DateTime @default(now())
-  modifiedOn      DateTime @updatedAt
+  id                 String            @id @default(cuid())
+  allocationEntityId String            @map("productId")
+  allocationEntity   AllocationEntity  @relation(fields: [allocationEntityId], references: [id])
+  year               Int // Planning year (2025, 2026…)
+  eotp               String // Target EOTP code, e.g. "7D0079001"
+  eopLabel           String? // Human label
+  internalAmount     Float             @default(0) // EUR routed to this EOTP (internal bucket)
+  externalAmount     Float             @default(0) // EUR routed to this EOTP (external bucket)
+  directAmount       Float             @default(0) // EUR routed to this EOTP (direct bucket)
+  comment            String?
+  createdOn          DateTime          @default(now())
+  modifiedOn         DateTime          @updatedAt
 
-  @@unique([productId, year, eotp])
+  @@unique([allocationEntityId, year, eotp])
   @@map("eotp_routing")
 }
 
@@ -167,8 +177,8 @@ model Initiative {
   components     String?                   // = Product (from Jira components field)
   productGroup   String?
   initiativeType String?
-  productId      String?
-  product        Product?          @relation(fields: [productId], references: [id])
+  allocationEntityId String?          @map("productId")
+  allocationEntity   AllocationEntity? @relation(fields: [allocationEntityId], references: [id])
   createdOn      DateTime
   modifiedOn     DateTime
 

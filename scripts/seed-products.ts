@@ -3,7 +3,7 @@
  *
  * Usage: `npm run db:seed:products`
  *
- * Run before production initiative seed so `productId` can resolve from Components.
+ * Run before production initiative seed so `allocationEntityId` can resolve from Components.
  */
 
 import "dotenv/config";
@@ -59,10 +59,10 @@ async function main(): Promise<void> {
 
   const rows = (parsed.data as ProductRow[]).filter((row) => row.id?.trim());
 
-  console.log(`Importing ${rows.length} products…`);
+  console.log(`Importing ${rows.length} allocation entities…`);
 
   for (const row of rows) {
-    await prisma.product.upsert({
+    await prisma.allocationEntity.upsert({
       where: { id: row.id.trim() },
       create: {
         id: row.id.trim(),
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`Done. ${rows.length} products upserted.`);
+  console.log(`Done. ${rows.length} allocation entities upserted.`);
 }
 
 main()

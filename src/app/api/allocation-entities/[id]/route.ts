@@ -1,12 +1,15 @@
+import { AllocationEntityType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+const ALLOCATION_ENTITY_TYPES = new Set<string>(Object.values(AllocationEntityType));
+
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const product = await prisma.product.findUnique({ where: { id } });
-  if (!product) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json(product);
+  const entity = await prisma.allocationEntity.findUnique({ where: { id } });
+  if (!entity) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json(entity);
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -20,6 +23,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const data: {
     name?: string;
+    type?: AllocationEntityType;
     productFamily?: string | null;
     division?: string | null;
     subDivision?: string | null;
@@ -31,6 +35,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   } = {};
 
   if (typeof body.name === "string") data.name = body.name;
+  if ("type" in body && body.type != null) {
+    const t = String(body.type);
+    if (!ALLOCATION_ENTITY_TYPES.has(t)) {
+      return Response.json({ error: "type must be a valid AllocationEntityType" }, { status: 400 });
+    }
+    data.type = t as AllocationEntityType;
+  }
   if ("productFamily" in body)
     data.productFamily =
       body.productFamily === null || body.productFamily === undefined
@@ -82,11 +93,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   try {
-    const product = await prisma.product.update({
+    const entity = await prisma.allocationEntity.update({
       where: { id },
       data,
     });
-    return Response.json(product);
+    return Response.json(entity);
   } catch {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -94,15 +105,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
 export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const linked = await prisma.initiative.count({ where: { productId: id } });
+  const linked = await prisma.initiative.count({ where: { allocationEntityId: id } });
   if (linked > 0) {
     return Response.json(
-      { error: `Cannot delete: ${linked} initiative(s) reference this product` },
+      { error: `Cannot delete: ${linked} initiative(s) reference this allocation entity` },
       { status: 409 }
     );
   }
   try {
-    await prisma.product.delete({ where: { id } });
+    await prisma.allocationEntity.delete({ where: { id } });
   } catch {
     return Response.json({ error: "Not found" }, { status: 404 });
   }

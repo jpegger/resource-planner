@@ -63,17 +63,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  const products = await prisma.product.findMany({ select: { id: true, name: true } });
-  const productMap = new Map(products.map((p) => [p.name.trim().toLowerCase(), p.id]));
+  const entities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
+  const entityMap = new Map(entities.map((p) => [p.name.trim().toLowerCase(), p.id]));
 
   let upserted = 0;
   let skipped = 0;
 
   for (const row of rows) {
     const productName = (row.productName ?? "").trim();
-    const productId = productMap.get(productName.toLowerCase());
-    if (!productId) {
-      console.warn(`WARN: product not found — "${productName}" (skipped)`);
+    const allocationEntityId = entityMap.get(productName.toLowerCase());
+    if (!allocationEntityId) {
+      console.warn(`WARN: allocation entity not found — "${productName}" (skipped)`);
       skipped++;
       continue;
     }
@@ -105,14 +105,14 @@ async function main(): Promise<void> {
 
     await prisma.eotpRouting.upsert({
       where: {
-        productId_year_eotp: {
-          productId,
+        allocationEntityId_year_eotp: {
+          allocationEntityId,
           year,
           eotp,
         },
       },
       create: {
-        productId,
+        allocationEntityId,
         year,
         eotp,
         eopLabel: eopLabel || null,

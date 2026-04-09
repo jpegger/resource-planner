@@ -37,7 +37,7 @@ export async function GET(
   try {
     const routings = await prisma.eotpRouting.findMany({
       where: {
-        productId: productId.trim(),
+        allocationEntityId: productId.trim(),
         ...(yearFilter === null ? {} : { year: yearFilter }),
       },
       orderBy: [{ year: "asc" }, { eotp: "asc" }],
@@ -47,10 +47,10 @@ export async function GET(
   } catch (e) {
     const resolved = resolveEotpRoutingDbError(e);
     if (resolved) {
-      console.warn("[GET /api/products/.../eotp-routing] schema:", e);
+      console.warn("[GET /api/allocation-entities/.../eotp-routing] schema:", e);
       return resolved;
     }
-    console.error("[GET /api/products/.../eotp-routing]", e);
+    console.error("[GET /api/allocation-entities/.../eotp-routing]", e);
     return Response.json({ error: "Internal error loading EOTP routing" }, { status: 500 });
   }
 }
@@ -75,21 +75,21 @@ export async function POST(
     return Response.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const product = await prisma.product.findUnique({
+  const entity = await prisma.allocationEntity.findUnique({
     where: { id: productId.trim() },
     select: { sapEotpCode: true },
   });
-  if (!product) {
-    return Response.json({ error: "Product not found" }, { status: 404 });
+  if (!entity) {
+    return Response.json({ error: "Allocation entity not found" }, { status: 404 });
   }
-  if (eotpTargetsProductMain(eotp, product.sapEotpCode)) {
+  if (eotpTargetsProductMain(eotp, entity.sapEotpCode)) {
     return Response.json({ error: EOTP_ROUTING_MAIN_TARGET_ERROR }, { status: 400 });
   }
 
   try {
     const routing = await prisma.eotpRouting.create({
       data: {
-        productId: productId.trim(),
+        allocationEntityId: productId.trim(),
         year,
         eotp,
         eopLabel:
@@ -110,10 +110,10 @@ export async function POST(
   } catch (e) {
     const resolved = resolveEotpRoutingDbError(e);
     if (resolved) {
-      console.warn("[POST /api/products/.../eotp-routing] schema:", e);
+      console.warn("[POST /api/allocation-entities/.../eotp-routing] schema:", e);
       return resolved;
     }
-    console.error("[POST /api/products/.../eotp-routing]", e);
+    console.error("[POST /api/allocation-entities/.../eotp-routing]", e);
     return Response.json({ error: "Internal error creating EOTP routing" }, { status: 500 });
   }
 }

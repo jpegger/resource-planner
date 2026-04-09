@@ -70,17 +70,17 @@ export async function GET(
           ORDER BY i.year DESC, i.summary ASC
         `;
 
-  const product = await prisma.product.findUnique({
+  const entity = await prisma.allocationEntity.findUnique({
     where: { id: productId.trim() },
     select: { sapEotpCode: true, sapEotpName: true },
   });
 
   let routings: EotpRoutingRow[] = [];
-  if (product?.sapEotpCode) {
+  if (entity?.sapEotpCode) {
     try {
       routings = await prisma.eotpRouting.findMany({
         where: {
-          productId: productId.trim(),
+          allocationEntityId: productId.trim(),
           ...(yearFilter === null ? {} : { year: yearFilter }),
         },
       });
@@ -106,10 +106,10 @@ export async function GET(
       direct_cost: direct,
       total_cost: Number(r.total_cost),
       eotpBreakdown:
-        product?.sapEotpCode
+        entity?.sapEotpCode
           ? computeEotpBreakdown(
-              product.sapEotpCode,
-              product.sapEotpName ?? product.sapEotpCode,
+              entity.sapEotpCode,
+              entity.sapEotpName ?? entity.sapEotpCode,
               { internal, external, direct },
               routings.filter((x) => x.year === initiativeYear)
             )

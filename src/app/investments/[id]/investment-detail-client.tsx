@@ -36,7 +36,7 @@ type ResourceType = "INTERNAL" | "EXTERNAL" | "DIRECT_COST";
 
 type ResourceOption = { id: string; fullName: string; type: ResourceType };
 
-type Product = {
+type Investment = {
   id: string;
   name: string;
   productFamily: string | null;
@@ -166,7 +166,7 @@ function statusClass(status: string): string {
 
 type EotpRoutingRow = {
   id: string;
-  productId: string;
+  allocationEntityId?: string;
   year: number;
   eotp: string;
   eopLabel: string | null;
@@ -214,15 +214,15 @@ function eotpIsMainSapCode(rowEotp: string, mainSapEotp: string | null): boolean
 }
 
 function EotpRoutingSection({
-  productId,
+  investmentId,
   mainSapEotpCode,
   filterYear,
   onChanged,
 }: {
-  productId: string;
-  /** Product SAP EOTP code — rows with the same target EOTP are highlighted as the main bucket. */
+  investmentId: string;
+  /** Main SAP EOTP code — rows with the same target EOTP are highlighted as the main bucket. */
   mainSapEotpCode: string | null;
-  /** Same as budget / product year filter — null = show all routing years. */
+  /** Same as budget / investment year filter — null = show all routing years. */
   filterYear: number | null;
   onChanged: () => void;
 }) {
@@ -235,7 +235,7 @@ function EotpRoutingSection({
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<RoutingDraft>(() => emptyDraft(new Date().getFullYear()));
 
-  const productIdDecoded = useMemo(() => decodeURIComponent(productId.trim()), [productId]);
+  const investmentIdDecoded = useMemo(() => decodeURIComponent(investmentId.trim()), [investmentId]);
 
   const yearsInData = useMemo(
     () => [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a),
@@ -257,7 +257,7 @@ function EotpRoutingSection({
           ? ""
           : `?year=${encodeURIComponent(String(filterYear))}`;
       const res = await fetch(
-        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-main-from-view${q}`
+        `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-main-from-view${q}`
       );
       if (!res.ok) {
         const errBody = (await res.json().catch(() => null)) as Record<string, unknown> | null;
@@ -283,14 +283,14 @@ function EotpRoutingSection({
       setMainFromView([]);
       setMainViewError("Network error loading v_eotp_costs main row.");
     }
-  }, [productIdDecoded, filterYear]);
+  }, [investmentIdDecoded, filterYear]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
       const res = await fetch(
-        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`
+        `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-routing`
       );
       if (!res.ok) {
         setRows([]);
@@ -304,7 +304,7 @@ function EotpRoutingSection({
         setLoadError(
           msg ??
             (res.status === 404
-              ? "Product not found."
+              ? "Investment not found."
               : `Could not load routing (${res.status}).`)
         );
         return;
@@ -317,7 +317,7 @@ function EotpRoutingSection({
     } finally {
       setLoading(false);
     }
-  }, [productIdDecoded]);
+  }, [investmentIdDecoded]);
 
   useEffect(() => {
     void load();
@@ -367,7 +367,7 @@ function EotpRoutingSection({
     setSaving(true);
     try {
       if (editingId === "new") {
-        const res = await fetch(`/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`, {
+        const res = await fetch(`/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-routing`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -387,7 +387,7 @@ function EotpRoutingSection({
         }
       } else if (editingId) {
         const res = await fetch(
-          `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing/${encodeURIComponent(editingId)}`,
+          `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-routing/${encodeURIComponent(editingId)}`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -421,7 +421,7 @@ function EotpRoutingSection({
     setSaving(true);
     try {
       const res = await fetch(
-        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing/${encodeURIComponent(id)}`,
+        `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-routing/${encodeURIComponent(id)}`,
         { method: "DELETE" }
       );
       if (!res.ok) {
@@ -553,14 +553,14 @@ function EotpRoutingSection({
             rows.length === 0 &&
             mainFromView.length === 0 &&
             editingId !== "new" ? (
-              <p className="text-muted-foreground text-sm">No routing rows for this product.</p>
+              <p className="text-muted-foreground text-sm">No routing rows for this investment.</p>
             ) : null}
             {rows.length > 0 &&
             displayRows.length === 0 &&
             editingId !== "new" &&
             mainFromView.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No routing rows for year {filterYear}. Choose &quot;All&quot; or another year in the product
+                No routing rows for year {filterYear}. Choose &quot;All&quot; or another year in the investment
                 panel.
               </p>
             ) : null}
@@ -604,7 +604,7 @@ function EotpRoutingSection({
                           {m.eotp && eotpIsMainSapCode(m.eotp, mainSapEotpCode) ? (
                             <span
                               className="inline-block rounded-full border border-[color:var(--primary-blue)]/30 bg-[color:var(--primary-blue)]/[0.08] px-2.5 py-0.5 font-mono tabular-nums dark:bg-[color:var(--primary-blue)]/[0.14]"
-                              title="Product SAP EOTP (main)"
+                              title="Main SAP EOTP"
                             >
                               {m.eotp}
                             </span>
@@ -650,7 +650,7 @@ function EotpRoutingSection({
                             {eotpIsMainSapCode(r.eotp, mainSapEotpCode) ? (
                               <span
                                 className="inline-block rounded-full border border-[color:var(--primary-blue)]/30 bg-[color:var(--primary-blue)]/[0.08] px-2.5 py-0.5 font-mono tabular-nums dark:bg-[color:var(--primary-blue)]/[0.14]"
-                                title="Product SAP EOTP (main)"
+                                title="Main SAP EOTP"
                               >
                                 {r.eotp}
                               </span>
@@ -963,8 +963,8 @@ function AllocationEditor({
   );
 }
 
-export function ProductDetailTestClient({ productId }: { productId: string }) {
-  const [product, setProduct] = useState<Product | null>(null);
+export function InvestmentDetailClient({ investmentId }: { investmentId: string }) {
+  const [investment, setInvestment] = useState<Investment | null>(null);
   const [initiatives, setInitiatives] = useState<BudgetInitiative[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedInitiative, setSelectedInitiative] = useState<BudgetInitiative | null>(null);
@@ -977,12 +977,12 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
   const [budgetYearOptions, setBudgetYearOptions] = useState<number[]>([]);
   const [routingYearOptions, setRoutingYearOptions] = useState<number[]>([]);
 
-  const productIdDecoded = useMemo(() => decodeURIComponent(productId.trim()), [productId]);
+  const investmentIdDecoded = useMemo(() => decodeURIComponent(investmentId.trim()), [investmentId]);
 
   const loadRoutingYears = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/products/${encodeURIComponent(productIdDecoded)}/eotp-routing`
+        `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/eotp-routing`
       );
       if (!res.ok) {
         setRoutingYearOptions([]);
@@ -995,7 +995,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
     } catch {
       setRoutingYearOptions([]);
     }
-  }, [productIdDecoded]);
+  }, [investmentIdDecoded]);
 
   const yearOptions = useMemo(() => {
     const s = new Set([...budgetYearOptions, ...routingYearOptions]);
@@ -1009,7 +1009,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
         selectedYear === null
           ? ""
           : `?year=${encodeURIComponent(String(selectedYear))}`;
-      const res = await fetch(`/api/test/products/${encodeURIComponent(productId)}/budget${q}`);
+      const res = await fetch(`/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/budget${q}`);
       if (!res.ok) {
         setInitiatives([]);
         return;
@@ -1030,18 +1030,18 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
     } finally {
       setBudgetLoading(false);
     }
-  }, [productId, selectedYear]);
+  }, [investmentIdDecoded, selectedYear]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const prodsRes = await fetch(`/api/products/${encodeURIComponent(productId)}`);
+        const prodsRes = await fetch(`/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}`);
         const p = prodsRes.ok ? await prodsRes.json() : null;
 
         let resList: ResourceOption[] = [];
         try {
-          const rRes = await fetch("/api/test/resources");
+          const rRes = await fetch("/api/resources");
           if (rRes.ok) {
             const j = await rRes.json();
             resList = Array.isArray(j) ? j : [];
@@ -1051,7 +1051,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
         }
 
         if (cancelled) return;
-        setProduct(p && typeof p === "object" && "id" in p ? (p as Product) : null);
+        setInvestment(p && typeof p === "object" && "id" in p ? (p as Investment) : null);
         setResources(resList);
       } finally {
         if (!cancelled) setLoading(false);
@@ -1060,7 +1060,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+  }, [investmentIdDecoded]);
 
   useEffect(() => {
     void loadBudget();
@@ -1078,7 +1078,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
 
   const loadCostsForInitiative = useCallback(async (jiraKey: string) => {
     const res = await fetch(
-      `/api/test/initiative-allocation-costs?initiativeId=${encodeURIComponent(jiraKey)}`
+      `/api/initiative-allocation-costs?initiativeId=${encodeURIComponent(jiraKey)}`
     );
     if (!res.ok) {
       setCostByAllocId({});
@@ -1212,13 +1212,13 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
     );
   }
 
-  if (!product) {
+  if (!investment) {
     return (
       <div className="p-6">
-        <Link href="/test/products" className="text-primary text-sm underline">
-          ← Back to products
+        <Link href="/investments" className="text-primary text-sm underline">
+          ← Back to investments
         </Link>
-        <p className="text-muted-foreground mt-4 text-sm">Product not found.</p>
+        <p className="text-muted-foreground mt-4 text-sm">Investment not found.</p>
       </div>
     );
   }
@@ -1227,10 +1227,10 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <div>
         <Link
-          href="/test/products"
+          href="/investments"
           className="text-primary inline-flex text-sm font-medium underline-offset-4 hover:underline"
         >
-          ← Back to products
+          ← Back to investments
         </Link>
       </div>
 
@@ -1239,23 +1239,23 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <CardTitle className="text-base">{product.name}</CardTitle>
-                {product.productFamily ? (
-                  <Badge variant="secondary">{product.productFamily}</Badge>
+                <CardTitle className="text-base">{investment.name}</CardTitle>
+                {investment.productFamily ? (
+                  <Badge variant="secondary">{investment.productFamily}</Badge>
                 ) : null}
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <FieldReadonly label="Division" value={product.division ?? ""} />
-              <FieldReadonly label="Sub-division" value={product.subDivision ?? ""} />
-              <FieldReadonly label="Team" value={product.team ?? ""} />
-              <FieldReadonly label="SAP EOTP code" value={product.sapEotpCode ?? ""} />
-              <FieldReadonly label="SAP EOTP name" value={product.sapEotpName ?? ""} />
-              {product.attractiveness != null ? (
-                <FieldReadonly label="Attractiveness" value={String(product.attractiveness)} />
+              <FieldReadonly label="Division" value={investment.division ?? ""} />
+              <FieldReadonly label="Sub-division" value={investment.subDivision ?? ""} />
+              <FieldReadonly label="Team" value={investment.team ?? ""} />
+              <FieldReadonly label="SAP EOTP code" value={investment.sapEotpCode ?? ""} />
+              <FieldReadonly label="SAP EOTP name" value={investment.sapEotpName ?? ""} />
+              {investment.attractiveness != null ? (
+                <FieldReadonly label="Attractiveness" value={String(investment.attractiveness)} />
               ) : null}
-              {product.competitiveness != null ? (
-                <FieldReadonly label="Competitiveness" value={String(product.competitiveness)} />
+              {investment.competitiveness != null ? (
+                <FieldReadonly label="Competitiveness" value={String(investment.competitiveness)} />
               ) : null}
             </CardContent>
           </Card>
@@ -1296,8 +1296,8 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
           </div>
 
           <EotpRoutingSection
-            productId={productId}
-            mainSapEotpCode={product.sapEotpCode}
+            investmentId={investmentId}
+            mainSapEotpCode={investment.sapEotpCode}
             filterYear={selectedYear}
             onChanged={() => {
               void loadBudget();
@@ -1334,7 +1334,7 @@ export function ProductDetailTestClient({ productId }: { productId: string }) {
               {budgetLoading ? (
                 <p className="text-muted-foreground text-sm">Loading initiatives…</p>
               ) : initiatives.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No allocation costs for this product.</p>
+                <p className="text-muted-foreground text-sm">No allocation costs for this investment.</p>
               ) : (
                 <div className="flex min-h-0 flex-col">
                   <div

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Product = {
+type Row = {
   id: string;
   name: string;
   productFamily: string | null;
@@ -27,9 +27,9 @@ const formatK = (n: number) => {
   return "\u00a0" + Math.round(n / 1000) + "k";
 };
 
-export default function ProductsTestPage() {
+export default function InvestmentsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [budgetById, setBudgetById] = useState<Map<string, BudgetRow>>(new Map());
   const [search, setSearch] = useState("");
   const [familyFilter, setFamilyFilter] = useState("");
@@ -39,13 +39,13 @@ export default function ProductsTestPage() {
     let cancelled = false;
     (async () => {
       try {
-        const prodsRes = await fetch("/api/products");
+        const prodsRes = await fetch("/api/allocation-entities");
         const prodsJson = prodsRes.ok ? await prodsRes.json() : [];
-        const prods: Product[] = Array.isArray(prodsJson) ? prodsJson : [];
+        const prods: Row[] = Array.isArray(prodsJson) ? prodsJson : [];
 
         let budget: BudgetRow[] = [];
         try {
-          const budgetRes = await fetch("/api/test/products-with-budget");
+          const budgetRes = await fetch("/api/allocation-entities/with-budget");
           if (budgetRes.ok) {
             const j = await budgetRes.json();
             budget = Array.isArray(j) ? j : [];
@@ -55,13 +55,13 @@ export default function ProductsTestPage() {
         }
 
         if (cancelled) return;
-        setProducts(prods);
+        setRows(prods);
         const m = new Map<string, BudgetRow>();
         for (const b of budget) m.set(b.product_id, b);
         setBudgetById(m);
       } catch {
         if (!cancelled) {
-          setProducts([]);
+          setRows([]);
           setBudgetById(new Map());
         }
       } finally {
@@ -75,22 +75,22 @@ export default function ProductsTestPage() {
 
   const families = useMemo(() => {
     const s = new Set<string>();
-    for (const p of products) {
+    for (const p of rows) {
       if (p.productFamily?.trim()) s.add(p.productFamily.trim());
     }
     return [...s].sort((a, b) => a.localeCompare(b));
-  }, [products]);
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter((p) => {
+    return rows.filter((p) => {
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) ||
         (p.productFamily ?? "").toLowerCase().includes(q)
       );
     });
-  }, [products, search]);
+  }, [rows, search]);
 
   const familyFiltered = useMemo(() => {
     if (!familyFilter) return filtered;
@@ -99,11 +99,11 @@ export default function ProductsTestPage() {
 
   return (
     <div className="p-6" style={{ backgroundColor: "var(--page-background)" }}>
-      <h1 className="text-foreground mb-4 text-lg font-semibold">Products (prototype)</h1>
+      <h1 className="text-foreground mb-4 text-lg font-semibold">Investments</h1>
       <div className="mb-4 flex flex-wrap gap-3">
         <input
           className="border-input bg-background text-foreground placeholder:text-muted-foreground min-w-[200px] flex-1 rounded-md border px-3 py-2 text-sm"
-          placeholder="Search products…"
+          placeholder="Search investments…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -148,10 +148,10 @@ export default function ProductsTestPage() {
                     key={p.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => router.push(`/test/products/${encodeURIComponent(p.id)}`)}
+                    onClick={() => router.push(`/investments/${encodeURIComponent(p.id)}`)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ")
-                        router.push(`/test/products/${encodeURIComponent(p.id)}`);
+                        router.push(`/investments/${encodeURIComponent(p.id)}`);
                     }}
                     className="hover:bg-muted/50 border-b border-border cursor-pointer transition-colors"
                   >
@@ -179,7 +179,7 @@ export default function ProductsTestPage() {
         </div>
       )}
       {!loading && familyFiltered.length === 0 ? (
-        <p className="text-muted-foreground mt-4 text-sm">No products match.</p>
+        <p className="text-muted-foreground mt-4 text-sm">No investments match.</p>
       ) : null}
     </div>
   );

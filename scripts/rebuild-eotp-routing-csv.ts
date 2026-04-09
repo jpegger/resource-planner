@@ -226,7 +226,7 @@ async function main(): Promise<void> {
   const parsed = Papa.parse<SourceRow>(content, { header: true, skipEmptyLines: true });
   const rows = (parsed.data ?? []).filter((r) => r && typeof r === "object");
 
-  const products = await prisma.product.findMany({
+  const products = await prisma.allocationEntity.findMany({
     select: { id: true, name: true, sapEotpCode: true, sapEotpName: true },
   });
   const byName = new Map(products.map((p) => [p.name.trim().toLowerCase(), p]));

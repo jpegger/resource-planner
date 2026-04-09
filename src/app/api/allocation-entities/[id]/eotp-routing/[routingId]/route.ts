@@ -56,22 +56,22 @@ export async function PATCH(
   }
 
   const existing = await prisma.eotpRouting.findFirst({
-    where: { id: routingId.trim(), productId: productId.trim() },
+    where: { id: routingId.trim(), allocationEntityId: productId.trim() },
   });
   if (!existing) {
     return Response.json({ error: "Routing row not found" }, { status: 404 });
   }
 
-  const product = await prisma.product.findUnique({
+  const entity = await prisma.allocationEntity.findUnique({
     where: { id: productId.trim() },
     select: { sapEotpCode: true },
   });
-  if (!product) {
-    return Response.json({ error: "Product not found" }, { status: 404 });
+  if (!entity) {
+    return Response.json({ error: "Allocation entity not found" }, { status: 404 });
   }
 
   const nextEotp = data.eotp !== undefined ? data.eotp : existing.eotp;
-  if (eotpTargetsProductMain(nextEotp, product.sapEotpCode)) {
+  if (eotpTargetsProductMain(nextEotp, entity.sapEotpCode)) {
     return Response.json({ error: EOTP_ROUTING_MAIN_TARGET_ERROR }, { status: 400 });
   }
 
@@ -85,10 +85,10 @@ export async function PATCH(
   } catch (e) {
     const resolved = resolveEotpRoutingDbError(e);
     if (resolved) {
-      console.warn("[PATCH /api/products/.../eotp-routing/...] schema:", e);
+      console.warn("[PATCH /api/allocation-entities/.../eotp-routing/...] schema:", e);
       return resolved;
     }
-    console.error("[PATCH /api/products/.../eotp-routing/...]", e);
+    console.error("[PATCH /api/allocation-entities/.../eotp-routing/...]", e);
     return Response.json({ error: "Internal error updating EOTP routing" }, { status: 500 });
   }
 }
@@ -108,10 +108,10 @@ export async function DELETE(
   } catch (e) {
     const resolved = resolveEotpRoutingDbError(e);
     if (resolved) {
-      console.warn("[DELETE /api/products/.../eotp-routing/...] schema:", e);
+      console.warn("[DELETE /api/allocation-entities/.../eotp-routing/...] schema:", e);
       return resolved;
     }
-    console.error("[DELETE /api/products/.../eotp-routing/...]", e);
+    console.error("[DELETE /api/allocation-entities/.../eotp-routing/...]", e);
     return Response.json({ error: "Internal error deleting EOTP routing" }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.2.5 · April 2026**
+**Paradigm · Brussels Capital Region · v1.3 · April 2026**
 
 ---
 
@@ -211,14 +211,15 @@ Individual daily rate per resource per year. Unique on `(resourceId, year)`. Tak
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.3 Product
+### 4.3 AllocationEntity (physical table: `product`)
 
-Canonical product catalog (Jira **Components** ↔ `Product`). Seeded from `scripts/data-prod/PRODUCTS.csv` via `npm run db:seed:products` (prod seed also upserts products when the file exists). `Initiative.productId` links here for reporting and Jira sync.
+Canonical allocation / investment catalog (Jira **Components** ↔ `AllocationEntity.name`). **Physical PostgreSQL table name remains `product`.** Column **`entity_type`** maps to Prisma enum **`AllocationEntityType`** (`PRODUCT`, `PROJECT`, `PROGRAM`, `INFRASTRUCTURE`, `TEAM`; default `PRODUCT`). Seeded from `scripts/data-prod/PRODUCTS.csv` via `npm run db:seed:products` (prod seed also upserts rows when the file exists). **`Initiative.allocationEntityId`** in Prisma maps to DB column **`productId`** for reporting and Jira sync.
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
 | `id` | String | ✓ | PK (e.g. `PRD-xxx` from CSV) |
 | `name` | String | ✓ | Unique — must match Jira Components value for resolution |
+| `type` | AllocationEntityType | ✓ | DB column `entity_type` |
 | `productFamily` | String? | | Grouping (SALES, WORKPLACE, …) |
 | `division` / `subDivision` / `team` | String? | | Org metadata |
 | `sapEotpCode` / `sapEotpName` | String? | | SAP EOTP split (code vs label) |
@@ -251,12 +252,12 @@ Synced from Jira via the `/api/jira/sync` route. The `jiraKey` (RI-xxx) is the n
 | `summary` | String | ✓ | Initiative title from Jira |
 | `status` | String | ✓ | Kept as String — Jira values vary (Done, In Progress, RFP, etc.) |
 | `year` | Int | ✓ | Planning year. CRITICAL — drives all rate resolution. |
-| `components` | String? | | Jira components field (product name; used to resolve `productId`) |
-| `productId` | String? | | FK → `Product.id` — set by Jira sync from first matching component, or by seed |
+| `components` | String? | | Jira components field (product name; used to resolve allocation entity) |
+| `allocationEntityId` | String? | | Prisma FK → `AllocationEntity.id`; **DB column `productId`** — set by Jira sync from first matching component, or by seed |
 | `productGroup` | String? | | Higher grouping (SALES, SMART ADMIN, eCITIZEN, etc.) |
 | `initiativeType` | String? | | Run, Evolution, Rollout, Projet, Analyse, etc. |
 | `allocations` | Allocation[] | | Relation — all resource assignments for this initiative |
-| `product` | Product? | | Optional relation when `productId` set |
+| `allocationEntity` | AllocationEntity? | | Optional relation when `allocationEntityId` set |
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
@@ -282,7 +283,7 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 | Field | Type | Req | Notes |
 |---|---|---|---|
 | `id` | String | ✓ | PK (`cuid`) |
-| `productId` | String | ✓ | FK → `Product.id` |
+| `allocationEntityId` | String | ✓ | Prisma FK → `AllocationEntity.id`; **DB column `productId`** |
 | `year` | Int | ✓ | Planning year (aligned with initiative / budget year) |
 | `eotp` | String | ✓ | Target SAP EOTP code |
 | `eopLabel` | String? | | Display label |
@@ -291,19 +292,19 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 | `directAmount` | Float | ✓ | EUR from the **direct** bucket |
 | `comment` | String? | | Optional |
 
-**Unique:** `(productId, year, eotp)` — one combined row per target code per year.
+**Unique:** `(allocationEntityId, year, eotp)` in Prisma — **DB columns** `(productId, year, eotp)` — one combined row per target code per year.
 
 **App rule:** POST/PATCH must **not** set `eotp` equal to the product’s **`sapEotpCode`** (main bucket is the computed remainder, not a stored routing row). Enforced in **`src/lib/eotp-routing-validation.ts`** (case-insensitive trim).
 
 **Downstream:** `src/lib/eotp.ts` — `computeEotpBreakdown(mainEotp, costs, routings)` rolls initiative **internal / external / direct** costs into per–EOTP amounts (main EOTP gets the remainder after subtracting non-main targets). The test **budget** API attaches `eotpBreakdown` per initiative row.
 
-**Power BI:** use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/products/[id]/eotp-routing`.
+**Power BI:** use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/allocation-entities/[id]/eotp-routing`.
 
 ### 4.8 Entity Relationship Summary
 
 ```
-Product (1) ───── (N) Initiative    [productId optional]
-Product (1) ───── (N) EotpRouting   [productId]
+AllocationEntity (table product) (1) ───── (N) Initiative    [DB productId optional]
+AllocationEntity (1) ───── (N) EotpRouting   [DB productId]
 Resource (1) ──── (N) Rate          [resourceId + year — unique]
 Resource (1) ──── (N) Allocation   [resourceId]
 Initiative (1) ── (N) Allocation    [initiativeId]
@@ -374,7 +375,7 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 
 ```
 Jira API  →  /api/jira/sync  →  Initiative table (upsert by jira_key)
-Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); products seeded first
+Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); allocation entities (`product` table) seeded first when `PRODUCTS.csv` is present
 Browser  →  Next.js API routes  →  Prisma  →  PostgreSQL
 Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 ```
@@ -389,45 +390,29 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource |
 | `/api/rates` | GET, POST | GET by resourceId. POST creates new rate. |
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
-| `/api/products` | GET | List all products (ordered by family, name) |
-| `/api/products/[id]` | GET, PATCH, DELETE | One product by id; PATCH updates catalog fields |
-| `/api/products/[id]/eotp-routing` | GET, POST | List or create **EotpRouting** rows for the product (`GET` optional `?year=`). POST rejects targets equal to **`sapEotpCode`**. |
-| `/api/products/[id]/eotp-routing/[routingId]` | PATCH, DELETE | Update or delete one routing row (PATCH rejects effective `eotp` = main SAP code). |
-| `/api/products/[id]/eotp-main-from-view` | GET | Main-bucket rows from **`v_eotp_costs`** (`is_main_eotp = true`); optional `?year=` |
-| `/api/test/products-with-budget` | GET | Per-product INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via `productId`) |
-| `/api/test/products/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups; includes **`eotpBreakdown`** (from `computeEotpBreakdown` + `eotp_routing`) when `sapEotpCode` is set |
-| `/api/test/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
-| `/api/test/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation `internal_cost`, `external_cost`, `direct_cost`, `computed_cost` from `v_allocation_costs` |
+| `/api/allocation-entities` | GET | List all allocation entities (ordered by family, name) |
+| `/api/allocation-entities/[id]` | GET, PATCH, DELETE | One entity by id; PATCH updates catalog fields (including optional `type`) |
+| `/api/allocation-entities/[id]/eotp-routing` | GET, POST | List or create **EotpRouting** rows (`GET` optional `?year=`). POST rejects targets equal to **`sapEotpCode`**. |
+| `/api/allocation-entities/[id]/eotp-routing/[routingId]` | PATCH, DELETE | Update or delete one routing row (PATCH rejects effective `eotp` = main SAP code). |
+| `/api/allocation-entities/[id]/eotp-main-from-view` | GET | Main-bucket rows from **`v_eotp_costs`** (`is_main_eotp = true`); optional `?year=` |
+| `/api/allocation-entities/with-budget` | GET | Per-entity INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via DB `productId`) |
+| `/api/allocation-entities/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups; includes **`eotpBreakdown`** when `sapEotpCode` is set |
+| `/api/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
+| `/api/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation costs from `v_allocation_costs` |
 
-**Prototype note:** routes under `/api/test/*` and UI under `/test/*` are the **product navigation prototype** (budget-by-initiative + assignment editor). They depend on `v_allocation_costs` existing in the DB (seed / `SEED_VIEW_ONLY`).
+**Redirects:** `next.config.ts` maps legacy **`/api/products/*`**, **`/api/test/*`**, **`/test/products/*`**, and **`/initiatives`** to the canonical routes above.
 
-### 6.3 Initiatives page — server props, dynamic client, and product catalog
+### 6.3 Investments UI and allocation entity catalog
 
-The initiatives UI is loaded with **`next/dynamic`** and **`ssr: false`** (`initiatives-dynamic-shell.tsx`) so the heavy client bundle does not participate in SSR/hydration (avoids dev-only Turbopack placeholder drift against the real client bundle).
-
-**Trade-off:** props passed from the React Server Component into that dynamic client boundary are not fully reliable for **nested objects** or, in practice, for **some extra scalar fields** on large DTO arrays — `productName` / `productTeam` tended to arrive, while org/SAP/marketing fields on the same initiative sometimes did not.
-
-**Mitigations (implemented):**
-
-1. **`InitiativeDTO` is flat** — catalog fields (`productFamily`, `division`, `subDivision`, `sapEotpCode`, `sapEotpName`, `attractiveness`, `competitiveness`) live as top-level nullable scalars next to `productId`, `productName`, `productTeam` — not nested under a `productDetails` object.
-2. **Stable wire shape** — `initiatives/page.tsx` runs `JSON.parse(JSON.stringify(initiatives))` before passing the list to the shell so every row is a plain object with a consistent JSON-serializable shape.
-3. **Authoritative catalog on selection** — when the user selects an initiative, the client loads the full **`Product`** row via **`GET /api/products/[id]`** when `productId` is set; if `productId` is missing on the client but `productName` is present, it falls back to **`GET /api/products`** and matches by name (case-insensitive). The Product detail card merges this response with the DTO so SAP EOTP and org fields always reflect the database.
+The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI label: **Investment**). The detail screen loads the allocation entity with **`GET /api/allocation-entities/[id]`** and drives budget, EOTP routing, and allocations against `v_allocation_costs`. The former **`/initiatives`** screen was removed; bookmarks redirect to **`/investments`**.
 
 ---
 
 ## 7. Application Screens
 
-### 7.1 Initiatives (/initiatives) — Complete
+### 7.1 Investments (`/investments`, `/investments/[id]`) — Primary
 
-Master-detail layout. Left panel: scrollable filtered list of all initiatives. Right panel: read-only details + editable allocation grid.
-
-- **Product card** — Title shows linked catalog **product name** (or “No product linked”). Body shows **product family, division, sub-division, team, SAP EOTP code/name, attractiveness, competitiveness** — sourced from the **`Product`** row via the API when an initiative is selected (see §6.3). Table columns **Product** and **Team** still come from the initiative list DTO for fast filtering.
-- **Filters** — Text search (case-insensitive contains on key/summary/product/group), Year dropdown, Product dropdown, Team dropdown, Reset button
-- **Jira Refresh** — Button calls `/api/jira/sync` — upserts latest initiatives from Jira
-- **Allocation grid** — Assignment ID, Percent (numeric input), Man Days (numeric input), Resource (combobox), Delete button
-- **Resource combobox** — Uses cmdk with `shouldFilter=false` and custom case-insensitive contains filter across 600+ resources
-- **Auto-save** — `PATCH /api/allocations/[id]` with 450ms debounce on input change
-- **New row** — `POST /api/allocations` — defaults to first available resource, 0 quantity
+Portfolio table of allocation entities with optional budget columns (€k INT/EXT/DIR from **`/api/allocation-entities/with-budget`**). Row opens the **investment detail**: catalog card, year filter, **EOTP routing** (main remainder from **`v_eotp_costs`** plus editable exceptions), **budget by initiative**, and (when an initiative is selected) the **allocation** editor using **`/api/allocations`** and **`/api/initiative-allocation-costs`**.
 
 ### 7.2 Resources (/resources) — In Progress
 
@@ -441,13 +426,9 @@ Same master-detail pattern as initiatives.
 
 To be defined. Likely a link to Power BI Service or an embedded report. No in-app charts planned — Power BI handles all analytics.
 
-### 7.4 Products prototype (`/test/products`, `/test/products/[id]`) — Prototype
+### 7.4 Legacy routes
 
-UX experiment for navigating **product → initiatives → allocations** using the same cost model as Power BI (`v_allocation_costs`). Not a replacement for `/initiatives` yet.
-
-- **`/test/products`** — Table of products (`GET /api/products`) with internal / external / direct totals in €k from `GET /api/test/products-with-budget` (list still loads if the budget call fails). Search and product-family filter. Row opens detail.
-- **`/test/products/[id]`** — **Left column:** product card (name, family, catalog fields only). **Year** control (**All** + year chips) sits **between** the product card and the **EOTP routing** card, right-aligned in the column; it drives **budget** (`/api/test/.../budget`), **EOTP routing** list (`GET .../eotp-routing`), and **`/api/products/.../eotp-main-from-view`** together (year options merge initiative years and routing years). **EOTP routing** table: first row(s) are the **main SAP remainder** from **`v_eotp_costs`** (read-only); below, editable **exception** rows (Internal / External / Direct / **Total** in primary blue, **Cash out**, Comment, Actions). **Budget by initiative:** header totals + rows on a shared **`FINANCIALS_4COL`** grid; column labels **Internal / External / Direct / Total** (same wording as EOTP). **Right (selected initiative):** allocation editor — resource-type sections; table headers and the Internal/External/Direct/Total summary line use the same **label style** (muted, uppercase tracking, optional `bg-muted/40` on header bands) as EOTP and initiative lists. **Totals row at the bottom of the assignment table was removed** — rollups live in the top summary and section headers only.
-- **Allocations API** — `GET`/`POST` `/api/allocations` and `PATCH` `/api/allocations/[id]` include **`resource.type`** in the embedded `resource` object so the client can group rows without an extra lookup.
+Older URLs (`/test/products`, `/api/products`, `/api/test/*`, `/initiatives`) redirect to the canonical **`/investments`** and **`/api/allocation-entities`** routes (see §6.2).
 
 ---
 
@@ -460,7 +441,7 @@ UX experiment for navigating **product → initiatives → allocations** using t
 | Source | Single JQL filter ID covering all relevant initiatives |
 | Pagination | 100 results per page, loop with startAt until all fetched (~1,200 initiatives) |
 | Strategy | Upsert — create new, update existing matched by jira_key |
-| Product link | After upsert, `productId` is set when a Jira **component** string (split on comma) **case-insensitively matches** `Product.name` (first match wins) |
+| Allocation entity link | After upsert, `allocationEntityId` (DB `productId`) is set when a Jira **component** string (split on comma) **case-insensitively matches** `AllocationEntity.name` (first match wins) |
 
 Required environment variables:
 
@@ -480,18 +461,18 @@ JIRA_FILTER_ID=12345
 | Script | Command | Source Files | Purpose |
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
-| `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert `Product` rows only (SAP fields, scores) |
+| `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `product`; SAP fields, scores, **`entity_type`**) |
 | `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`** |
-| `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → `Product.name`, columns: internal / external / direct EUR) |
+| `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR) |
 | `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
 | `rebuild-eotp-routing-csv.ts` | `npm run db:rebuild:routing-csv` | `EOTP_ROUTING_SOURCE.csv` | Rebuild **`EOTP_ROUTING.csv`** from wide export (outputs merged EUR columns) |
 
-**Order for a full prod load:** run migrations, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert products), then **`db:seed:prod`**. The prod script upserts products from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
+**Order for a full prod load:** run **`npx prisma migrate deploy`** (or `migrate dev` locally), then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert allocation entities), then **`db:seed:prod`**. The prod script upserts catalog rows from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
 
 ### 9.1 Production Seed — Run Modes
 
 ```bash
-# Full reload: clears planner tables (allocations, rates, initiatives, resources — NOT products), then import
+# Full reload: clears planner tables (allocations, rates, initiatives, resources — NOT the `product` table), then import
 SEED_PROD_RESET=1 npm run db:seed:prod
 
 # Upsert only (leave existing rows not touched by CSV logic)
@@ -506,7 +487,7 @@ npm run db:recreate:eotp-costs
 
 ### 9.2 Production Seed Notes
 
-- **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for product master data. `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
+- **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for allocation-entity master data (table `product`). `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
 - **ID-based linking** — `InitiativeId` (RI-xxx), `RessourceId` (MAT-xxx), etc.
 - **Duplicate assignment rows** — CSV can list the same resource×initiative twice (e.g. % line + man-days line). The seed **merges** into one DB row: **percent values are summed**; **man-days** — **first line with a positive man-days value wins** (CSV order), not the sum. This matches business rules for split Excel exports.
 - **Allocation IDs** — Deterministic `ASS-{hash(resourceId|initiativeId)}` after merge (one row per pair).
@@ -514,10 +495,10 @@ npm run db:recreate:eotp-costs
 - **Percent & ManDays** — Trailing `%`; values divided by 100 for storage (`34%` → `0.34` FTE decimal; large “%” man-days columns → man-days).
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
-- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete **`Product`** — product master survives full reloads.
+- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete rows in **`product`** — allocation-entity catalog survives full reloads.
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
-**Manual truncate (rare)** — If you need a clean slate including products, truncate `product` explicitly or use SQL; default reset keeps products.
+**Manual truncate (rare)** — If you need a clean slate including the allocation-entity catalog, truncate `product` explicitly or use SQL; default reset keeps those rows.
 
 ---
 
@@ -538,9 +519,13 @@ npm run db:recreate:eotp-costs
 # 1. Launch Docker Desktop from Windows (system tray or Start menu)
 # 2. Open WSL terminal: Win+R → wsl
 docker start resource-planner-db   # skip if restart:always is set
-cd ~/projects/resource-planner && cursor .
+cd ~/projects/resource-planner
+npx prisma migrate deploy   # after pulling schema/migration changes (adds e.g. entity_type on product)
+cursor .   # optional
 npm run dev   # → http://localhost:3000
 ```
+
+On a fresh clone or after schema updates, run **`npx prisma migrate deploy`** (production-like) or **`npx prisma migrate dev`** (local dev, applies pending migrations and regenerates the client) before **`npm run dev`**.
 
 ### 10.2 Make Postgres Survive Reboots
 
@@ -586,6 +571,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`product`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`productId`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (redirects keep old URLs working).
 - **Products prototype & EOTP polish (v1.2.5)** — Single **year** strip (between product card and EOTP card) drives budget, routing, and **`eotp-main-from-view`**. **`v_eotp_costs`** adds **`cash_out`** and **`total_cost`**; view SQL simplified (**`routed_non_main`** + **`UNION ALL`**); main row uses **`sapEotpName`** as label. API **`GET /api/products/[id]/eotp-main-from-view`**; POST/PATCH **eotp-routing** rejects targeting the **main SAP EOTP** (**`eotp-routing-validation.ts`**). Prototype EOTP table: main remainder row from the view, then exceptions; columns align with **Internal / External / Direct / Total / Cash out**; unified table header styling with initiative and assignment tables; budget/assignment grids use the same **Internal / External / Direct / Total** labels as EOTP.
 - **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(productId, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
 - **Products prototype (v1.2.3)** — `src/app/test/products/**` and `src/app/api/test/**`: product list with budget columns; product detail with budget-by-initiative and initiative allocation editor; test APIs read from `v_allocation_costs` and Prisma; allocation responses include `resource.type` for grouping; assignment UI uses €k abbreviation (`formatK`) aligned with initiative list styling.
@@ -609,25 +595,25 @@ Consolidated documentation of major changes since the initial design doc:
 src/
   app/
     layout.tsx                  ← Root layout (nav sidebar, header)
-    initiatives/page.tsx              ← Server: loads initiatives + products → DTO list
-    initiatives/initiatives-dynamic-shell.tsx  ← dynamic(ssr:false) wrapper for initiatives UI
-    initiatives/initiatives-client.tsx ← Client: filters, Product card + API catalog fetch, allocations
+    page.tsx                    ← Redirect to /investments
+    investments/page.tsx        ← Investment list + budget columns
+    investments/[id]/page.tsx   ← Investment detail shell
+    investments/[id]/investment-detail-client.tsx ← Budget, EOTP routing, allocations editor
     resources/page.tsx          ← Resources screen (in progress)
-    test/products/page.tsx      ← Prototype: product list + budget columns
-    test/products/[id]/page.tsx  ← Prototype: product detail + budget + allocations
-    test/products/[id]/product-detail-client.tsx  ← Prototype: main client UI
     api/
-      jira/sync/route.ts        ← Jira sync (in progress)
+      jira/sync/route.ts        ← Jira sync
       allocations/route.ts      ← GET by initiative, POST
       allocations/[id]/route.ts ← PATCH, DELETE (includes resource.type on PATCH response)
+      resources/route.ts        ← GET — resource picker list (+ type)
+      initiative-allocation-costs/route.ts ← Per-allocation costs for an initiative
+      allocation-entities/route.ts ← GET — list allocation entities
+      allocation-entities/[id]/route.ts ← GET, PATCH, DELETE
+      allocation-entities/with-budget/route.ts ← Per-entity INT/EXT/DIR from v_allocation_costs
+      allocation-entities/[id]/budget/route.ts ← Per-initiative costs + eotpBreakdown
+      allocation-entities/[id]/eotp-routing/route.ts ← GET, POST — EotpRouting rows
+      allocation-entities/[id]/eotp-routing/[routingId]/route.ts ← PATCH, DELETE
+      allocation-entities/[id]/eotp-main-from-view/route.ts ← GET — main rows from v_eotp_costs
       resources/[id]/route.ts   ← GET, PATCH, DELETE
-      test/products-with-budget/route.ts   ← Prototype: per-product INT/EXT/DIR
-      test/products/[id]/budget/route.ts   ← Prototype: per-initiative costs for product
-      test/resources/route.ts   ← Prototype: resources for combobox (+ type)
-      test/initiative-allocation-costs/route.ts ← Prototype: per-allocation costs per initiative
-      products/[id]/eotp-routing/route.ts     ← GET, POST — EotpRouting rows
-      products/[id]/eotp-routing/[routingId]/route.ts ← PATCH, DELETE
-      products/[id]/eotp-main-from-view/route.ts ← GET — main rows from v_eotp_costs
       rates/route.ts            ← GET by resource, POST
       rates/[id]/route.ts       ← PATCH, DELETE
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
@@ -640,7 +626,7 @@ prisma/
   config.ts                     ← Prisma 7 config (datasource URL)
 scripts/
   seed.ts                       ← Dev seed from PowerApps CSV exports
-  seed-products.ts              ← Upsert Product rows from PRODUCTS.csv
+  seed-products.ts              ← Upsert AllocationEntity rows from PRODUCTS.csv (table `product`)
   seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs
   eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
   seed-eotp-routing.ts          ← Seed eotp_routing from EOTP_ROUTING.csv
@@ -653,4 +639,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.2.5 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.3 (see §11.3 changelog)*
