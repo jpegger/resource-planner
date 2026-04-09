@@ -21,8 +21,8 @@ export async function GET() {
       COALESCE(SUM(v.internal_cost), 0) AS total_internal,
       COALESCE(SUM(v.external_cost), 0) AS total_external,
       COALESCE(SUM(v.direct_cost), 0) AS total_direct
-    FROM product pr
-    INNER JOIN initiative i ON i."productId" = pr.id
+    FROM allocation_entity pr
+    INNER JOIN initiative i ON i."allocation_entity_id" = pr.id
     INNER JOIN v_allocation_costs v ON v.jira_key = i.id
     GROUP BY pr.id, pr.name, pr."productFamily"
     ORDER BY pr.name ASC

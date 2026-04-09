@@ -48,7 +48,7 @@ export async function GET(
             COALESCE(SUM(v.computed_cost), 0) AS total_cost
           FROM initiative i
           LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
-          WHERE i."productId" = ${productId.trim()}
+          WHERE i."allocation_entity_id" = ${productId.trim()}
           GROUP BY i.id, i.summary, i.status, i.year
           ORDER BY i.year DESC, i.summary ASC
         `
@@ -64,7 +64,7 @@ export async function GET(
             COALESCE(SUM(v.computed_cost), 0) AS total_cost
           FROM initiative i
           LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
-          WHERE i."productId" = ${productId.trim()}
+          WHERE i."allocation_entity_id" = ${productId.trim()}
             AND i.year = ${yearFilter}
           GROUP BY i.id, i.summary, i.status, i.year
           ORDER BY i.year DESC, i.summary ASC

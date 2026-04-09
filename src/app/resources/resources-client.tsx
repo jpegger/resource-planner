@@ -30,7 +30,7 @@ export type ResourceRateDTO = {
   id: string;
   year: number;
   dailyRate: number;
-  nbrDaysPerYear: number | null;
+  nbrDaysPerYear: number;
 };
 
 export type ResourceRowDTO = {
@@ -294,7 +294,7 @@ export function ResourcesPageClient({ resources }: Props) {
                           <TableRow key={rate.id}>
                             <TableCell>{rate.year}</TableCell>
                             <TableCell>{rate.dailyRate}</TableCell>
-                            <TableCell>{rate.nbrDaysPerYear ?? "—"}</TableCell>
+                            <TableCell>{rate.nbrDaysPerYear}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

@@ -150,6 +150,12 @@ async function seedRates() {
       continue;
     }
 
+    const nbrDaysPerYear = parseFloat_(row["nbrOfDaysPerYearDecimal"]);
+    if (nbrDaysPerYear === null || Number.isNaN(nbrDaysPerYear)) {
+      skipped++;
+      continue;
+    }
+
     const year = parseInt(row["Year"]);
     if (isNaN(year)) { skipped++; continue; }
 
@@ -166,13 +172,13 @@ async function seedRates() {
 
     await prisma.rate.upsert({
       where: { resourceId_year: { resourceId: row["RessourceId"], year } },
-      update: { dailyRate, nbrDaysPerYear: parseFloat_(row["nbrOfDaysPerYearDecimal"]), modifiedOn },
+      update: { dailyRate, nbrDaysPerYear, modifiedOn },
       create: {
         id: row["RatePrimaryId"],
         resourceId: row["RessourceId"],
         year,
         dailyRate,
-        nbrDaysPerYear: parseFloat_(row["nbrOfDaysPerYearDecimal"]),
+        nbrDaysPerYear,
         createdOn,
         modifiedOn,
       },
@@ -362,18 +368,7 @@ SELECT
   r.direction,
   a.quantity,
   COALESCE(rt."dailyRate", rs."dailyRate")        AS effective_rate,
-  CASE
-    WHEN r.type IN ('INTERNAL', 'EXTERNAL') THEN
-      COALESCE(
-        rt."nbrDaysPerYear",
-        CAST(rs."nbrDaysPerYear" AS double precision)
-      )
-    ELSE
-      COALESCE(
-        CAST(rt."nbrDaysPerYear" AS double precision),
-        CAST(1 AS double precision)
-      )
-  END                                             AS effective_days_per_year,
+  CAST(rt."nbrDaysPerYear" AS double precision)   AS effective_days_per_year,
 
   -- Internal/External: man-days or FTE×days/year. Direct: man-days or quantity×days/year.
   CASE
@@ -381,24 +376,13 @@ SELECT
       CASE
         WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN CAST(a."manDays" AS double precision)
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * CAST(
-            COALESCE(
-              CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
-                THEN CAST(rt."nbrDaysPerYear" AS numeric)
-              END,
-              CAST(1 AS double precision)
-            ) AS double precision
-          )
+          a.quantity * CAST(rt."nbrDaysPerYear" AS double precision)
         ELSE 0
       END
     WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
       a."manDays"
     WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-      a.quantity * COALESCE(
-        rt."nbrDaysPerYear",
-        CAST(rs."nbrDaysPerYear" AS double precision)
-      )
+      a.quantity * CAST(rt."nbrDaysPerYear" AS double precision)
     ELSE 0
   END                                             AS calculated_man_days,
 
@@ -410,15 +394,7 @@ SELECT
           a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
           a.quantity
-          * CAST(
-            COALESCE(
-              CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
-                THEN CAST(rt."nbrDaysPerYear" AS numeric)
-              END,
-              CAST(1 AS double precision)
-            ) AS double precision
-          )
+          * CAST(rt."nbrDaysPerYear" AS double precision)
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         ELSE CAST(0 AS double precision)
       END
@@ -426,10 +402,7 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * COALESCE(
-        rt."nbrDaysPerYear",
-        CAST(rs."nbrDaysPerYear" AS double precision)
-      )
+      * CAST(rt."nbrDaysPerYear" AS double precision)
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS computed_cost,
@@ -440,10 +413,7 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN r.type = 'INTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * COALESCE(
-        rt."nbrDaysPerYear",
-        CAST(rs."nbrDaysPerYear" AS double precision)
-      )
+      * CAST(rt."nbrDaysPerYear" AS double precision)
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS internal_cost,
@@ -454,10 +424,7 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN r.type = 'EXTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * COALESCE(
-        rt."nbrDaysPerYear",
-        CAST(rs."nbrDaysPerYear" AS double precision)
-      )
+      * CAST(rt."nbrDaysPerYear" AS double precision)
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS external_cost,
@@ -470,15 +437,7 @@ SELECT
           a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
           a.quantity
-          * CAST(
-            COALESCE(
-              CASE
-                WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
-                THEN CAST(rt."nbrDaysPerYear" AS numeric)
-              END,
-              CAST(1 AS double precision)
-            ) AS double precision
-          )
+          * CAST(rt."nbrDaysPerYear" AS double precision)
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         ELSE CAST(0 AS double precision)
       END

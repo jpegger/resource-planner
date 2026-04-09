@@ -34,13 +34,35 @@ export default function InvestmentsPage() {
   const [search, setSearch] = useState("");
   const [familyFilter, setFamilyFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const prodsRes = await fetch("/api/allocation-entities");
-        const prodsJson = prodsRes.ok ? await prodsRes.json() : [];
+        if (!prodsRes.ok) {
+          const raw = await prodsRes.text().catch(() => "");
+          let detail = raw.trim();
+          try {
+            const j = JSON.parse(raw) as { error?: string };
+            if (typeof j?.error === "string") detail = j.error;
+          } catch {
+            /* use raw */
+          }
+          if (!cancelled) {
+            setLoadError(
+              `Could not load investments (HTTP ${prodsRes.status}).` +
+                (detail && detail.length < 800 ? ` ${detail}` : "") +
+                " Check the terminal running next dev and that DATABASE_URL points at a migrated database with data (e.g. npm run db:seed:products)."
+            );
+            setRows([]);
+            setBudgetById(new Map());
+          }
+          return;
+        }
+
+        const prodsJson = await prodsRes.json();
         const prods: Row[] = Array.isArray(prodsJson) ? prodsJson : [];
 
         let budget: BudgetRow[] = [];
@@ -55,12 +77,18 @@ export default function InvestmentsPage() {
         }
 
         if (cancelled) return;
+        setLoadError(null);
         setRows(prods);
         const m = new Map<string, BudgetRow>();
         for (const b of budget) m.set(b.product_id, b);
         setBudgetById(m);
-      } catch {
+      } catch (e) {
         if (!cancelled) {
+          setLoadError(
+            e instanceof Error
+              ? e.message
+              : "Network error loading investments. Is the dev server running?"
+          );
           setRows([]);
           setBudgetById(new Map());
         }
@@ -123,6 +151,8 @@ export default function InvestmentsPage() {
 
       {loading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
+      ) : loadError ? (
+        <p className="text-destructive max-w-2xl text-sm whitespace-pre-wrap">{loadError}</p>
       ) : (
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full border-collapse text-sm">
@@ -178,8 +208,17 @@ export default function InvestmentsPage() {
           </table>
         </div>
       )}
-      {!loading && familyFiltered.length === 0 ? (
-        <p className="text-muted-foreground mt-4 text-sm">No investments match.</p>
+      {!loading && !loadError && rows.length === 0 ? (
+        <p className="text-muted-foreground mt-4 max-w-2xl text-sm">
+          No allocation entities in this database. Import the catalog with{" "}
+          <code className="bg-muted rounded px-1 py-0.5 text-xs">npm run db:seed:products</code>{" "}
+          (needs <code className="bg-muted rounded px-1 py-0.5 text-xs">scripts/data-prod/PRODUCTS.csv</code>
+          ). Use the same <code className="bg-muted rounded px-1 py-0.5 text-xs">DATABASE_URL</code> as{" "}
+          <code className="bg-muted rounded px-1 py-0.5 text-xs">next dev</code>.
+        </p>
+      ) : null}
+      {!loading && !loadError && rows.length > 0 && familyFiltered.length === 0 ? (
+        <p className="text-muted-foreground mt-4 text-sm">No investments match your filters.</p>
       ) : null}
     </div>
   );

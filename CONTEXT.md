@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.3 · April 2026**
+**Paradigm · Brussels Capital Region · v1.4 · April 2026**
 
 ---
 
@@ -71,15 +71,9 @@ Example: 60 man-days / 200 days/year = 30% FTE
 
 ### 2.3 Days Per Year — nbrDaysPerYear
 
-This value converts between FTE % and man-days. It varies by resource type and year:
+This value converts between FTE % and man-days. **`rate.nbrDaysPerYear` is required** (non-null): each individual **`Rate`** row stores the working days (or unit multiplier for direct costs) for that resource×year. **`v_allocation_costs` uses only this column** for FTE/man-day math — **no** `COALESCE` to `rate_standard.nbrDaysPerYear`.
 
-| Resource Type | Standard Days/Year | Source |
-|---|---|---|
-| INTERNAL | 200 | RateStandard table — confirmed value |
-| EXTERNAL | 220 | RateStandard table — confirmed value |
-| DIRECT_COST | 1.0 | Rate table — always 1.0 (unit cost model, not days) |
-
-Individual resources can override the standard days/year value via their own Rate row (the `nbrDaysPerYear` field on the Rate model). This is rare but supported.
+Typical values when entering data: **200** internal staff, **220** external, **1.0** direct-cost unit model. **`RateStandard`** still carries 200/220 for **daily rate** fallbacks and documentation; it is **not** used as a days fallback in the cost view.
 
 ### 2.4 Rate Resolution — Always by Initiative Year
 
@@ -109,8 +103,8 @@ The cost is then split into three non-overlapping columns in the view: `internal
 
 The view exposes a unified `calculated_man_days` column for capacity-style reporting:
 
-- **INTERNAL / EXTERNAL** — If `manDays` > 0: raw man-days. If FTE (`quantity` > 0): `quantity × nbrDaysPerYear` (individual rate or standard).
-- **DIRECT_COST** — Man-days path uses `manDays` directly. Quantity path uses `quantity ×` per-unit days from the **individual** `Rate` row when `nbrDaysPerYear` > 0 (usually **1.0** for licences). If there is **no rate row** for `(resource, initiative year)` or `nbrDaysPerYear` is missing, the multiplier defaults to **1** — it must **not** fall back to INTERNAL `RateStandard` (200 days), or a single licence is reported as 200 “man-days”.
+- **INTERNAL / EXTERNAL** — If `manDays` > 0: raw man-days. If FTE (`quantity` > 0): `quantity × Rate.nbrDaysPerYear` (from the joined rate row only).
+- **DIRECT_COST** — Man-days path uses `manDays` directly. Quantity path uses `quantity × Rate.nbrDaysPerYear` (typically **1.0** for licences). If there is **no** matching `rate` row for `(resource, initiative year)`, view columns that depend on `rt.*` are null — data should always include a rate row with **`nbrDaysPerYear` set**.
 
 So `SUM(calculated_man_days)` is comparable across assignment methods for staff; direct-cost quantity and cost use the same per-unit multiplier as in `computed_cost` (cost still needs a `Rate.dailyRate` for a non-zero EUR amount).
 
@@ -207,13 +201,13 @@ Individual daily rate per resource per year. Unique on `(resourceId, year)`. Tak
 | `resourceId` | String | ✓ | FK → Resource.id |
 | `year` | Int | ✓ | Year this rate applies to (matched to initiative.year) |
 | `dailyRate` | Float | ✓ | EUR/day for Internal/External. Unit price for Direct Costs. |
-| `nbrDaysPerYear` | Float? | | Working days. 1.0 for Direct Costs. NULL = use RateStandard value. |
+| `nbrDaysPerYear` | Float | ✓ | Working days per year (FTE↔man-days) or unit multiplier for Direct Costs. Required — not null. |
 | `createdOn` | DateTime | ✓ | |
 | `modifiedOn` | DateTime | ✓ | |
 
-### 4.3 AllocationEntity (physical table: `product`)
+### 4.3 AllocationEntity (physical table: `allocation_entity`)
 
-Canonical allocation / investment catalog (Jira **Components** ↔ `AllocationEntity.name`). **Physical PostgreSQL table name remains `product`.** Column **`entity_type`** maps to Prisma enum **`AllocationEntityType`** (`PRODUCT`, `PROJECT`, `PROGRAM`, `INFRASTRUCTURE`, `TEAM`; default `PRODUCT`). Seeded from `scripts/data-prod/PRODUCTS.csv` via `npm run db:seed:products` (prod seed also upserts rows when the file exists). **`Initiative.allocationEntityId`** in Prisma maps to DB column **`productId`** for reporting and Jira sync.
+Canonical allocation / investment catalog (Jira **Components** ↔ `AllocationEntity.name`). **Physical PostgreSQL table name is `allocation_entity`.** Column **`entity_type`** maps to Prisma enum **`AllocationEntityType`** (`PRODUCT`, `PROJECT`, `PROGRAM`, `INFRASTRUCTURE`, `TEAM`; default `PRODUCT`). Seeded from `scripts/data-prod/PRODUCTS.csv` via `npm run db:seed:products` (prod seed also upserts rows when the file exists). **`Initiative.allocationEntityId`** in Prisma maps to DB column **`allocation_entity_id`** for reporting and Jira sync.
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
@@ -253,7 +247,7 @@ Synced from Jira via the `/api/jira/sync` route. The `jiraKey` (RI-xxx) is the n
 | `status` | String | ✓ | Kept as String — Jira values vary (Done, In Progress, RFP, etc.) |
 | `year` | Int | ✓ | Planning year. CRITICAL — drives all rate resolution. |
 | `components` | String? | | Jira components field (product name; used to resolve allocation entity) |
-| `allocationEntityId` | String? | | Prisma FK → `AllocationEntity.id`; **DB column `productId`** — set by Jira sync from first matching component, or by seed |
+| `allocationEntityId` | String? | | Prisma FK → `AllocationEntity.id`; **DB column `allocation_entity_id`** — set by Jira sync from first matching component, or by seed |
 | `productGroup` | String? | | Higher grouping (SALES, SMART ADMIN, eCITIZEN, etc.) |
 | `initiativeType` | String? | | Run, Evolution, Rollout, Projet, Analyse, etc. |
 | `allocations` | Allocation[] | | Relation — all resource assignments for this initiative |
@@ -283,7 +277,7 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 | Field | Type | Req | Notes |
 |---|---|---|---|
 | `id` | String | ✓ | PK (`cuid`) |
-| `allocationEntityId` | String | ✓ | Prisma FK → `AllocationEntity.id`; **DB column `productId`** |
+| `allocationEntityId` | String | ✓ | Prisma FK → `AllocationEntity.id`; **DB column `allocation_entity_id`** |
 | `year` | Int | ✓ | Planning year (aligned with initiative / budget year) |
 | `eotp` | String | ✓ | Target SAP EOTP code |
 | `eopLabel` | String? | | Display label |
@@ -292,7 +286,7 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 | `directAmount` | Float | ✓ | EUR from the **direct** bucket |
 | `comment` | String? | | Optional |
 
-**Unique:** `(allocationEntityId, year, eotp)` in Prisma — **DB columns** `(productId, year, eotp)` — one combined row per target code per year.
+**Unique:** `(allocationEntityId, year, eotp)` in Prisma — **DB columns** `(allocation_entity_id, year, eotp)` — one combined row per target code per year.
 
 **App rule:** POST/PATCH must **not** set `eotp` equal to the product’s **`sapEotpCode`** (main bucket is the computed remainder, not a stored routing row). Enforced in **`src/lib/eotp-routing-validation.ts`** (case-insensitive trim).
 
@@ -303,8 +297,8 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 ### 4.8 Entity Relationship Summary
 
 ```
-AllocationEntity (table product) (1) ───── (N) Initiative    [DB productId optional]
-AllocationEntity (1) ───── (N) EotpRouting   [DB productId]
+AllocationEntity (table allocation_entity) (1) ───── (N) Initiative    [DB allocation_entity_id optional]
+AllocationEntity (1) ───── (N) EotpRouting   [DB allocation_entity_id]
 Resource (1) ──── (N) Rate          [resourceId + year — unique]
 Resource (1) ──── (N) Allocation   [resourceId]
 Initiative (1) ── (N) Allocation    [initiativeId]
@@ -331,7 +325,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `allocation_id` | Primary key of the allocation row |
 | `power_id` | Initiative `powerId` (INI-xxx), often null |
 | `product` | Initiative `components` (Jira text) |
-| `product_name` | `LEFT JOIN product` — `COALESCE(name,'Unassigned')` |
+| `product_name` | `LEFT JOIN allocation_entity` — `COALESCE(name,'Unassigned')` |
 | `product_family` / `division` / `sub_division` / `team` | From `Product` with `Unassigned` fallbacks (`&` → `and` on family) |
 | `sap_eotp_code` / `sap_eotp_name` | From `Product` (`Unassigned` if null) |
 | `attractiveness` / `competitiveness` | Raw floats from `Product` (nullable) |
@@ -345,7 +339,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `cellule` | Resource cell |
 | `direction` | Resource direction |
 | `effective_rate` | Resolved daily rate (individual or standard fallback) |
-| `effective_days_per_year` | Staff: individual `Rate`, then `RateStandard` for type/year. **DIRECT_COST:** individual `Rate.nbrDaysPerYear`, else **1** (not INTERNAL 200). |
+| `effective_days_per_year` | `Rate.nbrDaysPerYear` from the joined individual rate row (required on `rate`; no fallback to `rate_standard` for days). |
 | `computed_cost` | Total cost — all types |
 | `internal_cost` | Cost if INTERNAL, else 0 |
 | `external_cost` | Cost if EXTERNAL, else 0 |
@@ -353,7 +347,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `fte_decimal` / `fte_percent` | See §2.7 — FTE from % or implied from man-days (staff only) |
 | `calculated_man_days` | See §2.6 — unified man-days / direct-cost quantity path |
 
-**Cost safeguards (implementation):** Staff FTE cost uses `nbrDaysPerYear` from the individual rate or type standard. Direct-cost quantity uses `COALESCE(individual nbrDaysPerYear when > 0, 1)` — never INTERNAL’s 200-day standard when the rate row is missing.
+**Cost safeguards (implementation):** FTE and direct-cost quantity paths multiply by **`rate.nbrDaysPerYear` only** (see `createCostView` in `seed-production.ts` / `seed.ts`). **`dailyRate`** may still fall back to **`rate_standard`** when the individual rate row has no `dailyRate`; days/year do not.
 
 **Key guarantee:** `internal_cost + external_cost + direct_cost = computed_cost` for every row.
 
@@ -375,7 +369,7 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 
 ```
 Jira API  →  /api/jira/sync  →  Initiative table (upsert by jira_key)
-Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); allocation entities (`product` table) seeded first when `PRODUCTS.csv` is present
+Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); allocation entities (`allocation_entity` table) seeded first when `PRODUCTS.csv` is present
 Browser  →  Next.js API routes  →  Prisma  →  PostgreSQL
 Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 ```
@@ -395,7 +389,7 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/allocation-entities/[id]/eotp-routing` | GET, POST | List or create **EotpRouting** rows (`GET` optional `?year=`). POST rejects targets equal to **`sapEotpCode`**. |
 | `/api/allocation-entities/[id]/eotp-routing/[routingId]` | PATCH, DELETE | Update or delete one routing row (PATCH rejects effective `eotp` = main SAP code). |
 | `/api/allocation-entities/[id]/eotp-main-from-view` | GET | Main-bucket rows from **`v_eotp_costs`** (`is_main_eotp = true`); optional `?year=` |
-| `/api/allocation-entities/with-budget` | GET | Per-entity INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via DB `productId`) |
+| `/api/allocation-entities/with-budget` | GET | Per-entity INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via DB `allocation_entity_id`) |
 | `/api/allocation-entities/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups; includes **`eotpBreakdown`** when `sapEotpCode` is set |
 | `/api/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
 | `/api/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation costs from `v_allocation_costs` |
@@ -441,7 +435,7 @@ Older URLs (`/test/products`, `/api/products`, `/api/test/*`, `/initiatives`) re
 | Source | Single JQL filter ID covering all relevant initiatives |
 | Pagination | 100 results per page, loop with startAt until all fetched (~1,200 initiatives) |
 | Strategy | Upsert — create new, update existing matched by jira_key |
-| Allocation entity link | After upsert, `allocationEntityId` (DB `productId`) is set when a Jira **component** string (split on comma) **case-insensitively matches** `AllocationEntity.name` (first match wins) |
+| Allocation entity link | After upsert, `allocationEntityId` (DB `allocation_entity_id`) is set when a Jira **component** string (split on comma) **case-insensitively matches** `AllocationEntity.name` (first match wins) |
 
 Required environment variables:
 
@@ -461,18 +455,18 @@ JIRA_FILTER_ID=12345
 | Script | Command | Source Files | Purpose |
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
-| `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `product`; SAP fields, scores, **`entity_type`**) |
+| `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `allocation_entity`; SAP fields, scores, **`entity_type`**) |
 | `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`** |
 | `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR) |
 | `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
 | `rebuild-eotp-routing-csv.ts` | `npm run db:rebuild:routing-csv` | `EOTP_ROUTING_SOURCE.csv` | Rebuild **`EOTP_ROUTING.csv`** from wide export (outputs merged EUR columns) |
 
-**Order for a full prod load:** run **`npx prisma migrate deploy`** (or `migrate dev` locally), then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert allocation entities), then **`db:seed:prod`**. The prod script upserts catalog rows from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
+**Order for a full prod load:** run **`npm run db:migrate`** (same as **`npx prisma migrate deploy`**) or **`npx prisma migrate dev`** locally, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert allocation entities), then **`db:seed:prod`**. The prod script upserts catalog rows from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
 
 ### 9.1 Production Seed — Run Modes
 
 ```bash
-# Full reload: clears planner tables (allocations, rates, initiatives, resources — NOT the `product` table), then import
+# Full reload: clears planner tables (allocations, rates, initiatives, resources — NOT the `allocation_entity` table), then import
 SEED_PROD_RESET=1 npm run db:seed:prod
 
 # Upsert only (leave existing rows not touched by CSV logic)
@@ -487,7 +481,7 @@ npm run db:recreate:eotp-costs
 
 ### 9.2 Production Seed Notes
 
-- **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for allocation-entity master data (table `product`). `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
+- **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for allocation-entity master data (table `allocation_entity`). `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
 - **ID-based linking** — `InitiativeId` (RI-xxx), `RessourceId` (MAT-xxx), etc.
 - **Duplicate assignment rows** — CSV can list the same resource×initiative twice (e.g. % line + man-days line). The seed **merges** into one DB row: **percent values are summed**; **man-days** — **first line with a positive man-days value wins** (CSV order), not the sum. This matches business rules for split Excel exports.
 - **Allocation IDs** — Deterministic `ASS-{hash(resourceId|initiativeId)}` after merge (one row per pair).
@@ -495,10 +489,10 @@ npm run db:recreate:eotp-costs
 - **Percent & ManDays** — Trailing `%`; values divided by 100 for storage (`34%` → `0.34` FTE decimal; large “%” man-days columns → man-days).
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
-- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete rows in **`product`** — allocation-entity catalog survives full reloads.
+- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete rows in **`allocation_entity`** — allocation-entity catalog survives full reloads.
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
-**Manual truncate (rare)** — If you need a clean slate including the allocation-entity catalog, truncate `product` explicitly or use SQL; default reset keeps those rows.
+**Manual truncate (rare)** — If you need a clean slate including the allocation-entity catalog, truncate `allocation_entity` explicitly or use SQL; default reset keeps those rows.
 
 ---
 
@@ -520,12 +514,14 @@ npm run db:recreate:eotp-costs
 # 2. Open WSL terminal: Win+R → wsl
 docker start resource-planner-db   # skip if restart:always is set
 cd ~/projects/resource-planner
-npx prisma migrate deploy   # after pulling schema/migration changes (adds e.g. entity_type on product)
+npm run db:migrate   # after pulling schema/migration changes (alias for prisma migrate deploy)
 cursor .   # optional
 npm run dev   # → http://localhost:3000
 ```
 
-On a fresh clone or after schema updates, run **`npx prisma migrate deploy`** (production-like) or **`npx prisma migrate dev`** (local dev, applies pending migrations and regenerates the client) before **`npm run dev`**.
+On a fresh clone or after schema updates, run **`npm run db:migrate`** (production-like) or **`npx prisma migrate dev`** (local dev, applies pending migrations and regenerates the client) before **`npm run dev`**.
+
+**Prisma client:** `src/generated/prisma` is **gitignored** — **`npm install`** runs **`prisma generate`** via **`postinstall`**. After schema changes, run **`npx prisma generate`** if needed. If **`next dev`** errors with table **`public.product`** (or other stale names) while the schema uses **`allocation_entity`**, delete **`.next`** and restart the dev server so Turbopack picks up the regenerated client.
 
 ### 10.2 Make Postgres Survive Reboots
 
@@ -571,16 +567,19 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
-- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`product`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`productId`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (redirects keep old URLs working).
+- **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. Plan notes: **`prisma/RENAME_BASELINE_PLAN.md`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
+- **Investments list error UX (v1.4)** — **`GET /api/allocation-entities`** returns JSON **`{ error }`** on failure; **`/investments`** shows HTTP/Prisma errors and distinguishes empty DB vs filter mismatch.
+- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`allocation_entity`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`allocation_entity_id`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (redirects keep old URLs working).
+- **Rate.nbrDaysPerYear NOT NULL** — **`rate.nbrDaysPerYear`** is required; **`v_allocation_costs`** uses only the individual rate row for days/year (no fallback to **`rate_standard`** for FTE multipliers). Migration backfills legacy nulls; **`RATES.csv`** / dev **`Rates.csv`** rows without days are skipped at seed. **`dailyRate`** may still **`COALESCE`** to **`rate_standard`** when missing.
 - **Products prototype & EOTP polish (v1.2.5)** — Single **year** strip (between product card and EOTP card) drives budget, routing, and **`eotp-main-from-view`**. **`v_eotp_costs`** adds **`cash_out`** and **`total_cost`**; view SQL simplified (**`routed_non_main`** + **`UNION ALL`**); main row uses **`sapEotpName`** as label. API **`GET /api/products/[id]/eotp-main-from-view`**; POST/PATCH **eotp-routing** rejects targeting the **main SAP EOTP** (**`eotp-routing-validation.ts`**). Prototype EOTP table: main remainder row from the view, then exceptions; columns align with **Internal / External / Direct / Total / Cash out**; unified table header styling with initiative and assignment tables; budget/assignment grids use the same **Internal / External / Direct / Total** labels as EOTP.
-- **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(productId, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
+- **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(allocation_entity_id, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
 - **Products prototype (v1.2.3)** — `src/app/test/products/**` and `src/app/api/test/**`: product list with budget columns; product detail with budget-by-initiative and initiative allocation editor; test APIs read from `v_allocation_costs` and Prisma; allocation responses include `resource.type` for grouping; assignment UI uses €k abbreviation (`formatK`) aligned with initiative list styling.
-- **Product model** — `Product` table + `Initiative.productId`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
+- **Product model** — `allocation_entity` table + `Initiative.allocation_entity_id`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
 - **API** — `GET /api/products`, `GET /api/products/[id]`.
-- **Jira sync** — Resolves `productId` from components ↔ `Product.name` (case-insensitive).
+- **Jira sync** — Resolves `allocation_entity_id` from components ↔ `AllocationEntity.name` (case-insensitive).
 - **Single production seed** — One `scripts/seed-production.ts` (merged former alternate script): CSV merge rules, `RateStandard` fallback path, `createCostView()` with product join and corrected cost/FTE/`calculated_man_days` logic.
 - **Allocations CSV merge** — Duplicate MAT×RI rows: **sum** `quantity` (%); **first positive man-days** in CSV order wins (not summed).
-- **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `product`.
+- **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `allocation_entity`.
 - **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost quantity path uses per-unit days from the individual rate or **1** if absent (see §2.6 — avoids treating missing licence rates as 200 “man-days”).
 - **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
 - **Initiatives Product card (v1.2.2)** — Flat `InitiativeDTO` + `JSON.parse(JSON.stringify)` on the server list; client fetches full **`Product`** via `/api/products/[id]` (or list + name match) on selection so SAP/org fields display reliably despite `dynamic(..., { ssr: false })` (see §6.3). `initiatives-dynamic-shell.tsx` wraps the page client.
@@ -620,13 +619,14 @@ src/
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
   lib/eotp.ts                   ← computeEotpBreakdown (budget / reporting)
   lib/eotp-routing-validation.ts ← reject routing target = main SAP EOTP
+prisma.config.ts                ← Prisma 7 config (project root; datasource URL for CLI)
 prisma/
   schema.prisma                 ← Database schema (source of truth)
-  migrations/                   ← Migration history
-  config.ts                     ← Prisma 7 config (datasource URL)
+  migrations/                   ← Single baseline migration (20260405120000_baseline; history squashed Apr 2026)
+  RENAME_BASELINE_PLAN.md        ← Notes on allocation_entity rename + baseline procedure
 scripts/
   seed.ts                       ← Dev seed from PowerApps CSV exports
-  seed-products.ts              ← Upsert AllocationEntity rows from PRODUCTS.csv (table `product`)
+  seed-products.ts              ← Upsert AllocationEntity rows from PRODUCTS.csv (table `allocation_entity`)
   seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs
   eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
   seed-eotp-routing.ts          ← Seed eotp_routing from EOTP_ROUTING.csv
@@ -639,4 +639,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.3 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.4 (see §11.3 changelog)*

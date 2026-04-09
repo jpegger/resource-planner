@@ -155,7 +155,7 @@ In Power BI Desktop:
 
 ## Production seed (`scripts/data-prod/`)
 
-Order matters: **products** must exist before initiatives so Jira `Components` resolve to `productId`.
+Order matters: **allocation entities** (from `PRODUCTS.csv`) must exist before initiatives so Jira `Components` resolve to `allocation_entity_id`.
 
 ```bash
 # 1. Products first (requires scripts/data-prod/PRODUCTS.csv)

@@ -2,13 +2,13 @@
  * Production seed — ID-linked CSVs under `scripts/data-prod/`.
  *
  * JIRA / RESSOURCES: latin-1 · RATES / Assignement / RateStandard: utf-8 (BOM stripped).
- * Initiatives get `allocationEntityId` (DB column `productId`) from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
+ * Initiatives get `allocationEntityId` (DB column `allocation_entity_id`) from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
  * Duplicate Assignement rows (same resource + initiative): % summed across lines. Man-days: if
  * several lines have man-days > 0, the first line in CSV order wins (avoids double-counting
  * duplicate exports such as 12 + 7 for the same assignment). Existing DB pairs still get CSV
  * deltas added (additive re-import).
  *
- * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `product` rows).
+ * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `allocation_entity` rows).
  * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod`
  * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
  *
@@ -308,7 +308,10 @@ if (!rateId || !resourceId || resourceId === "RessourceId" || resourceId === "0"
     const dailyRate = parseNum(row["Daily Cost "]);  // note trailing space in column name
     const nbrDays   = parseNum(row["Nbr of Days per Year "]);
 
-    if (isNaN(year) || dailyRate === null) { skipped++; continue; }
+    if (isNaN(year) || dailyRate === null || nbrDays === null || Number.isNaN(nbrDays)) {
+      skipped++;
+      continue;
+    }
 
     // Verify the resource exists (was not skipped above due to missing ID)
     const exists = await prisma.resource.findUnique({
@@ -547,30 +550,8 @@ async function seedAllocations(): Promise<void> {
 // ─── 5. Cost View ────────────────────────────────────────────────────────────
 
 async function createCostView(): Promise<void> {
-  const fteDaysPerYear = `CAST(
-    COALESCE(
-      rt."nbrDaysPerYear",
-      CAST(rs."nbrDaysPerYear" AS double precision)
-    ) AS double precision)`;
-
-  // Direct costs: unit model (nbrDaysPerYear on the rate row, usually 1). Never fall back to
-  // INTERNAL RateStandard (200) — missing rate row must not inflate quantity into 200 "man-days".
-  const directCostQtyDays = `CAST(
-    COALESCE(
-      CASE
-        WHEN rt."nbrDaysPerYear" IS NOT NULL AND CAST(rt."nbrDaysPerYear" AS numeric) > 0
-        THEN CAST(rt."nbrDaysPerYear" AS numeric)
-      END,
-      CAST(1 AS double precision)
-    ) AS double precision)`;
-
-  const effectiveDaysPerYear = `CASE
-    WHEN r.type IN ('INTERNAL', 'EXTERNAL') THEN ${fteDaysPerYear}
-    ELSE COALESCE(
-      CAST(rt."nbrDaysPerYear" AS double precision),
-      CAST(1 AS double precision)
-    )
-  END`;
+  // Days/year come only from the individual rate row (required column); no fallback to rate_standard.
+  const daysPerYearFromRate = `CAST(rt."nbrDaysPerYear" AS double precision)`;
 
   console.log("Creating v_allocation_costs...");
 
@@ -613,7 +594,7 @@ async function createCostView(): Promise<void> {
       a."manDays"                                                   AS man_days,
       a.quantity,
       COALESCE(rt."dailyRate", rs."dailyRate")                      AS effective_rate,
-      ${effectiveDaysPerYear}                                       AS effective_days_per_year,
+      ${daysPerYearFromRate}                                       AS effective_days_per_year,
 
       CASE
         WHEN r.type = 'DIRECT_COST' THEN
@@ -621,13 +602,13 @@ async function createCostView(): Promise<void> {
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
               a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${directCostQtyDays} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
+              a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             ELSE CAST(0 AS double precision)
           END
         WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${fteDaysPerYear} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS computed_cost,
 
@@ -635,7 +616,7 @@ async function createCostView(): Promise<void> {
         WHEN r.type = 'INTERNAL' AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN r.type = 'INTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${fteDaysPerYear} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS internal_cost,
 
@@ -643,7 +624,7 @@ async function createCostView(): Promise<void> {
         WHEN r.type = 'EXTERNAL' AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN r.type = 'EXTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${fteDaysPerYear} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS external_cost,
 
@@ -653,7 +634,7 @@ async function createCostView(): Promise<void> {
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
               a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${directCostQtyDays} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
+              a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             ELSE CAST(0 AS double precision)
           END
         ELSE 0
@@ -663,7 +644,7 @@ async function createCostView(): Promise<void> {
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a."manDays" IS NOT NULL AND a."manDays" > 0
-        THEN COALESCE(a."manDays" / NULLIF(${fteDaysPerYear}, 0), 0)
+        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearFromRate}, 0), 0)
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
         THEN a.quantity
@@ -673,7 +654,7 @@ async function createCostView(): Promise<void> {
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a."manDays" IS NOT NULL AND a."manDays" > 0
-        THEN COALESCE(a."manDays" / NULLIF(${fteDaysPerYear}, 0), 0) * 100
+        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearFromRate}, 0), 0) * 100
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
         THEN a.quantity * 100
@@ -685,19 +666,19 @@ async function createCostView(): Promise<void> {
           CASE
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN CAST(a."manDays" AS double precision)
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${directCostQtyDays}
+              a.quantity * ${daysPerYearFromRate}
             ELSE 0
           END
         WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays"
         WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${fteDaysPerYear}
+          a.quantity * ${daysPerYearFromRate}
         ELSE 0
       END                                                           AS calculated_man_days
 
     FROM allocation a
     JOIN initiative i   ON i.id = a."initiativeId"
-    LEFT JOIN product p ON p.id = i."productId"
+    LEFT JOIN allocation_entity p ON p.id = i."allocation_entity_id"
     JOIN resource r     ON r.id = a."resourceId"
     LEFT JOIN rate rt
       ON rt."resourceId" = r.id
@@ -745,7 +726,7 @@ async function main(): Promise<void> {
     process.env["SEED_PROD_RESET"] === "1" ||
     process.env["SEED_PROD_RESET"] === "true";
   if (fullReset) {
-    console.log("SEED_PROD_RESET: clearing planner tables (product table preserved)…\n");
+    console.log("SEED_PROD_RESET: clearing planner tables (allocation_entity rows preserved)…\n");
     await clearPlannerTables();
   } else {
     console.log(

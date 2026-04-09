@@ -87,9 +87,9 @@ model Rate {
   resource       Resource @relation(fields: [resourceId], references: [id])
   year           Int
   dailyRate      Float
-  // For Direct Costs: always 1.0 (unit cost model)
-  // For Internal/External: null — use RateStandard.nbrDaysPerYear
-  nbrDaysPerYear Float?
+  // Working days per year for this resource×year (FTE ↔ man-days, direct-cost quantity multiplier).
+  // Required: cost views use only rt."nbrDaysPerYear" — no fallback to RateStandard for days.
+  nbrDaysPerYear Float
 
   createdOn      DateTime
   modifiedOn     DateTime
@@ -119,7 +119,7 @@ model RateStandard {
 }
 
 // ============================================================
-// ALLOCATION ENTITIES (table: product)
+// ALLOCATION ENTITIES (table: allocation_entity)
 // Canonical catalog: Jira Components ↔ id; cost attribution / EOTP / reporting.
 // ============================================================
 
@@ -140,12 +140,12 @@ model AllocationEntity {
   createdOn        DateTime              @default(now())
   modifiedOn       DateTime              @updatedAt
 
-  @@map("product")
+  @@map("allocation_entity")
 }
 
 model EotpRouting {
   id                 String            @id @default(cuid())
-  allocationEntityId String            @map("productId")
+  allocationEntityId String            @map("allocation_entity_id")
   allocationEntity   AllocationEntity  @relation(fields: [allocationEntityId], references: [id])
   year               Int // Planning year (2025, 2026…)
   eotp               String // Target EOTP code, e.g. "7D0079001"
@@ -177,7 +177,7 @@ model Initiative {
   components     String?                   // = Product (from Jira components field)
   productGroup   String?
   initiativeType String?
-  allocationEntityId String?          @map("productId")
+  allocationEntityId String?          @map("allocation_entity_id")
   allocationEntity   AllocationEntity? @relation(fields: [allocationEntityId], references: [id])
   createdOn      DateTime
   modifiedOn     DateTime

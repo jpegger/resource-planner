@@ -57,8 +57,8 @@ async function loadCostsByProductYear(): Promise<
       COALESCE(SUM(v.internal_cost), 0)::double precision AS internal_cost,
       COALESCE(SUM(v.external_cost), 0)::double precision AS external_cost,
       COALESCE(SUM(v.direct_cost), 0)::double precision AS direct_cost
-    FROM product p
-    JOIN initiative i ON i."productId" = p.id
+    FROM allocation_entity p
+    JOIN initiative i ON i."allocation_entity_id" = p.id
     JOIN v_allocation_costs v ON v.jira_key = i.id
     GROUP BY p.name, i.year
   `;

@@ -11,6 +11,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
+    "db:migrate": "prisma migrate deploy",
     "db:seed:products": "tsx scripts/seed-products.ts",
     "db:seed:prod": "tsx scripts/seed-production.ts",
     "db:seed:routing": "tsx scripts/seed-eotp-routing.ts",

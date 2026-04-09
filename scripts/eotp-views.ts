@@ -26,23 +26,23 @@ export async function createEotpCostsView(prisma: PrismaClient): Promise<void> {
         SUM(v.internal_cost)   AS internal_cost,
         SUM(v.external_cost)   AS external_cost,
         SUM(v.direct_cost)     AS direct_cost
-      FROM product p
-      JOIN initiative i ON i."productId" = p.id
+      FROM allocation_entity p
+      JOIN initiative i ON i."allocation_entity_id" = p.id
       JOIN v_allocation_costs v ON v.jira_key = i.id
       GROUP BY p.id, p.name, p."sapEotpCode", p."sapEotpName", v.initiative_year
     ),
     -- Per product × year: sum of exception routing only (main EOTP targets excluded — see file header).
     routed_non_main AS (
       SELECT
-        er."productId" AS product_id,
+        er."allocation_entity_id" AS product_id,
         er.year,
         SUM(er."internalAmount") AS internal_routed,
         SUM(er."externalAmount") AS external_routed,
         SUM(er."directAmount") AS direct_routed
       FROM eotp_routing er
-      JOIN product_costs pc ON pc.product_id = er."productId" AND pc.year = er.year
+      JOIN product_costs pc ON pc.product_id = er."allocation_entity_id" AND pc.year = er.year
       WHERE er.eotp <> pc.main_eotp
-      GROUP BY er."productId", er.year
+      GROUP BY er."allocation_entity_id", er.year
     )
     -- Exception rows: one line per routing row (same filter as routed_non_main).
     SELECT
@@ -58,7 +58,7 @@ export async function createEotpCostsView(prisma: PrismaClient): Promise<void> {
       (er."externalAmount" + er."directAmount") AS cash_out,
       (er."internalAmount" + er."externalAmount" + er."directAmount") AS total_cost
     FROM eotp_routing er
-    JOIN product_costs pc ON pc.product_id = er."productId" AND pc.year = er.year
+    JOIN product_costs pc ON pc.product_id = er."allocation_entity_id" AND pc.year = er.year
     WHERE er.eotp <> pc.main_eotp
 
     UNION ALL
