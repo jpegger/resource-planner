@@ -1,0 +1,12 @@
+﻿product_id,year,total_internal,total_external,total_direct,total_cost,notes
+PRD-BOS,2026,989084,0,0,989084,internal only — staff FTE; ties EOTP scenario A
+PRD-TESTING,2023,0,452390.4,0,452390.4,external only — consultants
+PRD-CRM,2026,951920,1222949.7,795204.13,2970073.83,mixed INT/EXT/DIR; ties EOTP scenario C
+PRD-SAP,2023,133879.875,238652,11379,383910.875,historical year — 2023 rates
+PRD-REGIONAL_WEB_PORTAL,2025,620575.2,1847321.51,0,2467896.71,many initiatives — aggregation regression
+PRD-NOVA,2022,0,0,0,0,initiatives without allocation rows — COALESCE sums to zero
+PRD-WEPULSE_DATA,2026,0,0,154721,154721,direct cost only — licences
+PRD-HMS,2025,16380,78400.00000035,0,94780.00000035,one EOTP exception row — ties scenario B
+PRD-BRUSO,2025,0,6720.000000030001,0,6720.000000030001,external-only small total — ties scenario D
+PRD-AXON,2023,8325,1000,0,9325,cross-year isolation — ties scenario F (2023)
+PRD-AXON,2024,17550,0,0,17550,cross-year isolation — ties scenario F (2024)

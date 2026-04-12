@@ -4,8 +4,9 @@
 // ============================================================
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["views"]
 }
 
 datasource db {
@@ -88,7 +89,7 @@ model Rate {
   year           Int
   dailyRate      Float
   // Working days per year for this resource×year (FTE ↔ man-days, direct-cost quantity multiplier).
-  // Required: cost views use only rt."nbrDaysPerYear" — no fallback to RateStandard for days.
+  // v_allocation_costs: FTE paths use COALESCE(rt.nbrDaysPerYear, rs.nbrDaysPerYear) when rt is missing.
   nbrDaysPerYear Float
 
   createdOn      DateTime
@@ -137,10 +138,23 @@ model AllocationEntity {
   competitiveness  Float? // Marketing matrix — competitiveness axis (X)
   initiatives      Initiative[]
   eotpRoutings     EotpRouting[]
+  /// Rollup of INT/EXT/DIR from v_allocation_costs (see v_allocation_entity_cost_totals).
+  costTotals       VAllocationEntityCostTotals?
   createdOn        DateTime              @default(now())
   modifiedOn       DateTime              @updatedAt
 
   @@map("allocation_entity")
+}
+
+/// Per–allocation-entity sums over initiatives (depends on v_allocation_costs). Read-only view.
+view VAllocationEntityCostTotals {
+  allocationEntityId String           @unique @map("allocation_entity_id")
+  totalInternal      Float            @map("total_internal")
+  totalExternal      Float            @map("total_external")
+  totalDirect        Float            @map("total_direct")
+  allocationEntity   AllocationEntity @relation(fields: [allocationEntityId], references: [id])
+
+  @@map("v_allocation_entity_cost_totals")
 }
 
 model EotpRouting {

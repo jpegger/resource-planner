@@ -1,0 +1,12 @@
+﻿scenario,product_id,year,eotp,is_main_eotp,internal_cost,external_cost,direct_cost,cash_out,total_cost,notes
+A,PRD-BOS,2026,7D0028001,true,989084,0,0,0,989084,no exceptions — main equals full entity total
+B,PRD-HMS,2025,7D0079001,false,0,78400.00000035,0,78400.00000035,78400.00000035,exception — external bucket to AMS EOTP
+B,PRD-HMS,2025,7D0034001,true,16380,0,0,0,16380,main remainder after exception
+C,PRD-CRM,2026,7D0043001,true,280360,508202.69999999995,-0.005000000004656613,508202.69499999995,788562.695,main remainder — three exceptions below
+C,PRD-CRM,2026,7D0043002,false,671560,714747,390831.91,1105578.91,1777138.91,exception — plateforme
+C,PRD-CRM,2026,7D0043005,false,0,0,83820.225,83820.225,83820.225,exception — CRM interne
+C,PRD-CRM,2026,7D0056003,false,0,0,320552,320552,320552,exception — integration hub
+D,PRD-BRUSO,2025,7D0079001,false,0,6720.000000030001,0,6720.000000030001,6720.000000030001,exception — 100% external to AMS
+D,PRD-BRUSO,2025,7D0040001,true,0,0,0,0,0,zero remainder on main BRUSO code
+F,PRD-AXON,2023,7D0010002,true,8325,1000,0,1000,9325,year isolation — 2023
+F,PRD-AXON,2024,7D0010002,true,17550,0,0,0,17550,year isolation — 2024 must not bleed from 2023

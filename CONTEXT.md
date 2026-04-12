@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.4 · April 2026**
+**Paradigm · Brussels Capital Region · v1.5 · April 2026**
 
 ---
 
@@ -381,7 +381,7 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/jira/sync` | GET | Fetch all initiatives from Jira filter, upsert to DB |
 | `/api/allocations` | GET, POST | GET by initiativeId. POST creates new allocation. |
 | `/api/allocations/[id]` | PATCH, DELETE | Update or delete one allocation. Auto-save on change. |
-| `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource |
+| `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource; **`direction`** must be **`CRPS`**, **`PDS`**, or **null** |
 | `/api/rates` | GET, POST | GET by resourceId. POST creates new rate. |
 | `/api/rates/[id]` | PATCH, DELETE | Update or delete one rate row |
 | `/api/allocation-entities` | GET | List all allocation entities (ordered by family, name) |
@@ -389,16 +389,16 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/allocation-entities/[id]/eotp-routing` | GET, POST | List or create **EotpRouting** rows (`GET` optional `?year=`). POST rejects targets equal to **`sapEotpCode`**. |
 | `/api/allocation-entities/[id]/eotp-routing/[routingId]` | PATCH, DELETE | Update or delete one routing row (PATCH rejects effective `eotp` = main SAP code). |
 | `/api/allocation-entities/[id]/eotp-main-from-view` | GET | Main-bucket rows from **`v_eotp_costs`** (`is_main_eotp = true`); optional `?year=` |
-| `/api/allocation-entities/with-budget` | GET | Per-entity INT/EXT/DIR totals from `v_allocation_costs` (initiatives linked via DB `allocation_entity_id`) |
+| `/api/allocation-entities/with-budget` | GET | **All** allocation entities with rolled-up INT/EXT/DIR from `v_allocation_costs` via SQL (`LEFT JOIN` — zeros when no initiatives/costs). JSON mirrors Prisma scalars on the entity plus **`totalInternal`**, **`totalExternal`**, **`totalDirect`** (camelCase EUR totals). Used by the investments list in one request. |
 | `/api/allocation-entities/[id]/budget` | GET | Optional `?year=` — per-initiative cost rollups; includes **`eotpBreakdown`** when `sapEotpCode` is set |
 | `/api/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
 | `/api/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation costs from `v_allocation_costs` |
 
-**Redirects:** `next.config.ts` maps legacy **`/api/products/*`**, **`/api/test/*`**, **`/test/products/*`**, and **`/initiatives`** to the canonical routes above.
+**Legacy URLs:** No Next.js redirects are configured for old paths — use the canonical routes in the table above only.
 
 ### 6.3 Investments UI and allocation entity catalog
 
-The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI label: **Investment**). The detail screen loads the allocation entity with **`GET /api/allocation-entities/[id]`** and drives budget, EOTP routing, and allocations against `v_allocation_costs`. The former **`/initiatives`** screen was removed; bookmarks redirect to **`/investments`**.
+The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI label: **Investment**). The detail screen loads the allocation entity with **`GET /api/allocation-entities/[id]`** and drives budget, EOTP routing, and allocations against `v_allocation_costs`. The old **`/initiatives`** screen was removed; it is not redirected.
 
 ---
 
@@ -406,15 +406,16 @@ The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI l
 
 ### 7.1 Investments (`/investments`, `/investments/[id]`) — Primary
 
-Portfolio table of allocation entities with optional budget columns (€k INT/EXT/DIR from **`/api/allocation-entities/with-budget`**). Row opens the **investment detail**: catalog card, year filter, **EOTP routing** (main remainder from **`v_eotp_costs`** plus editable exceptions), **budget by initiative**, and (when an initiative is selected) the **allocation** editor using **`/api/allocations`** and **`/api/initiative-allocation-costs`**.
+Portfolio table of allocation entities with optional budget columns (€k INT/EXT/DIR from **`/api/allocation-entities/with-budget`**). Row opens **investment detail** (modular client under **`investments/[id]/`**).
 
-### 7.2 Resources (/resources) — In Progress
+**Layout (v1.5):** Shared panel chrome (**`PANEL_CARD_CLASS`** in **`src/lib/panel-card.ts`**) matches **`/resources`**. **Main title** = allocation entity **name · selected year**; **year** chips sit in the **same grid column** as the **Details** card so they align with its right edge. **Top row (two columns):** **Details** (readonly catalog: division, SAP EOTP, etc.) | **Budget Summary {year}** — EOTP routing from **`v_eotp_costs`** (main remainder) plus editable exception rows (**`/api/allocation-entities/[id]/eotp-routing`**). **Horizontal separator**, then **bottom row:** **Budget by initiative** | **Allocations** editor ( **`/api/allocations`**, **`/api/initiative-allocation-costs`** ) when an initiative is selected.
 
-Same master-detail pattern as initiatives.
+### 7.2 Resources (`/resources`)
 
-- **Left panel** — List with columns: Name, Function, Cell, Direction, Type (colored badge — blue/amber/green per type). Filters: text search, Cell, Direction, Type dropdowns.
-- **Right panel top** — Resource details with Edit/Delete buttons. Fields toggle between read-only and editable inputs on Edit click.
-- **Right panel bottom** — Daily Rates table — Nbr of days/year, Daily Rate, Year (2022–2027 dropdown), Delete. New rate via + New button.
+Master-detail: **left** searchable/filterable table (ID, name from Prénom+Nom, function, type); **right** stacked cards (**Details** + **Daily rates by year**) with the same **`PANEL_CARD_CLASS`** border/shadow as investments.
+
+- **Details** — Edit/Save/Cancel; **`PATCH /api/resources/[id]`**; display name derived from first/last name (**`resourceFullNameFromParts`**). **Direction** is restricted to **CRPS** or **PDS** (or empty); legacy CSV values must be replaced in the UI before save.
+- **Rates** — Edit rates mode: existing rows **auto-save** (debounced PATCH **`/api/rates/[id]`**); **Add rate** opens a draft row at the top (**Save** posts **`/api/resources/[id]/rates`**); **Delete** uses a **modal** (not `window.confirm`). Numbers are **right-aligned** in the table.
 
 ### 7.3 Report — Planned
 
@@ -422,7 +423,7 @@ To be defined. Likely a link to Power BI Service or an embedded report. No in-ap
 
 ### 7.4 Legacy routes
 
-Older URLs (`/test/products`, `/api/products`, `/api/test/*`, `/initiatives`) redirect to the canonical **`/investments`** and **`/api/allocation-entities`** routes (see §6.2).
+Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`** and **`/api/allocation-entities`** (see §6.2).
 
 ---
 
@@ -489,6 +490,7 @@ npm run db:recreate:eotp-costs
 - **Percent & ManDays** — Trailing `%`; values divided by 100 for storage (`34%` → `0.34` FTE decimal; large “%” man-days columns → man-days).
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
+- **RESSOURCES encoding** — File is **UTF-8 with BOM**. **`seed-production.ts`** reads **`RESSOURCES.csv`** as **`utf8`** (not `latin1`) so headers **`Nom` / `Prénom`** parse correctly; **`JIRA.csv`** remains **`latin1`**.
 - **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete rows in **`allocation_entity`** — allocation-entity catalog survives full reloads.
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
@@ -557,7 +559,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 ### 11.2 Prioritised Next Steps
 
-1. **Complete Resources screen** (`/resources`) — API routes + UI per Section 7.2
+1. **Hardening** — Auth, tests (`vitest`), CI fixes for **`tests/fixtures/load-csv.ts`** typing if needed
 2. **Apply be.brussels colour scheme** globally (sidebar `#1a2f4e`, primary `#185FA5`, background `#f4f6f8`)
 3. **Discover Jira custom field IDs** then finish field mapping in Jira sync (`year`, `initiativeType`, etc.)
 4. **Validate Power BI reports** against `v_allocation_costs` on local Docker Postgres (refresh model after view changes)
@@ -567,9 +569,10 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Investment detail layout + resources UX (v1.5)** — Modular **`InvestmentDetailClient`** and panels; **title** = name **·** year; year selector column-aligned with **Details**; **Budget Summary {year}** card (EOTP routing) top-right vs Details; **separator**; **Budget by initiative** + **Allocations** row. **Resources** screen: **`PANEL_CARD_CLASS`**, details/rates editing, rate **auto-save**, add-rate draft row, delete **modal**, **CRPS/PDS** direction validation, **`resource-display-name`**. **Prod seed:** **`RESSOURCES.csv`** read as **UTF-8**. Shared **`src/lib/panel-card.ts`**, **`resource-direction.ts`**, **`resource-display-name.ts`**.
 - **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. Plan notes: **`prisma/RENAME_BASELINE_PLAN.md`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
 - **Investments list error UX (v1.4)** — **`GET /api/allocation-entities`** returns JSON **`{ error }`** on failure; **`/investments`** shows HTTP/Prisma errors and distinguishes empty DB vs filter mismatch.
-- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`allocation_entity`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`allocation_entity_id`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (redirects keep old URLs working).
+- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`allocation_entity`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`allocation_entity_id`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (no legacy redirects in dev).
 - **Rate.nbrDaysPerYear NOT NULL** — **`rate.nbrDaysPerYear`** is required; **`v_allocation_costs`** uses only the individual rate row for days/year (no fallback to **`rate_standard`** for FTE multipliers). Migration backfills legacy nulls; **`RATES.csv`** / dev **`Rates.csv`** rows without days are skipped at seed. **`dailyRate`** may still **`COALESCE`** to **`rate_standard`** when missing.
 - **Products prototype & EOTP polish (v1.2.5)** — Single **year** strip (between product card and EOTP card) drives budget, routing, and **`eotp-main-from-view`**. **`v_eotp_costs`** adds **`cash_out`** and **`total_cost`**; view SQL simplified (**`routed_non_main`** + **`UNION ALL`**); main row uses **`sapEotpName`** as label. API **`GET /api/products/[id]/eotp-main-from-view`**; POST/PATCH **eotp-routing** rejects targeting the **main SAP EOTP** (**`eotp-routing-validation.ts`**). Prototype EOTP table: main remainder row from the view, then exceptions; columns align with **Internal / External / Direct / Total / Cash out**; unified table header styling with initiative and assignment tables; budget/assignment grids use the same **Internal / External / Direct / Total** labels as EOTP.
 - **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(allocation_entity_id, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
@@ -597,7 +600,7 @@ src/
     page.tsx                    ← Redirect to /investments
     investments/page.tsx        ← Investment list + budget columns
     investments/[id]/page.tsx   ← Investment detail shell
-    investments/[id]/investment-detail-client.tsx ← Budget, EOTP routing, allocations editor
+    investments/[id]/InvestmentDetailClient.tsx ← Layout: Details | Budget Summary, separator, initiatives | allocations
     resources/page.tsx          ← Resources screen (in progress)
     api/
       jira/sync/route.ts        ← Jira sync
@@ -639,4 +642,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.4 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.5 (see §11.3 changelog)*

@@ -1,7 +1,7 @@
 /**
  * Production seed — ID-linked CSVs under `scripts/data-prod/`.
  *
- * JIRA / RESSOURCES: latin-1 · RATES / Assignement / RateStandard: utf-8 (BOM stripped).
+ * JIRA: latin-1 · RESSOURCES / RATES / Assignement / RateStandard: utf-8 (BOM stripped).
  * Initiatives get `allocationEntityId` (DB column `allocation_entity_id`) from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
  * Duplicate Assignement rows (same resource + initiative): % summed across lines. Man-days: if
  * several lines have man-days > 0, the first line in CSV order wins (avoids double-counting
@@ -23,6 +23,11 @@ import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
 import { createEotpCostsView } from "./eotp-views";
+import { resourceFullNameFromParts } from "../src/lib/resource-display-name";
+import {
+  CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
+  DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
+} from "./v-allocation-entity-cost-totals-view";
 
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
@@ -164,7 +169,7 @@ async function seedInitiatives(): Promise<void> {
 
 async function seedResources(): Promise<void> {
   console.log("Seeding resources from RESSOURCES.csv...");
-  const rows = readCsv("RESSOURCES.csv", "latin1");
+  const rows = readCsv("RESSOURCES.csv", "utf8");
 
   let upserted = 0;
   let skipped = 0;
@@ -181,15 +186,20 @@ async function seedResources(): Promise<void> {
       continue;
     }
 
-    const fullName = row["Full Name"]?.trim() || row["Nom"]?.trim() || "";
-    if (!fullName) { skipped++; continue; }
+    const firstName = row["Prénom"]?.trim() || null;
+    const lastName = row["Nom"]?.trim() || null;
+    const fullName = resourceFullNameFromParts(firstName, lastName);
+    if (!fullName) {
+      skipped++;
+      continue;
+    }
 
     await prisma.resource.upsert({
       where: { id },
       update: {
         fullName,
-        firstName:  row["Prénom"]?.trim() || null,
-        lastName:   row["Nom"]?.trim() || null,
+        firstName,
+        lastName,
         function:   row["Fonction"]?.trim() || null,
         cellule:    row["Cellule"]?.trim() || null,
         direction:  row["Pôle"]?.trim() || null,
@@ -199,8 +209,8 @@ async function seedResources(): Promise<void> {
       create: {
         id,
         fullName,
-        firstName:  row["Prénom"]?.trim() || null,
-        lastName:   row["Nom"]?.trim() || null,
+        firstName,
+        lastName,
         function:   row["Fonction"]?.trim() || null,
         cellule:    row["Cellule"]?.trim() || null,
         direction:  row["Pôle"]?.trim() || null,
@@ -550,8 +560,11 @@ async function seedAllocations(): Promise<void> {
 // ─── 5. Cost View ────────────────────────────────────────────────────────────
 
 async function createCostView(): Promise<void> {
-  // Days/year come only from the individual rate row (required column); no fallback to rate_standard.
-  const daysPerYearFromRate = `CAST(rt."nbrDaysPerYear" AS double precision)`;
+  // Match daily rate: when there is no individual rate row, use rate_standard for days/year too (FTE paths).
+  const daysPerYearEffective = `COALESCE(
+    CAST(rt."nbrDaysPerYear" AS double precision),
+    CAST(rs."nbrDaysPerYear" AS double precision)
+  )`;
 
   console.log("Creating v_allocation_costs...");
 
@@ -559,6 +572,7 @@ async function createCostView(): Promise<void> {
   // drop them first to keep the seed idempotent.
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_routing`);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_costs`);
+  await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs`);
 
   await prisma.$executeRawUnsafe(`
@@ -594,7 +608,7 @@ async function createCostView(): Promise<void> {
       a."manDays"                                                   AS man_days,
       a.quantity,
       COALESCE(rt."dailyRate", rs."dailyRate")                      AS effective_rate,
-      ${daysPerYearFromRate}                                       AS effective_days_per_year,
+      ${daysPerYearEffective}                                       AS effective_days_per_year,
 
       CASE
         WHEN r.type = 'DIRECT_COST' THEN
@@ -602,13 +616,13 @@ async function createCostView(): Promise<void> {
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
               a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
+              a.quantity * ${daysPerYearEffective} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             ELSE CAST(0 AS double precision)
           END
         WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearEffective} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS computed_cost,
 
@@ -616,7 +630,7 @@ async function createCostView(): Promise<void> {
         WHEN r.type = 'INTERNAL' AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN r.type = 'INTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearEffective} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS internal_cost,
 
@@ -624,7 +638,7 @@ async function createCostView(): Promise<void> {
         WHEN r.type = 'EXTERNAL' AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
         WHEN r.type = 'EXTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", rs."dailyRate")
+          a.quantity * ${daysPerYearEffective} * COALESCE(rt."dailyRate", rs."dailyRate")
         ELSE 0
       END                                                           AS external_cost,
 
@@ -634,7 +648,7 @@ async function createCostView(): Promise<void> {
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
               a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${daysPerYearFromRate} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
+              a.quantity * ${daysPerYearEffective} * COALESCE(rt."dailyRate", CAST(0 AS double precision))
             ELSE CAST(0 AS double precision)
           END
         ELSE 0
@@ -644,7 +658,7 @@ async function createCostView(): Promise<void> {
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a."manDays" IS NOT NULL AND a."manDays" > 0
-        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearFromRate}, 0), 0)
+        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearEffective}, 0), 0)
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
         THEN a.quantity
@@ -654,7 +668,7 @@ async function createCostView(): Promise<void> {
       CASE
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a."manDays" IS NOT NULL AND a."manDays" > 0
-        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearFromRate}, 0), 0) * 100
+        THEN COALESCE(a."manDays" / NULLIF(${daysPerYearEffective}, 0), 0) * 100
         WHEN r.type IN ('INTERNAL', 'EXTERNAL')
          AND a.quantity IS NOT NULL AND a.quantity > 0
         THEN a.quantity * 100
@@ -666,13 +680,13 @@ async function createCostView(): Promise<void> {
           CASE
             WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN CAST(a."manDays" AS double precision)
             WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-              a.quantity * ${daysPerYearFromRate}
+              a.quantity * ${daysPerYearEffective}
             ELSE 0
           END
         WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
           a."manDays"
         WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * ${daysPerYearFromRate}
+          a.quantity * ${daysPerYearEffective}
         ELSE 0
       END                                                           AS calculated_man_days
 
@@ -692,6 +706,13 @@ async function createCostView(): Promise<void> {
   console.log("  ✓ v_allocation_costs created\n");
 }
 
+async function createAllocationEntityCostTotalsView(): Promise<void> {
+  console.log("Creating v_allocation_entity_cost_totals view...");
+  await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
+  await prisma.$executeRawUnsafe(CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
+  console.log("  ✓ v_allocation_entity_cost_totals created\n");
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -702,6 +723,7 @@ async function main(): Promise<void> {
   if (viewOnly) {
     console.log("SEED_VIEW_ONLY: recreating v_allocation_costs (no CSV import)…\n");
     await createCostView();
+    await createAllocationEntityCostTotalsView();
     await createEotpCostsView(prisma);
     console.log("Done.");
     return;
@@ -740,6 +762,7 @@ async function main(): Promise<void> {
   await seedRates();
   await seedAllocations();
   await createCostView();
+  await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);
 
   console.log("Done.");

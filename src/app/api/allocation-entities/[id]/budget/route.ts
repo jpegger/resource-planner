@@ -3,19 +3,9 @@ import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeEotpBreakdown } from "@/lib/eotp";
 import type { EotpRoutingRow } from "@/lib/eotp";
+import { queryBudgetRawRows } from "@/lib/investment-detail-budget-query";
 
 export const runtime = "nodejs";
-
-type BudgetRow = {
-  jira_key: string;
-  summary: string;
-  status: string;
-  initiative_year: unknown;
-  internal_cost: unknown;
-  external_cost: unknown;
-  direct_cost: unknown;
-  total_cost: unknown;
-};
 
 /** Per-initiative cost rollups for a product (from v_allocation_costs). Optional ?year= filters initiatives. */
 export async function GET(
@@ -34,41 +24,7 @@ export async function GET(
     if (!Number.isNaN(y)) yearFilter = y;
   }
 
-  const rows =
-    yearFilter === null
-      ? await prisma.$queryRaw<BudgetRow[]>`
-          SELECT
-            i.id AS jira_key,
-            i.summary,
-            i.status,
-            i.year AS initiative_year,
-            COALESCE(SUM(v.internal_cost), 0) AS internal_cost,
-            COALESCE(SUM(v.external_cost), 0) AS external_cost,
-            COALESCE(SUM(v.direct_cost), 0) AS direct_cost,
-            COALESCE(SUM(v.computed_cost), 0) AS total_cost
-          FROM initiative i
-          LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
-          WHERE i."allocation_entity_id" = ${productId.trim()}
-          GROUP BY i.id, i.summary, i.status, i.year
-          ORDER BY i.year DESC, i.summary ASC
-        `
-      : await prisma.$queryRaw<BudgetRow[]>`
-          SELECT
-            i.id AS jira_key,
-            i.summary,
-            i.status,
-            i.year AS initiative_year,
-            COALESCE(SUM(v.internal_cost), 0) AS internal_cost,
-            COALESCE(SUM(v.external_cost), 0) AS external_cost,
-            COALESCE(SUM(v.direct_cost), 0) AS direct_cost,
-            COALESCE(SUM(v.computed_cost), 0) AS total_cost
-          FROM initiative i
-          LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
-          WHERE i."allocation_entity_id" = ${productId.trim()}
-            AND i.year = ${yearFilter}
-          GROUP BY i.id, i.summary, i.status, i.year
-          ORDER BY i.year DESC, i.summary ASC
-        `;
+  const rows = await queryBudgetRawRows(productId.trim(), yearFilter);
 
   const entity = await prisma.allocationEntity.findUnique({
     where: { id: productId.trim() },
@@ -85,7 +41,6 @@ export async function GET(
         },
       });
     } catch {
-      // e.g. migration not applied yet (`eotp_routing` missing) — still return budget rows without EOTP breakdown
       routings = [];
     }
   }

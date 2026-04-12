@@ -24,6 +24,12 @@ import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
 
+import { createEotpCostsView } from "./eotp-views";
+import {
+  CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
+  DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
+} from "./v-allocation-entity-cost-totals-view";
+
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
 });
@@ -343,9 +349,20 @@ async function seedAllocations() {
 // ─── 6. Cost View ────────────────────────────────────────────────────────────
 // Run after all tables are seeded. This view is what Power BI connects to.
 
+async function createAllocationEntityCostTotalsView() {
+  console.log("Creating v_allocation_entity_cost_totals view...");
+  await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
+  await prisma.$executeRawUnsafe(CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
+  console.log("  ✓ View v_allocation_entity_cost_totals created\n");
+}
+
 async function createCostView() {
   console.log("Creating v_allocation_costs view...");
 
+  // Drop dependents first (v_eotp_costs / totals reference v_allocation_costs).
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_routing`);
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_costs`);
+  await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs`);
 
   // Column names match Prisma’s migration (camelCase quoted identifiers).
@@ -368,7 +385,10 @@ SELECT
   r.direction,
   a.quantity,
   COALESCE(rt."dailyRate", rs."dailyRate")        AS effective_rate,
-  CAST(rt."nbrDaysPerYear" AS double precision)   AS effective_days_per_year,
+  COALESCE(
+    CAST(rt."nbrDaysPerYear" AS double precision),
+    CAST(rs."nbrDaysPerYear" AS double precision)
+  )                                               AS effective_days_per_year,
 
   -- Internal/External: man-days or FTE×days/year. Direct: man-days or quantity×days/year.
   CASE
@@ -376,13 +396,19 @@ SELECT
       CASE
         WHEN a."manDays" IS NOT NULL AND a."manDays" > 0 THEN CAST(a."manDays" AS double precision)
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
-          a.quantity * CAST(rt."nbrDaysPerYear" AS double precision)
+          a.quantity * COALESCE(
+            CAST(rt."nbrDaysPerYear" AS double precision),
+            CAST(rs."nbrDaysPerYear" AS double precision)
+          )
         ELSE 0
       END
     WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a."manDays" IS NOT NULL AND a."manDays" > 0 THEN
       a."manDays"
     WHEN r.type IN ('INTERNAL', 'EXTERNAL') AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
-      a.quantity * CAST(rt."nbrDaysPerYear" AS double precision)
+      a.quantity * COALESCE(
+        CAST(rt."nbrDaysPerYear" AS double precision),
+        CAST(rs."nbrDaysPerYear" AS double precision)
+      )
     ELSE 0
   END                                             AS calculated_man_days,
 
@@ -394,7 +420,10 @@ SELECT
           a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
           a.quantity
-          * CAST(rt."nbrDaysPerYear" AS double precision)
+          * COALESCE(
+            CAST(rt."nbrDaysPerYear" AS double precision),
+            CAST(rs."nbrDaysPerYear" AS double precision)
+          )
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         ELSE CAST(0 AS double precision)
       END
@@ -402,7 +431,10 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * CAST(rt."nbrDaysPerYear" AS double precision)
+      * COALESCE(
+        CAST(rt."nbrDaysPerYear" AS double precision),
+        CAST(rs."nbrDaysPerYear" AS double precision)
+      )
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS computed_cost,
@@ -413,7 +445,10 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN r.type = 'INTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * CAST(rt."nbrDaysPerYear" AS double precision)
+      * COALESCE(
+        CAST(rt."nbrDaysPerYear" AS double precision),
+        CAST(rs."nbrDaysPerYear" AS double precision)
+      )
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS internal_cost,
@@ -424,7 +459,10 @@ SELECT
       a."manDays" * COALESCE(rt."dailyRate", rs."dailyRate")
     WHEN r.type = 'EXTERNAL' AND a.quantity IS NOT NULL AND a.quantity > 0 THEN
       a.quantity
-      * CAST(rt."nbrDaysPerYear" AS double precision)
+      * COALESCE(
+        CAST(rt."nbrDaysPerYear" AS double precision),
+        CAST(rs."nbrDaysPerYear" AS double precision)
+      )
       * COALESCE(rt."dailyRate", rs."dailyRate")
     ELSE 0
   END                                             AS external_cost,
@@ -437,7 +475,10 @@ SELECT
           a."manDays" * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         WHEN a.quantity IS NOT NULL AND a.quantity > 0 THEN
           a.quantity
-          * CAST(rt."nbrDaysPerYear" AS double precision)
+          * COALESCE(
+            CAST(rt."nbrDaysPerYear" AS double precision),
+            CAST(rs."nbrDaysPerYear" AS double precision)
+          )
           * COALESCE(rt."dailyRate", CAST(0 AS double precision))
         ELSE CAST(0 AS double precision)
       END
@@ -491,6 +532,8 @@ async function main() {
   if (viewOnly) {
     console.log("SEED_VIEW_ONLY: recreating v_allocation_costs (no CSV import)…\n");
     await createCostView();
+    await createAllocationEntityCostTotalsView();
+    await createEotpCostsView(prisma);
     console.log("✅ View updated.");
     return;
   }
@@ -504,6 +547,8 @@ async function main() {
   await seedInitiatives();
   await seedAllocations();
   await createCostView();
+  await createAllocationEntityCostTotalsView();
+  await createEotpCostsView(prisma);
 
   console.log("✅ Seed complete.");
 }
