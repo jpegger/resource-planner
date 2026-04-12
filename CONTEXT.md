@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.6 · April 2026**
+**Paradigm · Brussels Capital Region · v1.7 · April 2026**
 
 ---
 
@@ -10,7 +10,7 @@
 2. [Core Business Logic](#2-core-business-logic)
 3. [Technology Stack](#3-technology-stack)
 4. [Database Schema](#4-database-schema)
-5. [Power BI Cost View](#5-power-bi-cost-view-v_allocation_costs)
+5. [Power BI Cost View](#5-power-bi-cost-view-v_allocation_costs) (includes §5.3 planning vs baseline views)
 6. [Application Architecture](#6-application-architecture)
 7. [Application Screens](#7-application-screens)
 8. [Jira Sync](#8-jira-sync)
@@ -170,7 +170,7 @@ Prisma 7 introduced significant breaking changes from v6. Key adaptations:
 
 ## 4. Database Schema
 
-Eight Prisma models on the planner side (Resource, Rate, RateStandard, **AllocationEntity**, Initiative, Allocation, **EotpDefinition**, **EotpRouting**), plus read-only **views** mapped in Prisma (e.g. **`VAllocationEntityCostTotals`** → **`v_allocation_entity_cost_totals`**). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Allocation cost is never stored — computed at query time. **EotpRouting** stores explicit EUR splits (exception rows only); optional FKs to **`eotp_definition`** link catalog rows for the main investment line and for each exception target.
+Core Prisma models on the planner side: Resource, Rate, RateStandard, **AllocationEntity**, Initiative, Allocation, **EotpDefinition**, **EotpRouting**; plus **AllocationSnapshot** / **AllocationSnapshotRow** (frozen EOTP breakdowns), **BudgetBaseline** / **BudgetBaselineRow** (SAP Excel import), and **DimYear** (Power BI year bridge). Read-only Prisma **views**: **`VAllocationEntityCostTotals`**, **`DimEotp`** (`dim_eotp` — distinct EOTP codes from snapshot and baseline rows). PostgreSQL views **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`** are created by **`scripts/seed-production.ts`** (`SEED_VIEW_ONLY=1 npm run db:seed:prod`). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Live allocation cost is never stored — computed at query time; **snapshots** store frozen EUR amounts at capture time. **EotpRouting** stores explicit EUR splits (exception rows only); optional FKs to **`eotp_definition`** link catalog rows for the main investment line and for each exception target.
 
 ### 4.1 Resource
 
@@ -312,7 +312,20 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 
 **Power BI:** use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/allocation-entities/[id]/eotp-routing`.
 
-### 4.9 Entity Relationship Summary
+### 4.9 Planning snapshots & budget baselines
+
+| Piece | Role |
+|---|---|
+| **`allocation_snapshot` / `allocation_snapshot_row`** | Named, immutable **allocation snapshot**: at capture time the app aggregates **`v_allocation_costs`** by `product_name` × `initiative_year`, runs **`computeEotpBreakdown`** (same logic as budget API) per **AllocationEntity** with **`sapEotpCode`** and year-scoped **`eotp_routing`**, and persists per–EOTP INT/EXT/DIR. **User identity** for `takenBy` / `importedBy`: header **`X-Auth-Request-Email`** via **`getUserFromRequest`** (`src/lib/auth.ts`); dev fallback when unset. |
+| **`budget_baseline` / `budget_baseline_row`** | SAP budget team Excel import (**xlsx**): columns **Prog Fin**, **Prog Fin lib**, **Cellule**, **Budget actuel YYYY**; amounts stored **positive EUR** (SAP negatives negated on import). |
+| **`dim_year`** | Small table (years 2023–2028 seeded) for Power BI relationships to snapshot/baseline detail views. |
+| **`dim_eotp`** | **View**: distinct **`eotp`** (and label) from **`allocation_snapshot_row`** ∪ **`budget_baseline_row`**; **`DISTINCT ON (eotp)`** so one row per code for dimension relationships. |
+
+**Comparison vs baseline:** done in **Power BI**, not in-app. Gap concept: baseline tracks external + direct “catchout” scope; **`v_snapshot_detail`** exposes **`catchout`** = `external + direct`. See **§5.3**.
+
+**APIs:** **`GET` / `POST /api/snapshots`**, **`DELETE /api/snapshots/[id]`**; **`GET` / `POST /api/baselines`** (multipart Excel), **`DELETE /api/baselines/[id]`**. UI: **`/budget-comparison`**.
+
+### 4.10 Entity Relationship Summary
 
 ```
 EotpDefinition (1) ── (0..N) AllocationEntity [optional eotp_definition_id on main line]
@@ -329,7 +342,7 @@ RateStandard     ── (no FK)       [joined by type + year at query time]
 
 ## 5. Power BI Cost View (v_allocation_costs)
 
-A PostgreSQL view created by the seed script. Power BI connects to this single view — never to individual tables. The app itself uses Prisma on the raw tables. The view is recreated each time the seed script runs, or on demand via:
+The primary reporting view is **`v_allocation_costs`** (PostgreSQL), created by the seed script. Power BI should consume **views**, not ad-hoc table queries for reporting. The app uses Prisma on raw tables. **`v_allocation_costs`** is recreated each time the production seed view step runs, or on demand via:
 
 ```bash
 SEED_VIEW_ONLY=1 npm run db:seed:prod
@@ -381,6 +394,16 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 
 **There is no `v_eotp_routing` view** — listing raw exception rows = query **`eotp_routing`** or use the app APIs. To recreate only this view after SQL changes: **`npm run db:recreate:eotp-costs`** (requires **`v_allocation_costs`**). Full planner views: **`SEED_VIEW_ONLY=1 npm run db:seed:prod`** (same as §5 command).
 
+### 5.3 Planning vs budget baseline (Power BI)
+
+Created by the same production seed path as **`v_allocation_costs`** (after snapshot/baseline tables exist). Import into Power BI: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_year`**, **`dim_eotp`**.
+
+- **`v_snapshot_detail`** — joins **`allocation_snapshot`** and **`allocation_snapshot_row`**; includes **`catchout`** (= `external + direct`).
+- **`v_baseline_detail`** — joins **`budget_baseline`** and **`budget_baseline_row`**; **`baseline_amount`**.
+- Relationships: **`dim_year[year]`** → both detail views; **`dim_eotp[eotp]`** → **`v_snapshot_detail[eotp]`** and **`v_baseline_detail[eotp]`** (many-to-one from facts to **`dim_eotp`**). Use **`dim_eotp`** on matrix rows so measures from both facts filter per EOTP. **Measures (example):** `Planned Catchout = SUM(v_snapshot_detail[catchout])`, `Baseline Amount = SUM(v_baseline_detail[baseline_amount])`, `Gap = [Baseline Amount] - [Planned Catchout]`.
+
+See **README.md** (Planning vs budget baseline) for step-by-step import notes.
+
 ---
 
 ## 6. Application Architecture
@@ -391,7 +414,7 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 Jira API  →  /api/jira/sync  →  Initiative table (upsert by jira_key)
 Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); allocation entities (`allocation_entity` table) seeded first when `PRODUCTS.csv` is present
 Browser  →  Next.js API routes  →  Prisma  →  PostgreSQL
-Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
+Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_costs, v_snapshot_detail, v_baseline_detail, dim_year, dim_eotp
 ```
 
 ### 6.2 API Routes
@@ -415,6 +438,10 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs view
 | `/api/eotp-routing-target-options` | GET | Optional **`?mainSapEotp=`** — JSON target options from **`eotp_definition`** only (excludes main SAP code when provided) |
 | `/api/resources` | GET | `{ id, fullName, type }[]` for allocation resource picker (ordered by name) |
 | `/api/initiative-allocation-costs` | GET | Query `initiativeId` — per-allocation costs from `v_allocation_costs` |
+| `/api/snapshots` | GET, POST | List allocation snapshots; POST creates snapshot (**`takeSnapshot`**) — body JSON **`name`**, **`year`**; **`takenBy`** from **`X-Auth-Request-Email`**. |
+| `/api/snapshots/[id]` | DELETE | Delete snapshot (cascade rows). |
+| `/api/baselines` | GET, POST | List budget baselines; POST multipart **`name`**, **`version`**, **`year`**, **`file`** (Excel). |
+| `/api/baselines/[id]` | DELETE | Delete baseline (cascade rows). |
 
 **Legacy URLs:** No Next.js redirects are configured for old paths — use the canonical routes in the table above only.
 
@@ -445,9 +472,13 @@ Master-detail: **left** searchable/filterable table (ID, name from Prénom+Nom, 
 
 To be defined. Likely a link to Power BI Service or an embedded report. No in-app charts planned — Power BI handles all analytics.
 
-### 7.4 Legacy routes
+### 7.4 Planning vs budget baseline (`/budget-comparison`)
 
-Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`** and **`/api/allocation-entities`** (see §6.2).
+Management screen (sidebar): **take snapshots** (name, year), **import baselines** (Excel), list/delete with **Dialog** confirmations. Comparison **vs** baseline is **not** rendered in the app — use Power BI on **`v_snapshot_detail`** / **`v_baseline_detail`** / **`dim_year`** / **`dim_eotp`** (§5.3).
+
+### 7.5 Legacy routes
+
+Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`**, **`/budget-comparison`**, and **`/api/allocation-entities`** (see §6.2).
 
 ---
 
@@ -481,7 +512,7 @@ JIRA_FILTER_ID=12345
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
 | `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `allocation_entity`; SAP fields, scores, **`entity_type`**) |
-| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`** |
+| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, seed **`dim_year`** |
 | `seed-eotp-definitions.ts` | `npm run db:seed:eotp` | `scripts/data-prod/EOTP-Budget-Owner.csv` | Upsert **`eotp_definition`** (SAP code, label, org metadata) |
 | `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR); links **`eotp_definition_id`** when definitions exist |
 | `backfill-eotp-routing-eotp-definition-ids.ts` | `npm run db:backfill:eotp-routing-fks` | — | One-off: set **`eotp_definition_id`** on existing **`eotp_routing`** / **`allocation_entity`** rows from code ± label |
@@ -499,7 +530,7 @@ SEED_PROD_RESET=1 npm run db:seed:prod
 # Upsert only (leave existing rows not touched by CSV logic)
 npm run db:seed:prod
 
-# Recreate Power BI views only — no CSV import (`v_allocation_costs` + `v_eotp_costs`)
+# Recreate Power BI views only — no CSV import (`v_allocation_costs`, `v_eotp_costs`, snapshot/baseline views, `dim_eotp`, seed `dim_year`)
 SEED_VIEW_ONLY=1 npm run db:seed:prod
 
 # Recreate only v_eotp_costs (requires v_allocation_costs)
@@ -595,6 +626,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Planning vs budget baseline (v1.7)** — **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**; **`takeSnapshot`** (`src/lib/snapshot.ts`) freezes **`computeEotpBreakdown`** + **`v_allocation_costs`** aggregates; baseline Excel via **`xlsx`** (`src/lib/baseline-parser.ts`). APIs: **`/api/snapshots`**, **`/api/baselines`**. UI **`/budget-comparison`**. Seed: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, **`dim_year`** in **`scripts/seed-production.ts`**. Power BI: **`dim_eotp`** bridges **`eotp`** on both detail views. **`getUserFromRequest`** (`src/lib/auth.ts`). README: Power BI setup for baseline comparison.
 - **EOTP definition catalog + routing UI (v1.6)** — Prisma **`EotpDefinition`** / table **`eotp_definition`**; optional **`eotp_definition_id`** on **`allocation_entity`** and **`eotp_routing`** (migration **`20260412130000_eotp_definition_catalog`**). Seeds: **`npm run db:seed:eotp`** (`EOTP-Budget-Owner.csv`); optional **`npm run db:backfill:eotp-routing-fks`**. APIs: **`GET /api/eotp-routing-target-options`**; **`GET/PATCH`** allocation-entity and eotp-routing routes resolve or persist definition links (**`src/lib/eotp-definition-resolve.ts`**, **`eotp-target-options.ts`**, **`eotp-routing-target-options-query.ts`**). Investment **EOTP routing** panel: main lines from **`eotp-main-from-view`**; **Exception Routing** title **aligned with Edit routing**; exception target combobox from **definitions only**; delete **Dialog**. **Tests:** **`tests/fixtures/load-csv.ts`** typing fix for Vitest. After markup changes, **`rm -rf .next`** / hard refresh avoids stale SSR hydration mismatches in dev.
 - **Investment detail layout + resources UX (v1.5)** — Modular **`InvestmentDetailClient`** and panels; **title** = name **·** year; year selector column-aligned with **Details**; **Budget Summary {year}** card (EOTP routing) top-right vs Details; **separator**; **Budget by initiative** + **Allocations** row. **Resources** screen: **`PANEL_CARD_CLASS`**, details/rates editing, rate **auto-save**, add-rate draft row, delete **modal**, **CRPS/PDS** direction validation, **`resource-display-name`**. **Prod seed:** **`RESSOURCES.csv`** read as **UTF-8**. Shared **`src/lib/panel-card.ts`**, **`resource-direction.ts`**, **`resource-display-name.ts`**.
 - **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. Plan notes: **`prisma/RENAME_BASELINE_PLAN.md`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
@@ -625,6 +657,7 @@ src/
   app/
     layout.tsx                  ← Root layout (nav sidebar, header)
     page.tsx                    ← Redirect to /investments
+    budget-comparison/page.tsx  ← Snapshots + baseline import (Power BI data prep)
     investments/page.tsx        ← Investment list + budget columns
     investments/[id]/page.tsx   ← Investment detail shell
     investments/[id]/InvestmentDetailClient.tsx ← Layout: Details | Budget Summary, separator, initiatives | allocations
@@ -649,8 +682,15 @@ src/
       resources/[id]/route.ts   ← GET, PATCH, DELETE
       rates/route.ts            ← GET by resource, POST
       rates/[id]/route.ts       ← PATCH, DELETE
+      snapshots/route.ts        ← GET, POST allocation snapshots
+      snapshots/[id]/route.ts   ← DELETE snapshot
+      baselines/route.ts        ← GET, POST baseline (multipart Excel)
+      baselines/[id]/route.ts   ← DELETE baseline
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
+  lib/auth.ts                   ← getUserFromRequest (X-Auth-Request-Email)
+  lib/snapshot.ts               ← takeSnapshot (frozen EOTP breakdown)
+  lib/baseline-parser.ts        ← SAP baseline Excel parse
   lib/eotp.ts                   ← computeEotpBreakdown (budget / reporting)
   lib/eotp-routing-validation.ts ← reject routing target = main SAP EOTP
   lib/eotp-definition-resolve.ts ← resolve / pick EotpDefinition for APIs and seeds
@@ -665,7 +705,7 @@ prisma/
 scripts/
   seed.ts                       ← Dev seed from PowerApps CSV exports
   seed-products.ts              ← Upsert AllocationEntity rows from PRODUCTS.csv (table `allocation_entity`)
-  seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs
+  seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs + snapshot/baseline views + dim_eotp + dim_year seed
   eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
   seed-eotp-definitions.ts      ← Seed eotp_definition from EOTP-Budget-Owner.csv
   seed-eotp-routing.ts          ← Seed eotp_routing from EOTP_ROUTING.csv
@@ -679,4 +719,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.6 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.7 (see §11.3 changelog)*

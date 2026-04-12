@@ -203,6 +203,84 @@ model EotpRouting {
   @@map("eotp_routing")
 }
 
+// ─── Allocation snapshots (frozen EOTP breakdown for Power BI) ───────────────
+
+model AllocationSnapshot {
+  id        String                  @id @default(cuid())
+  name      String
+  year      Int
+  takenAt   DateTime                @default(now())
+  takenBy   String
+  rows      AllocationSnapshotRow[]
+  createdOn DateTime                @default(now())
+  modifiedOn DateTime              @updatedAt
+
+  @@map("allocation_snapshot")
+}
+
+model AllocationSnapshotRow {
+  id          String             @id @default(cuid())
+  snapshotId  String
+  snapshot    AllocationSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  eotp        String
+  eopLabel    String?
+  productId   String?
+  productName String?
+  internal    Float              @default(0)
+  external    Float              @default(0)
+  direct      Float              @default(0)
+
+  @@index([snapshotId])
+  @@index([eotp])
+  @@map("allocation_snapshot_row")
+}
+
+// ─── Budget baselines (SAP Excel import) ─────────────────────────────────────
+
+model BudgetBaseline {
+  id          String              @id @default(cuid())
+  name        String
+  version     String
+  year        Int
+  importedAt  DateTime            @default(now())
+  importedBy  String
+  rows        BudgetBaselineRow[]
+  createdOn   DateTime            @default(now())
+  modifiedOn  DateTime            @updatedAt
+
+  @@map("budget_baseline")
+}
+
+model BudgetBaselineRow {
+  id         String         @id @default(cuid())
+  baselineId String
+  baseline   BudgetBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  eotp       String
+  eopLabel   String?
+  cellule    String?
+  amount     Float
+
+  @@index([baselineId])
+  @@index([eotp])
+  @@map("budget_baseline_row")
+}
+
+/// Anchor table for Power BI year relationships.
+model DimYear {
+  year Int @id
+
+  @@map("dim_year")
+}
+
+/// Distinct EOTP codes from snapshot and baseline rows (Power BI bridge). Recreated by `db:seed:prod` view step.
+view DimEotp {
+  eotp     String  @map("eotp")
+  eopLabel String? @map("eop_label")
+
+  @@unique([eotp])
+  @@map("dim_eotp")
+}
+
 // ============================================================
 // INITIATIVES
 // Synced from Jira. jiraKey (RI-xxx) is the natural PK used

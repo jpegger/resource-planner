@@ -151,6 +151,31 @@ In Power BI Desktop:
 > GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 > ```
 
+### Planning vs budget baseline (snapshots and SAP baselines)
+
+Use this after you have created at least one **allocation snapshot** and one **budget baseline** in the app (`/budget-comparison`), and run `SEED_VIEW_ONLY=1 npm run db:seed:prod` (or a full `db:seed:prod`) so `v_snapshot_detail`, `v_baseline_detail`, `dim_year`, and `dim_eotp` exist.
+
+1. **Get Data → PostgreSQL** — same connection as above.
+2. Import these objects: `v_snapshot_detail`, `v_baseline_detail`, `dim_year`, `dim_eotp`.
+3. In **Model**, relate:
+   - `dim_year[year]` → `v_snapshot_detail[year]` (many-to-one, single direction)
+   - `dim_year[year]` → `v_baseline_detail[year]` (many-to-one, single direction)
+   - `dim_eotp[eotp]` → `v_snapshot_detail[eotp]` (many-to-one, single direction — `dim_eotp` is the one side)
+   - `dim_eotp[eotp]` → `v_baseline_detail[eotp]` (many-to-one, single direction)
+4. In table visuals, put **`dim_eotp[eotp]`** (and **`dim_eotp[eop_label]`** if needed) on rows so measures from both fact tables filter per EOTP. Set `year` on both fact-like tables to **Don’t summarize** where Power BI treats them as dimensions.
+
+**Measures** (adjust table names if your model renames the views):
+
+```dax
+Planned Catchout = SUM(v_snapshot_detail[catchout])
+
+Baseline Amount = SUM(v_baseline_detail[baseline_amount])
+
+Gap = [Baseline Amount] - [Planned Catchout]
+```
+
+Build the report with slicers on `dim_year[year]`, `v_snapshot_detail[snapshot_name]`, and `v_baseline_detail[baseline_name]`; compare **EOTP** lines and gaps in a table. Gap interpretation: baseline is external + direct (catchout) scope; internal amounts on `v_snapshot_detail` are for reference.
+
 ---
 
 ## Production seed (`scripts/data-prod/`)

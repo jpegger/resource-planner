@@ -706,6 +706,78 @@ async function createCostView(): Promise<void> {
   console.log("  ✓ v_allocation_costs created\n");
 }
 
+async function seedDimYear(): Promise<void> {
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO dim_year (year)
+    VALUES (2023), (2024), (2025), (2026), (2027), (2028)
+    ON CONFLICT DO NOTHING
+  `);
+}
+
+/** Power BI: frozen snapshot rows vs baseline import (depends on allocation_snapshot / budget_baseline tables). */
+async function createSnapshotBaselineViews(): Promise<void> {
+  console.log("Creating v_snapshot_detail, v_baseline_detail…");
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_snapshot_detail`);
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_baseline_detail`);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE VIEW v_snapshot_detail AS
+    SELECT
+      s.id AS snapshot_id,
+      s.name AS snapshot_name,
+      s."takenAt" AS snapshot_date,
+      s.year AS year,
+      r.eotp AS eotp,
+      r."eopLabel" AS eop_label,
+      r."productId" AS product_id,
+      r."productName" AS product_name,
+      r.internal AS internal,
+      r.external AS external,
+      r.direct AS direct,
+      CAST(r.external AS double precision) + CAST(r.direct AS double precision) AS catchout
+    FROM allocation_snapshot s
+    JOIN allocation_snapshot_row r ON r."snapshotId" = s.id
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE VIEW v_baseline_detail AS
+    SELECT
+      b.id AS baseline_id,
+      b.name AS baseline_name,
+      b.version AS baseline_version,
+      b."importedAt" AS imported_at,
+      b.year AS year,
+      bl.eotp AS eotp,
+      bl."eopLabel" AS eop_label,
+      bl.cellule AS cellule,
+      bl.amount AS baseline_amount
+    FROM budget_baseline b
+    JOIN budget_baseline_row bl ON bl."baselineId" = b.id
+  `);
+
+  console.log("  ✓ v_snapshot_detail, v_baseline_detail created\n");
+}
+
+/** Power BI: one row per EOTP (label from first non-null when duplicates exist). */
+async function createDimEotpView(): Promise<void> {
+  console.log("Creating dim_eotp…");
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS dim_eotp`);
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE VIEW dim_eotp AS
+    SELECT DISTINCT ON (u.eotp)
+      u.eotp AS eotp,
+      u.eop_label AS eop_label
+    FROM (
+      SELECT eotp, "eopLabel" AS eop_label FROM allocation_snapshot_row
+      UNION
+      SELECT eotp, "eopLabel" AS eop_label FROM budget_baseline_row
+    ) u
+    WHERE u.eotp IS NOT NULL AND TRIM(u.eotp) <> ''
+    ORDER BY u.eotp, u.eop_label NULLS LAST
+  `);
+  console.log("  ✓ dim_eotp created\n");
+}
+
 async function createAllocationEntityCostTotalsView(): Promise<void> {
   console.log("Creating v_allocation_entity_cost_totals view...");
   await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
@@ -725,6 +797,9 @@ async function main(): Promise<void> {
     await createCostView();
     await createAllocationEntityCostTotalsView();
     await createEotpCostsView(prisma);
+    await seedDimYear();
+    await createSnapshotBaselineViews();
+    await createDimEotpView();
     console.log("Done.");
     return;
   }
@@ -764,6 +839,9 @@ async function main(): Promise<void> {
   await createCostView();
   await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);
+  await seedDimYear();
+  await createSnapshotBaselineViews();
+  await createDimEotpView();
 
   console.log("Done.");
 }
