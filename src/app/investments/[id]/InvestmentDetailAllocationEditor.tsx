@@ -8,9 +8,11 @@ import {
   FINANCIALS_PILL,
 } from "@/app/investments/[id]/investment-detail-layout";
 import {
+  assignmentFieldStringFromQuantity,
   costAmountForResourceType,
   formatK,
   patchAllocation,
+  quantityFromAssignmentFieldString,
 } from "@/app/investments/[id]/investment-detail-helpers";
 import type {
   AllocationCostBreakdown,
@@ -38,7 +40,7 @@ export function InvestmentDetailAllocationEditor({
   onCostsStale: () => void;
 }) {
   const [qty, setQty] = useState<string>(() =>
-    row.quantity === null || row.quantity === undefined ? "" : String(row.quantity)
+    assignmentFieldStringFromQuantity(row.resource.type, row.quantity)
   );
   const [days, setDays] = useState<string>(() =>
     row.manDays === null || row.manDays === undefined ? "" : String(row.manDays)
@@ -49,9 +51,9 @@ export function InvestmentDetailAllocationEditor({
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    setQty(row.quantity === null || row.quantity === undefined ? "" : String(row.quantity));
+    setQty(assignmentFieldStringFromQuantity(row.resource.type, row.quantity));
     setDays(row.manDays === null || row.manDays === undefined ? "" : String(row.manDays));
-  }, [row.id, row.quantity, row.manDays]);
+  }, [row.id, row.quantity, row.manDays, row.resource.type, row.resourceId]);
 
   useEffect(() => {
     return () => {
@@ -79,22 +81,31 @@ export function InvestmentDetailAllocationEditor({
   };
 
   const typeCost = costAmountForResourceType(row.resource.type, costBreakdown);
+  const resType = row.resource.type;
+  const isStaff = resType === "INTERNAL" || resType === "EXTERNAL";
 
   return (
     <TableRow>
       <TableCell className="w-28">
         <Input
           type="number"
-          step="0.01"
+          step={isStaff ? "0.1" : "0.01"}
           min={0}
           className="h-8"
+          title={
+            isStaff
+              ? "FTE % (50 = 50% of capacity; matches DB decimal × 100)"
+              : "Quantity in units (direct cost)"
+          }
           value={qty}
           onChange={(e) => {
             const v = e.target.value;
             setQty(v);
             const n = v === "" ? null : parseFloat(v);
             if (v !== "" && Number.isNaN(n!)) return;
-            schedulePatch({ quantity: n });
+            schedulePatch({
+              quantity: quantityFromAssignmentFieldString(resType, n),
+            });
           }}
         />
       </TableCell>

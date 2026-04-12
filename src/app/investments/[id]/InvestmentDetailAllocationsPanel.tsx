@@ -1,9 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, UsersRound } from "lucide-react";
 import { Fragment } from "react";
 
 import { InvestmentDetailAllocationEditor } from "@/app/investments/[id]/InvestmentDetailAllocationEditor";
+import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
 import {
   FINANCIALS_4COL,
   FINANCIALS_PILL,
@@ -65,16 +66,19 @@ export function InvestmentDetailAllocationsPanel({
     <div
       className={cn(
         PANEL_CARD_CLASS,
-        "min-h-[320px] min-w-0 overflow-hidden rounded-xl transition-opacity duration-200",
+        "flex min-h-[320px] min-w-0 flex-col overflow-hidden rounded-xl transition-opacity duration-200",
         selectedInitiative ? "opacity-100" : "opacity-90"
       )}
     >
+      <div className="border-border shrink-0 border-b px-4 py-3">
+        <InvestmentDetailPanelHeading icon={UsersRound} title="Resource allocations" />
+      </div>
       {!selectedInitiative ? (
-        <div className="text-muted-foreground flex h-full min-h-[240px] items-center justify-center p-6 text-sm">
+        <div className="text-muted-foreground flex h-full min-h-[200px] flex-1 items-center justify-center p-6 text-sm">
           Select an initiative to edit allocations.
         </div>
       ) : (
-        <div className="flex h-full min-h-0 flex-col overflow-auto p-4">
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-auto p-4">
           <div className="mb-4 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold leading-snug">{selectedInitiative.summary}</h2>
@@ -91,7 +95,6 @@ export function InvestmentDetailAllocationsPanel({
           <div className="min-h-0 flex-1">
             <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
               <div className="flex min-w-0 flex-1 flex-wrap items-end gap-4 sm:gap-6">
-                <h3 className="text-foreground shrink-0 text-sm font-medium">Allocations</h3>
                 <div className="flex min-w-0 flex-col gap-1 sm:items-end">
                   <div className={cn(FINANCIALS_4COL, "min-w-0 justify-items-end")}>
                     <span className={TABLE_HEAD_CLASS}>Internal</span>
@@ -130,7 +133,7 @@ export function InvestmentDetailAllocationsPanel({
               <Table>
                 <TableHeader className={cn(TABLE_HEAD_ROW_BG, "[&_tr]:border-border")}>
                   <TableRow>
-                    <TableHead className={TABLE_HEAD_CLASS}>Percent</TableHead>
+                    <TableHead className={TABLE_HEAD_CLASS}>FTE % / units</TableHead>
                     <TableHead className={TABLE_HEAD_CLASS}>Man days</TableHead>
                     <TableHead className={TABLE_HEAD_CLASS}>Resource</TableHead>
                     <TableHead className={cn(TABLE_HEAD_CLASS, "min-w-[7rem] text-right")}>

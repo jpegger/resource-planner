@@ -15,12 +15,12 @@ export function loadCsv<T extends Record<string, string>>(filename: string): T[]
   }) as T[];
   // Strip BOM if the file was saved as "CSV UTF-8" from Excel (header becomes \ufeffproduct_id).
   return rows.map((row) => {
-    const out = {} as T;
+    const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(row)) {
-      const key = k.replace(/^\uFEFF/, "").trim() as keyof T & string;
-      out[key] = v;
+      const key = k.replace(/^\uFEFF/, "").trim();
+      out[key] = String(v);
     }
-    return out;
+    return out as T;
   });
 }
 

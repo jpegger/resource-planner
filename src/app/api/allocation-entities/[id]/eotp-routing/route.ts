@@ -5,6 +5,7 @@ import {
   EOTP_ROUTING_MAIN_TARGET_ERROR,
   eotpTargetsProductMain,
 } from "@/lib/eotp-routing-validation";
+import { resolveEotpDefinitionId } from "@/lib/eotp-definition-resolve";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -86,16 +87,20 @@ export async function POST(
     return Response.json({ error: EOTP_ROUTING_MAIN_TARGET_ERROR }, { status: 400 });
   }
 
+  const eopLabelRaw =
+    body["eopLabel"] === null || typeof body["eopLabel"] === "string"
+      ? (body["eopLabel"] as string | null)
+      : null;
+  const eotpDefinitionId = await resolveEotpDefinitionId(prisma, eotp, eopLabelRaw);
+
   try {
     const routing = await prisma.eotpRouting.create({
       data: {
         allocationEntityId: productId.trim(),
         year,
         eotp,
-        eopLabel:
-          body["eopLabel"] === null || typeof body["eopLabel"] === "string"
-            ? (body["eopLabel"] as string | null)
-            : null,
+        eopLabel: eopLabelRaw,
+        eotpDefinitionId,
         internalAmount,
         externalAmount,
         directAmount,

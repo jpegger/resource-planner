@@ -3,6 +3,9 @@
  *
  * Usage: `npm run db:seed:products`
  *
+ * Run **`npm run db:seed:eotp`** first so `eotp_definition` exists; this script links
+ * `allocation_entity.eotp_definition_id` from SAP code / label.
+ *
  * Run before production initiative seed so `allocationEntityId` can resolve from Components.
  */
 
@@ -12,6 +15,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import fs from "fs";
 import path from "path";
 import Papa from "papaparse";
+
+import { linkAllocationEntitiesToEotpDefinitions } from "../src/lib/eotp-definition-resolve";
 
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
@@ -91,6 +96,9 @@ async function main(): Promise<void> {
   }
 
   console.log(`Done. ${rows.length} allocation entities upserted.`);
+
+  await linkAllocationEntitiesToEotpDefinitions(prisma);
+  console.log("Linked allocation_entity.eotp_definition_id from SAP code / label.");
 }
 
 main()

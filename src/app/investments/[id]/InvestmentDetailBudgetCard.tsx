@@ -1,5 +1,6 @@
-import { Loader2 } from "lucide-react";
+import { Layers, Loader2 } from "lucide-react";
 
+import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
 import {
   FINANCIALS_4COL,
   FINANCIALS_PILL,
@@ -9,7 +10,7 @@ import {
 } from "@/app/investments/[id]/investment-detail-layout";
 import { formatK, statusClass } from "@/app/investments/[id]/investment-detail-helpers";
 import type { BudgetInitiative } from "@/app/investments/[id]/investment-detail-types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PANEL_CARD_CLASS } from "@/lib/panel-card";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export function InvestmentDetailBudgetCard({
       <CardHeader className="pb-2">
         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="min-w-0">
-            <CardTitle className="text-base">Budget by initiative</CardTitle>
+            <InvestmentDetailPanelHeading icon={Layers} title="Budget by initiative" />
           </div>
           <div className="text-foreground min-w-0 shrink-0 overflow-x-auto sm:w-auto">
             {budgetLoading ? (

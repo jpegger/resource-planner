@@ -1,6 +1,9 @@
+import { Briefcase } from "lucide-react";
+
 import { InvestmentDetailFieldReadonly } from "@/app/investments/[id]/InvestmentDetailFieldReadonly";
+import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { Investment } from "@/lib/investment-types";
 import { PANEL_CARD_CLASS } from "@/lib/panel-card";
 
@@ -9,7 +12,7 @@ export function InvestmentDetailSummaryCard({ investment }: { investment: Invest
     <Card className={PANEL_CARD_CLASS}>
       <CardHeader className="pb-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <CardTitle className="text-base">Details</CardTitle>
+          <InvestmentDetailPanelHeading icon={Briefcase} title="Investment details" />
           {investment.productFamily ? (
             <Badge variant="secondary">{investment.productFamily}</Badge>
           ) : null}

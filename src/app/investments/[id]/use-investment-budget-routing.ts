@@ -13,6 +13,8 @@ export function useInvestmentBudgetRouting(
     initialInitiatives.filter((i) => i.initiative_year === selectedYear)
   );
   const [budgetLoading, setBudgetLoading] = useState(false);
+  const [yearSummaryLoading, setYearSummaryLoading] = useState(false);
+  const [yearSummary, setYearSummary] = useState<{ totalCost: number; totalFte: number } | null>(null);
   const [budgetYearOptions, setBudgetYearOptions] = useState(() =>
     distinctSortedNumbers(initialInitiatives.map((i) => i.initiative_year), "desc")
   );
@@ -60,9 +62,36 @@ export function useInvestmentBudgetRouting(
     }
   }, [investmentIdDecoded, selectedYear]);
 
+  const loadYearSummary = useCallback(async () => {
+    setYearSummaryLoading(true);
+    try {
+      const q = `?year=${encodeURIComponent(String(selectedYear))}`;
+      const res = await fetch(
+        `/api/allocation-entities/${encodeURIComponent(investmentIdDecoded)}/year-summary${q}`
+      );
+      if (!res.ok) {
+        setYearSummary(null);
+        return;
+      }
+      const j = (await res.json()) as { totalCost?: number; totalFte?: number };
+      setYearSummary({
+        totalCost: Number(j.totalCost ?? 0),
+        totalFte: Number(j.totalFte ?? 0),
+      });
+    } catch {
+      setYearSummary(null);
+    } finally {
+      setYearSummaryLoading(false);
+    }
+  }, [investmentIdDecoded, selectedYear]);
+
   useEffect(() => {
     void loadBudget();
   }, [loadBudget, selectedYear]);
+
+  useEffect(() => {
+    void loadYearSummary();
+  }, [loadYearSummary, selectedYear]);
 
   const yearOptions = useMemo(
     () =>
@@ -91,5 +120,8 @@ export function useInvestmentBudgetRouting(
     loadRoutingYears,
     yearOptions,
     budgetListTotals,
+    yearSummary,
+    yearSummaryLoading,
+    loadYearSummary,
   };
 }

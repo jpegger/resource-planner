@@ -44,6 +44,8 @@ export type EotpRoutingRow = {
   year: number;
   eotp: string;
   eopLabel: string | null;
+  /** FK to `eotp_definition` when resolved from catalog */
+  eotpDefinitionId?: string | null;
   internalAmount: number;
   externalAmount: number;
   directAmount: number;

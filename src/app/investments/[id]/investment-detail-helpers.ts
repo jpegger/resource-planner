@@ -7,6 +7,25 @@ import type {
   ResourceType,
   RoutingDraft,
 } from "@/app/investments/[id]/investment-detail-types";
+
+/** DB stores FTE as 0–1+ decimal; UI edits as 0–100+ percent. Direct costs use raw units. */
+export function assignmentFieldStringFromQuantity(
+  resourceType: ResourceType,
+  quantity: number | null | undefined
+): string {
+  if (quantity === null || quantity === undefined) return "";
+  if (resourceType === "DIRECT_COST") return String(quantity);
+  return String(quantity * 100);
+}
+
+export function quantityFromAssignmentFieldString(
+  resourceType: ResourceType,
+  parsed: number | null
+): number | null {
+  if (parsed === null) return null;
+  if (resourceType === "DIRECT_COST") return parsed;
+  return parsed / 100;
+}
 import { RESOURCE_GROUP_LABEL, RESOURCE_GROUP_ORDER } from "@/app/investments/[id]/investment-detail-types";
 import { distinctSortedNumbers } from "@/lib/utils";
 

@@ -1,4 +1,5 @@
 import { AllocationEntityType } from "@/generated/prisma/client";
+import { resolveEotpDefinitionId } from "@/lib/eotp-definition-resolve";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -30,6 +31,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     team?: string | null;
     sapEotpCode?: string | null;
     sapEotpName?: string | null;
+    eotpDefinitionId?: string | null;
     attractiveness?: number | null;
     competitiveness?: number | null;
   } = {};
@@ -90,6 +92,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (Object.keys(data).length === 0) {
     return Response.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
+  const current = await prisma.allocationEntity.findUnique({ where: { id } });
+  if (!current) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (data.sapEotpCode !== undefined || data.sapEotpName !== undefined) {
+    const mergedCode =
+      data.sapEotpCode !== undefined ? data.sapEotpCode : current.sapEotpCode;
+    const mergedName =
+      data.sapEotpName !== undefined ? data.sapEotpName : current.sapEotpName;
+    data.eotpDefinitionId = await resolveEotpDefinitionId(
+      prisma,
+      mergedCode ?? "",
+      mergedName
+    );
   }
 
   try {

@@ -120,28 +120,54 @@ model RateStandard {
 }
 
 // ============================================================
+// EOTP DEFINITIONS (table: eotp_definition)
+// Canonical SAP EOTP lines: budget owner, director, team, label — seeded from EOTP-Budget-Owner.csv.
+// Allocation entities and routing rows reference this catalog.
+// ============================================================
+
+model EotpDefinition {
+  id                 String              @id @default(cuid())
+  sapEotpCode        String              @map("sap_eotp_code")
+  label              String
+  division           String?
+  budgetOwner        String?             @map("budget_owner")
+  director           String?
+  subDivision        String?             @map("sub_division")
+  team               String?
+  allocationEntities AllocationEntity[]  @relation("AllocationEntityEotpDefinition")
+  eotpRoutings       EotpRouting[]       @relation("EotpRoutingTargetEotpDefinition")
+  createdOn          DateTime            @default(now()) @map("created_on")
+  modifiedOn         DateTime            @updatedAt @map("modified_on")
+
+  @@unique([sapEotpCode, label])
+  @@map("eotp_definition")
+}
+
+// ============================================================
 // ALLOCATION ENTITIES (table: allocation_entity)
 // Canonical catalog: Jira Components ↔ id; cost attribution / EOTP / reporting.
 // ============================================================
 
 model AllocationEntity {
-  id               String                @id // PRD-XXXX — generated slug
-  name             String                @unique // Jira Components value, exact match
-  type             AllocationEntityType  @default(PRODUCT) @map("entity_type")
-  productFamily    String? // Portfolio family (SALES, WORKPLACE, SMART ADMIN, etc.)
-  division         String? // Division (e.g. CRPS, PDS)
-  subDivision      String? // Sub-division within the division
-  team             String? // Team responsible
-  sapEotpCode      String? // SAP EOTP identifier (e.g. 7D0032001) — part before " - "
-  sapEotpName      String? // SAP EOTP label — part after first " - "
-  attractiveness   Float? // Marketing matrix — attractiveness axis (Y)
-  competitiveness  Float? // Marketing matrix — competitiveness axis (X)
-  initiatives      Initiative[]
-  eotpRoutings     EotpRouting[]
+  id                 String                @id // PRD-XXXX — generated slug
+  name               String                @unique // Jira Components value, exact match
+  type               AllocationEntityType  @default(PRODUCT) @map("entity_type")
+  productFamily      String? // Portfolio family (SALES, WORKPLACE, SMART ADMIN, etc.)
+  division           String? // Division (e.g. CRPS, PDS)
+  subDivision        String? // Sub-division within the division
+  team               String? // Team responsible
+  sapEotpCode        String? // SAP EOTP identifier (e.g. 7D0032001) — part before " - "
+  sapEotpName        String? // SAP EOTP label — part after first " - "
+  eotpDefinitionId   String?               @map("eotp_definition_id")
+  eotpDefinition     EotpDefinition?       @relation("AllocationEntityEotpDefinition", fields: [eotpDefinitionId], references: [id])
+  attractiveness     Float? // Marketing matrix — attractiveness axis (Y)
+  competitiveness    Float? // Marketing matrix — competitiveness axis (X)
+  initiatives        Initiative[]
+  eotpRoutings       EotpRouting[]
   /// Rollup of INT/EXT/DIR from v_allocation_costs (see v_allocation_entity_cost_totals).
-  costTotals       VAllocationEntityCostTotals?
-  createdOn        DateTime              @default(now())
-  modifiedOn       DateTime              @updatedAt
+  costTotals         VAllocationEntityCostTotals?
+  createdOn          DateTime              @default(now())
+  modifiedOn         DateTime              @updatedAt
 
   @@map("allocation_entity")
 }
@@ -162,8 +188,10 @@ model EotpRouting {
   allocationEntityId String            @map("allocation_entity_id")
   allocationEntity   AllocationEntity  @relation(fields: [allocationEntityId], references: [id])
   year               Int // Planning year (2025, 2026…)
-  eotp               String // Target EOTP code, e.g. "7D0079001"
+  eotp               String // Target EOTP code, e.g. "7D0079001" (denormalized; matches eotp_definition.sap_eotp_code)
   eopLabel           String? // Human label
+  eotpDefinitionId   String?           @map("eotp_definition_id")
+  eotpDefinition     EotpDefinition?   @relation("EotpRoutingTargetEotpDefinition", fields: [eotpDefinitionId], references: [id])
   internalAmount     Float             @default(0) // EUR routed to this EOTP (internal bucket)
   externalAmount     Float             @default(0) // EUR routed to this EOTP (external bucket)
   directAmount       Float             @default(0) // EUR routed to this EOTP (direct bucket)

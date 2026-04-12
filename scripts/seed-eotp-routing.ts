@@ -12,6 +12,12 @@ import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
 
+import {
+  backfillEotpRoutingDefinitionIds,
+  eotpDefinitionsByCode,
+  pickEotpDefinitionId,
+} from "../src/lib/eotp-definition-resolve";
+
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
 });
@@ -66,6 +72,11 @@ async function main(): Promise<void> {
   const entities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
   const entityMap = new Map(entities.map((p) => [p.name.trim().toLowerCase(), p.id]));
 
+  const eotpDefs = await prisma.eotpDefinition.findMany({
+    select: { id: true, sapEotpCode: true, label: true },
+  });
+  const defsByCode = eotpDefinitionsByCode(eotpDefs);
+
   let upserted = 0;
   let skipped = 0;
 
@@ -103,6 +114,9 @@ async function main(): Promise<void> {
     const eopLabel = normalizeEopLabel(row.eopLabel ?? "");
     const comment = (row.comment ?? "").trim();
 
+    const candidates = defsByCode.get(eotp.toLowerCase()) ?? [];
+    const eotpDefinitionId = pickEotpDefinitionId(candidates, eopLabel);
+
     await prisma.eotpRouting.upsert({
       where: {
         allocationEntityId_year_eotp: {
@@ -116,6 +130,7 @@ async function main(): Promise<void> {
         year,
         eotp,
         eopLabel: eopLabel || null,
+        eotpDefinitionId,
         internalAmount,
         externalAmount,
         directAmount,
@@ -123,6 +138,7 @@ async function main(): Promise<void> {
       },
       update: {
         eopLabel: eopLabel || null,
+        eotpDefinitionId,
         internalAmount,
         externalAmount,
         directAmount,
@@ -134,6 +150,11 @@ async function main(): Promise<void> {
   }
 
   console.log(`Done. ${upserted} routing rows upserted, ${skipped} skipped.`);
+
+  const bf = await backfillEotpRoutingDefinitionIds(prisma);
+  console.log(
+    `Backfill eotp_definition_id: ${bf.linked}/${bf.processed} routing rows linked to catalog.`
+  );
 }
 
 main()

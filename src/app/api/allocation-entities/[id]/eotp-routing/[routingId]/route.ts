@@ -5,6 +5,7 @@ import {
   EOTP_ROUTING_MAIN_TARGET_ERROR,
   eotpTargetsProductMain,
 } from "@/lib/eotp-routing-validation";
+import { resolveEotpDefinitionId } from "@/lib/eotp-definition-resolve";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function PATCH(
   const data: {
     eotp?: string;
     eopLabel?: string | null;
+    eotpDefinitionId?: string | null;
     internalAmount?: number;
     externalAmount?: number;
     directAmount?: number;
@@ -73,6 +75,12 @@ export async function PATCH(
   const nextEotp = data.eotp !== undefined ? data.eotp : existing.eotp;
   if (eotpTargetsProductMain(nextEotp, entity.sapEotpCode)) {
     return Response.json({ error: EOTP_ROUTING_MAIN_TARGET_ERROR }, { status: 400 });
+  }
+
+  const nextEopLabel =
+    data.eopLabel !== undefined ? data.eopLabel : existing.eopLabel;
+  if (data.eotp !== undefined || data.eopLabel !== undefined) {
+    data.eotpDefinitionId = await resolveEotpDefinitionId(prisma, nextEotp, nextEopLabel);
   }
 
   try {

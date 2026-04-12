@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { InvestmentDetailAllocationsPanel } from "@/app/investments/[id]/InvestmentDetailAllocationsPanel";
 import { InvestmentDetailBudgetCard } from "@/app/investments/[id]/InvestmentDetailBudgetCard";
+import { InvestmentDetailBudgetKeyFigures } from "@/app/investments/[id]/InvestmentDetailBudgetKeyFigures";
 import { InvestmentDetailEotpRoutingSection } from "@/app/investments/[id]/InvestmentDetailEotpRoutingSection";
 import { InvestmentDetailSummaryCard } from "@/app/investments/[id]/InvestmentDetailSummaryCard";
 import { InvestmentDetailYearFilter } from "@/app/investments/[id]/InvestmentDetailYearFilter";
 import { defaultInvestmentDetailYear } from "@/app/investments/[id]/investment-detail-helpers";
-import type { InvestmentDetailServerPayload } from "@/app/investments/[id]/investment-detail-types";
+import type {
+  InvestmentDetailServerPayload,
+  MainEotpFromViewRow,
+} from "@/app/investments/[id]/investment-detail-types";
 
 import { useInvestmentBudgetRouting } from "@/app/investments/[id]/use-investment-budget-routing";
 import { useInitiativeAllocations } from "@/app/investments/[id]/use-investment-initiative-allocations";
@@ -32,6 +36,13 @@ export function InvestmentDetailClient({
   const [selectedYear, setSelectedYear] = useState<number>(() =>
     defaultInvestmentDetailYear(initialInitiatives, initialEotpRouting)
   );
+  const [mainFromView, setMainFromView] = useState<MainEotpFromViewRow[]>(() => mainEotpFromView);
+  const [mainViewError, setMainViewError] = useState<string | null>(() => mainEotpFromViewError);
+
+  const onMainFromViewChange = useCallback((rows: MainEotpFromViewRow[], error: string | null) => {
+    setMainFromView(rows);
+    setMainViewError(error);
+  }, []);
   const {
     initiatives,
     budgetLoading,
@@ -39,6 +50,9 @@ export function InvestmentDetailClient({
     loadRoutingYears,
     yearOptions,
     budgetListTotals,
+    yearSummary,
+    yearSummaryLoading,
+    loadYearSummary,
   } = useInvestmentBudgetRouting(
     investmentIdDecoded,
     selectedYear,
@@ -75,7 +89,7 @@ export function InvestmentDetailClient({
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
-          <div className="min-w-0 space-y-3">
+          <div className="min-w-0 space-y-3 lg:col-span-2">
             <Link
               href="/investments"
               className="text-primary inline-flex text-sm font-medium underline-offset-4 hover:underline"
@@ -96,7 +110,18 @@ export function InvestmentDetailClient({
               </div>
             </div>
           </div>
-          <div className="hidden min-h-0 min-w-0 lg:block" aria-hidden />
+
+          <InvestmentDetailBudgetKeyFigures
+            className="lg:col-span-2"
+            filterYear={selectedYear}
+            mainSapEotpCode={investment.sapEotpCode}
+            mainFromView={mainFromView}
+            mainViewError={mainViewError}
+            budgetListTotals={budgetListTotals}
+            budgetLoading={budgetLoading}
+            yearSummary={yearSummary}
+            yearSummaryLoading={yearSummaryLoading}
+          />
 
           <InvestmentDetailSummaryCard investment={investment} />
 
@@ -105,11 +130,13 @@ export function InvestmentDetailClient({
             mainSapEotpCode={investment.sapEotpCode}
             filterYear={selectedYear}
             initialRows={initialEotpRouting}
-            initialMainFromView={mainEotpFromView}
-            initialMainViewError={mainEotpFromViewError}
+            mainFromView={mainFromView}
+            mainViewError={mainViewError}
+            onMainFromViewChange={onMainFromViewChange}
             onChanged={() => {
               void loadBudget();
               void loadRoutingYears();
+              void loadYearSummary();
             }}
           />
         </div>
