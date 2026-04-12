@@ -39,18 +39,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "Initiative not found" }, { status: 404 });
   }
 
-  let resourceId = body.resourceId?.trim();
+  const resourceId = body.resourceId?.trim();
   if (!resourceId) {
-    const first = await prisma.resource.findFirst({ orderBy: { id: "asc" }, select: { id: true } });
-    if (!first) {
-      return Response.json({ error: "No resources exist — seed the database first" }, { status: 400 });
-    }
-    resourceId = first.id;
-  } else {
-    const res = await prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } });
-    if (!res) {
-      return Response.json({ error: "Resource not found" }, { status: 404 });
-    }
+    return Response.json({ error: "resourceId is required" }, { status: 400 });
+  }
+
+  const res = await prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } });
+  if (!res) {
+    return Response.json({ error: "Resource not found" }, { status: 404 });
   }
 
   const id = `ASS-${randomUUID().replace(/-/g, "").slice(0, 12)}`;

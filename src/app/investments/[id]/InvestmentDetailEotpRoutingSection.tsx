@@ -479,6 +479,15 @@ export function InvestmentDetailEotpRoutingSection({
   const showRoutingTable =
     !loadError && (editingRouting || displayRows.length > 0 || addingNew);
 
+  /** Read-only: show when there are no exception lines for this year, without duplicating other empty states. */
+  const showNoExceptionRoutingHint =
+    !loadError &&
+    !loading &&
+    !editingRouting &&
+    displayRows.length === 0 &&
+    !(rows.length === 0 && displayMainFromView.length === 0) &&
+    !(rows.length > 0 && displayRows.length === 0 && displayMainFromView.length === 0);
+
   return (
     <>
     <Card className={PANEL_CARD_CLASS}>
@@ -634,6 +643,12 @@ export function InvestmentDetailEotpRoutingSection({
             </div>
           ) : null}
         </div>
+
+        {showNoExceptionRoutingHint ? (
+          <p className="text-muted-foreground text-xs">
+            No exception routing for {filterYear}. Spend stays on the main SAP EOTP line above.
+          </p>
+        ) : null}
 
         {editingRouting && eotpTargetsError ? (
           <p className="text-destructive text-xs">{eotpTargetsError}</p>

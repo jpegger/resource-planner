@@ -23,10 +23,12 @@ export function InvestmentDetailResourceCombobox({
   value,
   resources,
   onSelect,
+  disabled = false,
 }: {
   value: string;
   resources: ResourceOption[];
   onSelect: (id: string) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -40,8 +42,9 @@ export function InvestmentDetailResourceCombobox({
   const selected = resources.find((r) => r.id === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={disabled ? undefined : setOpen}>
       <PopoverTrigger
+        disabled={disabled}
         className={cn(
           buttonVariants({ variant: "outline", size: "sm" }),
           "w-full min-w-[200px] justify-between font-normal"

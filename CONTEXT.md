@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.7 · April 2026**
+**Paradigm · Brussels Capital Region · v1.8 · April 2026**
 
 ---
 
@@ -422,7 +422,7 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_cos
 | Route | Methods | Purpose |
 |---|---|---|
 | `/api/jira/sync` | GET | Fetch all initiatives from Jira filter, upsert to DB |
-| `/api/allocations` | GET, POST | GET by initiativeId. POST creates new allocation. |
+| `/api/allocations` | GET, POST | GET by `initiativeId`. POST creates an allocation; body must include **`initiativeId`** and **`resourceId`** (no server-side default resource). |
 | `/api/allocations/[id]` | PATCH, DELETE | Update or delete one allocation. Auto-save on change. |
 | `/api/resources/[id]` | GET, PATCH, DELETE | Read, update or delete a resource; **`direction`** must be **`CRPS`**, **`PDS`**, or **null** |
 | `/api/rates` | GET, POST | GET by resourceId. POST creates new rate. |
@@ -460,6 +460,8 @@ Portfolio table of allocation entities with optional budget columns (€k INT/EX
 **Layout (v1.6):** Shared panel chrome (**`PANEL_CARD_CLASS`** in **`src/lib/panel-card.ts`**) matches **`/resources`**. **Main title** = allocation entity **name · selected year**; **year** chips sit in the **same grid column** as the **Details** card so they align with its right edge. **Top row (two columns):** **Details** (readonly catalog: division, SAP EOTP, etc.) | **Budget Summary {year}** — opens with a **budget overview** (year, **actual budget** from **`v_allocation_costs`**, **FTE sum** via **`/api/allocation-entities/[id]/year-summary`**), short copy linking overview to the **Distribution across EOTP lines** table below. The table defaults to **EOTP · Label · Total · Actions**; **internal / external / direct**, **cash out**, and **comment** are on **expandable** rows. Optional consistency hint compares summed EOTP line totals to the overview budget.
 
 **EOTP routing card (`InvestmentDetailEotpRoutingSection`):** Card header = **EOTP routing** + main SAP EOTP **pill** (from the entity). **Main** bucket: read-only rows from **`GET /api/allocation-entities/[id]/eotp-main-from-view`** ( **`v_eotp_costs`**, `is_main_eotp`), table styling aligned with exception rows; expand shows INT/EXT/DIR detail. **Exception routing:** heading **Exception Routing** on the **same row** as **Edit routing** / **Cancel** (`justify-between`). Exception targets are chosen from **`eotp_definition`** only (**`/api/eotp-routing-target-options`**). Persisted via **`/api/allocation-entities/[id]/eotp-routing`**. Delete routing uses a **dialog** (not `window.confirm`). **Horizontal separator**, then **bottom row:** **Budget by initiative** | **Allocations** editor ( **`/api/allocations`**, **`/api/initiative-allocation-costs`** ) when an initiative is selected.
+
+**Resource allocations (`InvestmentDetailAllocationsPanel` / `InvestmentDetailAllocationEditor`):** **View** mode by default; **Edit allocations** enables inline editing and **Add allocation**. New rows are **drafts in client state only** until the user picks a resource: draft lines render **at the top of the table** (below the header row), with an empty resource combobox (no automatic selection). Choosing a resource triggers **`POST /api/allocations`** with that **`resourceId`**. **Discard** removes a draft; **Cancel** exits edit mode and clears all drafts; switching initiative or year clears drafts. Rows are grouped by resource type (**Internal / External / Direct**) with group subtotals; the cost column uses extra right inset so figures sit inboard; group label rows stay left-aligned with the table. **Delete** on a saved row uses the same **outline + `Trash2` icon** pattern as **Daily rates by year** on **`/resources`** (not a text **Delete** button).
 
 ### 7.2 Resources (`/resources`)
 
@@ -626,6 +628,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Investment allocation drafts + API (v1.8)** — **`POST /api/allocations`** requires **`resourceId`** (no default first resource). **Resource allocations** panel: client-side **draft** rows at the **top** of the table until a resource is chosen; then **`POST`** persists. **`InvestmentDetailAllocationsPanel`**, **`InvestmentDetailAllocationEditor`**, **`InvestmentDetailAllocationPendingRow`**, **`use-investment-initiative-allocations`**. Delete row control: **`Trash2`** + outline styling (same as **Daily rates** on **`/resources`**). See §7.1.
 - **Planning vs budget baseline (v1.7)** — **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**; **`takeSnapshot`** (`src/lib/snapshot.ts`) freezes **`computeEotpBreakdown`** + **`v_allocation_costs`** aggregates; baseline Excel via **`xlsx`** (`src/lib/baseline-parser.ts`). APIs: **`/api/snapshots`**, **`/api/baselines`**. UI **`/budget-comparison`**. Seed: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, **`dim_year`** in **`scripts/seed-production.ts`**. Power BI: **`dim_eotp`** bridges **`eotp`** on both detail views. **`getUserFromRequest`** (`src/lib/auth.ts`). README: Power BI setup for baseline comparison.
 - **EOTP definition catalog + routing UI (v1.6)** — Prisma **`EotpDefinition`** / table **`eotp_definition`**; optional **`eotp_definition_id`** on **`allocation_entity`** and **`eotp_routing`** (migration **`20260412130000_eotp_definition_catalog`**). Seeds: **`npm run db:seed:eotp`** (`EOTP-Budget-Owner.csv`); optional **`npm run db:backfill:eotp-routing-fks`**. APIs: **`GET /api/eotp-routing-target-options`**; **`GET/PATCH`** allocation-entity and eotp-routing routes resolve or persist definition links (**`src/lib/eotp-definition-resolve.ts`**, **`eotp-target-options.ts`**, **`eotp-routing-target-options-query.ts`**). Investment **EOTP routing** panel: main lines from **`eotp-main-from-view`**; **Exception Routing** title **aligned with Edit routing**; exception target combobox from **definitions only**; delete **Dialog**. **Tests:** **`tests/fixtures/load-csv.ts`** typing fix for Vitest. After markup changes, **`rm -rf .next`** / hard refresh avoids stale SSR hydration mismatches in dev.
 - **Investment detail layout + resources UX (v1.5)** — Modular **`InvestmentDetailClient`** and panels; **title** = name **·** year; year selector column-aligned with **Details**; **Budget Summary {year}** card (EOTP routing) top-right vs Details; **separator**; **Budget by initiative** + **Allocations** row. **Resources** screen: **`PANEL_CARD_CLASS`**, details/rates editing, rate **auto-save**, add-rate draft row, delete **modal**, **CRPS/PDS** direction validation, **`resource-display-name`**. **Prod seed:** **`RESSOURCES.csv`** read as **UTF-8**. Shared **`src/lib/panel-card.ts`**, **`resource-direction.ts`**, **`resource-display-name.ts`**.
@@ -661,12 +664,16 @@ src/
     investments/page.tsx        ← Investment list + budget columns
     investments/[id]/page.tsx   ← Investment detail shell
     investments/[id]/InvestmentDetailClient.tsx ← Layout: Details | Budget Summary, separator, initiatives | allocations
+    investments/[id]/InvestmentDetailAllocationsPanel.tsx ← Initiative allocations table (view/edit, drafts, groups)
+    investments/[id]/InvestmentDetailAllocationEditor.tsx ← One allocation row (auto-save, delete)
+    investments/[id]/InvestmentDetailAllocationPendingRow.tsx ← Draft row before POST (resource combobox)
+    investments/[id]/use-investment-initiative-allocations.ts ← Initiative selection, allocations, pending drafts
     investments/[id]/InvestmentDetailEotpRoutingSection.tsx ← EOTP card: main from view + exception routing
     investments/[id]/InvestmentDetailBudgetKeyFigures.tsx ← Budget overview / key figures strip
     resources/page.tsx          ← Resources screen (in progress)
     api/
       jira/sync/route.ts        ← Jira sync
-      allocations/route.ts      ← GET by initiative, POST
+      allocations/route.ts      ← GET by initiative; POST requires resourceId + initiativeId
       allocations/[id]/route.ts ← PATCH, DELETE (includes resource.type on PATCH response)
       resources/route.ts        ← GET — resource picker list (+ type)
       initiative-allocation-costs/route.ts ← Per-allocation costs for an initiative
@@ -719,4 +726,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.7 (see §11.3 changelog)*
+*Last updated: April 2026 — Resource Planner v1.8 (see §11.3 changelog)*

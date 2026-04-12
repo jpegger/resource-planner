@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { groupAllocationsByResourceType } from "@/app/investments/[id]/investment-detail-helpers";
 import type {
@@ -8,16 +8,27 @@ import type {
   ResourceGroupKey,
 } from "@/app/investments/[id]/investment-detail-types";
 
+function newPendingDraftId() {
+  return crypto.randomUUID();
+}
+
 export function useInitiativeAllocations(selectedYear: number) {
   const [selectedInitiative, setSelectedInitiative] = useState<BudgetInitiative | null>(null);
   const [allocations, setAllocations] = useState<AllocationDTO[]>([]);
   const [allocLoading, setAllocLoading] = useState(false);
   const [costByAllocId, setCostByAllocId] = useState<Record<string, AllocationCostBreakdown>>({});
+  /** Client-only rows shown at the top until a resource is chosen and the allocation is persisted. */
+  const [pendingAllocationDraftIds, setPendingAllocationDraftIds] = useState<string[]>([]);
+  const [confirmingPendingDraftId, setConfirmingPendingDraftId] = useState<string | null>(null);
+  const confirmInFlightRef = useRef(false);
 
   useEffect(() => {
     setSelectedInitiative(null);
     setAllocations([]);
     setCostByAllocId({});
+    setPendingAllocationDraftIds([]);
+    setConfirmingPendingDraftId(null);
+    confirmInFlightRef.current = false;
   }, [selectedYear]);
 
   const loadCostsForInitiative = useCallback(async (jiraKey: string) => {
@@ -50,6 +61,9 @@ export function useInitiativeAllocations(selectedYear: number) {
   const handleSelectInitiative = useCallback(
     async (ini: BudgetInitiative) => {
       setSelectedInitiative(ini);
+      setPendingAllocationDraftIds([]);
+      setConfirmingPendingDraftId(null);
+      confirmInFlightRef.current = false;
       setAllocLoading(true);
       setAllocations([]);
       setCostByAllocId({});
@@ -115,22 +129,49 @@ export function useInitiativeAllocations(selectedYear: number) {
     return sums;
   }, [allocations, costByAllocId]);
 
-  const addAllocation = useCallback(async () => {
+  const addAllocation = useCallback(() => {
     if (!selectedInitiative) return;
-    const res = await fetch("/api/allocations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initiativeId: selectedInitiative.jira_key }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      alert((j as { error?: string }).error ?? "Could not create allocation");
-      return;
-    }
-    const created = (await res.json()) as AllocationDTO;
-    setAllocations((prev) => [...prev, created]);
-    void loadCostsForInitiative(selectedInitiative.jira_key);
-  }, [selectedInitiative, loadCostsForInitiative]);
+    setPendingAllocationDraftIds((prev) => [newPendingDraftId(), ...prev]);
+  }, [selectedInitiative]);
+
+  const removePendingAllocationDraft = useCallback((clientId: string) => {
+    setPendingAllocationDraftIds((prev) => prev.filter((id) => id !== clientId));
+  }, []);
+
+  const discardPendingAllocationDrafts = useCallback(() => {
+    setPendingAllocationDraftIds([]);
+  }, []);
+
+  const confirmPendingAllocationDraft = useCallback(
+    async (clientId: string, resourceId: string) => {
+      if (!selectedInitiative || confirmInFlightRef.current) return;
+      confirmInFlightRef.current = true;
+      setConfirmingPendingDraftId(clientId);
+      try {
+        const res = await fetch("/api/allocations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            initiativeId: selectedInitiative.jira_key,
+            resourceId,
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert((j as { error?: string }).error ?? "Could not create allocation");
+          return;
+        }
+        const created = (await res.json()) as AllocationDTO;
+        setPendingAllocationDraftIds((prev) => prev.filter((id) => id !== clientId));
+        setAllocations((prev) => [...prev, created]);
+        void loadCostsForInitiative(selectedInitiative.jira_key);
+      } finally {
+        confirmInFlightRef.current = false;
+        setConfirmingPendingDraftId(null);
+      }
+    },
+    [selectedInitiative, loadCostsForInitiative]
+  );
 
   const onPatchedAllocation = useCallback((u: AllocationDTO) => {
     setAllocations((prev) => prev.map((a) => (a.id === u.id ? u : a)));
@@ -148,6 +189,11 @@ export function useInitiativeAllocations(selectedYear: number) {
     handleSelectInitiative,
     refreshCosts,
     addAllocation,
+    pendingAllocationDraftIds,
+    removePendingAllocationDraft,
+    discardPendingAllocationDrafts,
+    confirmPendingAllocationDraft,
+    confirmingPendingDraftId,
     allocationTotals,
     allocationGroupsWithRows,
     allocationTotalsByGroup,

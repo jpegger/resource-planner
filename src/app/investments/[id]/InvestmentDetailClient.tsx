@@ -67,6 +67,11 @@ export function InvestmentDetailClient({
     handleSelectInitiative,
     refreshCosts,
     addAllocation,
+    pendingAllocationDraftIds,
+    removePendingAllocationDraft,
+    discardPendingAllocationDrafts,
+    confirmPendingAllocationDraft,
+    confirmingPendingDraftId,
     allocationTotals,
     allocationGroupsWithRows,
     allocationTotalsByGroup,
@@ -165,6 +170,11 @@ export function InvestmentDetailClient({
               allocationGroupsWithRows={allocationGroupsWithRows}
               allocationTotalsByGroup={allocationTotalsByGroup}
               onAddAllocation={addAllocation}
+              pendingAllocationDraftIds={pendingAllocationDraftIds}
+              onRemovePendingAllocationDraft={removePendingAllocationDraft}
+              onDiscardPendingAllocationDrafts={discardPendingAllocationDrafts}
+              onConfirmPendingAllocationDraft={confirmPendingAllocationDraft}
+              confirmingPendingDraftId={confirmingPendingDraftId}
               onPatchedAllocation={onPatchedAllocation}
               onDeletedAllocation={onDeletedAllocation}
               onCostsStale={refreshCosts}
