@@ -1,0 +1,36 @@
+# Local PostgreSQL for development. Default: `docker compose up -d` starts **db** only (matches `npm run db:up`).
+# Full stack (build app image, no registry): `docker compose --profile app up -d --build`
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: resource-planner-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: resource_planner
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d resource_planner"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:8080"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@db:5432/resource_planner?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

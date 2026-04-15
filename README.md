@@ -31,6 +31,48 @@ App runs on `http://localhost:3000`.
 
 ---
 
+## Docker (production image, no registry required)
+
+Build a local image and run the **Next.js standalone** server (listens on **8080** in the container):
+
+```bash
+npm run docker:build
+```
+
+**Database host from inside the app container**
+
+- **`127.0.0.1` inside the container is not your host** — use the Postgres **container name** on a **shared Docker network** (recommended), or `host.docker.internal` (Docker Desktop; on Linux add `--add-host=host.docker.internal:host-gateway`).
+
+Example when Postgres is the container `resource-planner-db` on network `rp`:
+
+```bash
+docker run --rm -p 3000:8080 --network rp \
+  -e DATABASE_URL="postgresql://admin:admin@resource-planner-db:5432/resource_planner?schema=public" \
+  resource-planner:local
+```
+
+- **`GET /api/health`** — JSON probe for Kubernetes/OpenShift (`200` when the process is up).
+- **Migrations**: run `npm run db:migrate` with the same `DATABASE_URL` your container uses (CI, init Job, or shell) — not automatically on every container start.
+
+**After you change application code**, rebuild the image (the image embeds the built app):
+
+```bash
+docker build -t resource-planner:local .
+# or
+npm run docker:build
+```
+
+Use `docker build --no-cache` only if you suspect stale layers. Changing **only** `DATABASE_URL` or other `-e` values does **not** require a rebuild — restart the container with the new env.
+
+**Compose**
+
+- **Postgres only** (default): `npm run db:up` / `docker compose up -d` — container `resource-planner-db` on port **5432**.
+- **App + Postgres** (build from this repo, no registry): `npm run docker:up` — app on `http://localhost:3000` (rebuilds with `--build`).
+
+See **`deploy/README.md`** for Kubernetes/OpenShift notes and **`deploy/kubernetes/deployment.yaml`** for a minimal example.
+
+---
+
 ## Environment variables
 
 Create `.env` (never commit it):

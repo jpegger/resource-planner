@@ -1,0 +1,65 @@
+# Minimal example — adjust namespace, image, resources, and secrets for your cluster.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-planner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resource-planner
+  template:
+    metadata:
+      labels:
+        app: resource-planner
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: app
+          image: resource-planner:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: resource-planner-db
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resource-planner
+spec:
+  selector:
+    app: resource-planner
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

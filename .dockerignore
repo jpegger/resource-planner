@@ -1,0 +1,29 @@
+# Dependencies & build output
+node_modules
+.next
+out
+
+# Git & IDE
+.git
+.gitignore
+.cursor
+
+# Env & secrets (inject at runtime)
+.env
+.env.*
+
+# Tests & coverage
+coverage
+**/*.test.ts
+**/*.test.tsx
+tests
+
+# Misc
+*.md
+!README.md
+.DS_Store
+npm-debug.log*
+pnpm-debug.log*
+
+# Prisma generated client is produced in the image build
+src/generated/prisma

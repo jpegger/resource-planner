@@ -4,7 +4,9 @@ import { PrismaClient } from "@/generated/prisma/client";
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 function createClient() {
-  const url = process.env.DATABASE_URL;
+  // Bracket access avoids Next.js inlining a build-time DATABASE_URL into the server bundle
+  // (Dockerfile used to set 127.0.0.1 for `next build`, which broke runtime `-e DATABASE_URL`).
+  const url = process.env["DATABASE_URL"];
   if (!url) {
     throw new Error("DATABASE_URL is not set");
   }

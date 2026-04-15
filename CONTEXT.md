@@ -621,6 +621,23 @@ Combined with Docker Desktop set to start on Windows login, this means no manual
 DATABASE_URL=postgresql://admin:admin@localhost:5432/resource_planner?schema=public
 ```
 
+### 10.4 Docker and OpenShift packaging
+
+- **`Dockerfile`** — multi-stage image: **`npm ci`** → **`next build`** (standalone) → runtime **`node server.js`**. Listens on **`PORT`** (default **8080**). Runs as **`uid 1001`** (non-root).
+- **`compose.yaml`** — local **Postgres 16** (`resource-planner-db`); optional **`app`** service via profile **`app`** (`npm run docker:up`) builds the image without a registry.
+- **`GET /api/health`** — lightweight probe (no DB call).
+- **`deploy/README.md`** — runbook: local tag, compose, registry workflow, OpenShift probes.
+- **`deploy/kubernetes/`** — sample **Deployment** + **Service** + secret template.
+
+**Runtime `DATABASE_URL` in containers**
+
+- Do not use **`127.0.0.1`** as the DB host from inside an app container unless Postgres runs in that same network namespace. Prefer the **Postgres container name** (e.g. `resource-planner-db`) on a **shared user-defined network** (e.g. `rp`), or `host.docker.internal` where supported.
+- **`src/lib/prisma.ts`** reads **`process.env["DATABASE_URL"]`** (bracket form) so Next.js does not bake a build-time URL into the server bundle.
+- **`Dockerfile`** sets a **dummy** `DATABASE_URL` only for **`prisma generate`** and **`npm run build`** (API routes import Prisma at build time). The **runtime** image has no DB URL; pass **` -e DATABASE_URL=...`** on `docker run` / Kubernetes Secret.
+- **`/investments`** uses **`dynamic = "force-dynamic"`** so the investments list is not statically generated against a DB during `next build`.
+
+**Updating the image after code changes** — run **`docker build -t resource-planner:local .`** (or **`npm run docker:build`**) and restart the container; env-only changes need a restart, not necessarily a rebuild.
+
 ---
 
 ## 11. Open Questions & Next Steps
@@ -645,12 +662,13 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 2. **Apply be.brussels colour scheme** globally (sidebar `#1a2f4e`, primary `#185FA5`, background `#f4f6f8`)
 3. **Discover Jira custom field IDs** then finish field mapping in Jira sync (`year`, `initiativeType`, etc.)
 4. **Validate Power BI reports** against `v_allocation_costs` on local Docker Postgres (refresh model after view changes)
-5. **Production deployment** — Dockerfile + K8s manifests with DevOps team
+5. **Production deployment** — Push image to registry; apply **`deploy/kubernetes`** (or OpenShift) with DevOps team
 
 ### 11.3 Changelog — v1.2 (April 2026)
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Docker / OpenShift prep** — Multi-stage **`Dockerfile`** (Next **standalone**, non-root, **`PORT=8080`**), **`compose.yaml`** (Postgres + optional **`app`** profile), **`GET /api/health`**, **`deploy/README.md`** and **`deploy/kubernetes/`** samples. Prisma reads **`process.env["DATABASE_URL"]`**; build uses a dummy URL only for **`prisma generate`** / **`next build`**; runtime **`DATABASE_URL`** from container env. **`/investments`** is **`force-dynamic`** to avoid DB access during image build. Rebuild image after code changes.
 - **Revenue assignment (v1.9)** — **`RevenueType`** enum (**`Mission`** \| **`Subscription`**); **`InitiativeRevenue`** (table **`initiative_revenue`**) — **multiple** rows per initiative (`type`, `comment`, EUR **`amount`**). Seeded from **`REVENU.csv`** (**`npm run db:seed:revenues`**, all lines **`Mission`**; delete-then-insert). API: **`GET` / `POST /api/revenues`**, **`PATCH` / `DELETE /api/revenues/[id]`**; budget API returns **`total_revenue`** + per-type sums. UI: **`InvestmentDetailRevenuePanel`** (grouped table, drafts, auto-save, delete **Dialog**); **Budget Key Figures**: **Revenues** + **Margin**. Power BI: **`v_revenues`** one row per revenue line (varchar casts); use **independently** of **`v_allocation_costs`** (different grain).
 - **Investment allocation drafts + API (v1.8)** — **`POST /api/allocations`** requires **`resourceId`** (no default first resource). **Resource allocations** panel: client-side **draft** rows at the **top** of the table until a resource is chosen; then **`POST`** persists. **`InvestmentDetailAllocationsPanel`**, **`InvestmentDetailAllocationEditor`**, **`InvestmentDetailAllocationPendingRow`**, **`use-investment-initiative-allocations`**. Delete row control: **`Trash2`** + outline styling (same as **Daily rates** on **`/resources`**). See §7.1.
 - **Planning vs budget baseline (v1.7)** — **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**; **`takeSnapshot`** (`src/lib/snapshot.ts`) freezes **`computeEotpBreakdown`** + **`v_allocation_costs`** aggregates; baseline Excel via **`xlsx`** (`src/lib/baseline-parser.ts`). APIs: **`/api/snapshots`**, **`/api/baselines`**. UI **`/budget-comparison`**. Seed: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, **`dim_year`** in **`scripts/seed-production.ts`**. Power BI: **`dim_eotp`** bridges **`eotp`** on both detail views. **`getUserFromRequest`** (`src/lib/auth.ts`). README: Power BI setup for baseline comparison.
@@ -717,6 +735,7 @@ src/
       snapshots/[id]/route.ts   ← DELETE snapshot
       baselines/route.ts        ← GET, POST baseline (multipart Excel)
       baselines/[id]/route.ts   ← DELETE baseline
+      health/route.ts           ← GET — liveness/readiness (no DB)
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
   lib/auth.ts                   ← getUserFromRequest (X-Auth-Request-Email)
@@ -729,6 +748,13 @@ src/
   lib/eotp-target-options.ts    ← build JSON options; exclude main SAP code
   lib/investment-year-summary.ts ← helpers for year-summary / budget UI
 prisma.config.ts                ← Prisma 7 config (project root; datasource URL for CLI)
+next.config.ts                  ← Next.js config (`output: "standalone"` for Docker)
+Dockerfile                      ← Multi-stage production image (Next standalone + non-root)
+compose.yaml                    ← Local Postgres; optional `app` profile (no registry)
+.dockerignore                   ← Docker build context exclusions
+deploy/
+  README.md                     ← Docker / K8s / OpenShift runbook
+  kubernetes/                   ← Sample Deployment, Service, Secret template
 prisma/
   schema.prisma                 ← Database schema (source of truth)
   migrations/                   ← Baseline + incremental (e.g. eotp_definition catalog)
