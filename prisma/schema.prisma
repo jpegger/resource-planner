@@ -23,6 +23,11 @@ enum ResourceType {
   DIRECT_COST
 }
 
+enum RevenueType {
+  Mission
+  Subscription
+}
+
 enum InitiativeStatus {
   IN_PROGRESS
   DONE
@@ -303,6 +308,7 @@ model Initiative {
   modifiedOn     DateTime
 
   allocations    Allocation[]
+  revenues       InitiativeRevenue[]
 
   @@map("initiative")
 }
@@ -335,4 +341,19 @@ model Allocation {
   modifiedOn       DateTime
 
   @@map("allocation")
+}
+
+/// One or more revenue lines per initiative (Mission vs Subscription).
+model InitiativeRevenue {
+  id           String       @id @default(cuid())
+  initiativeId String       @map("initiative_id")
+  initiative   Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  type         RevenueType  @default(Mission)
+  amount       Float        @default(0) // EUR
+  comment      String?
+  createdOn    DateTime     @default(now()) @map("created_on")
+  modifiedOn   DateTime     @updatedAt @map("modified_on")
+
+  @@index([initiativeId])
+  @@map("initiative_revenue")
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, UsersRound } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 
 import {
   ALLOCATION_COST_CELL_INSET,
@@ -78,10 +78,6 @@ export function InvestmentDetailAllocationsPanel({
   onCostsStale: () => void;
 }) {
   const [editingAllocations, setEditingAllocations] = useState(false);
-
-  useEffect(() => {
-    setEditingAllocations(false);
-  }, [selectedInitiative?.jira_key]);
 
   const colSpan = editingAllocations ? 5 : 4;
 

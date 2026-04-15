@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 
 import { InvestmentDetailAllocationsPanel } from "@/app/investments/[id]/InvestmentDetailAllocationsPanel";
 import { InvestmentDetailBudgetCard } from "@/app/investments/[id]/InvestmentDetailBudgetCard";
+import { InvestmentDetailRevenuePanel } from "@/app/investments/[id]/InvestmentDetailRevenuePanel";
 import { InvestmentDetailBudgetKeyFigures } from "@/app/investments/[id]/InvestmentDetailBudgetKeyFigures";
 import { InvestmentDetailEotpRoutingSection } from "@/app/investments/[id]/InvestmentDetailEotpRoutingSection";
 import { InvestmentDetailSummaryCard } from "@/app/investments/[id]/InvestmentDetailSummaryCard";
@@ -116,7 +117,7 @@ export function InvestmentDetailClient({
             </div>
           </div>
 
-          <InvestmentDetailBudgetKeyFigures
+            <InvestmentDetailBudgetKeyFigures
             className="lg:col-span-2"
             filterYear={selectedYear}
             mainSapEotpCode={investment.sapEotpCode}
@@ -159,8 +160,9 @@ export function InvestmentDetailClient({
             />
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-col overflow-auto">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-auto">
             <InvestmentDetailAllocationsPanel
+              key={selectedInitiative?.jira_key ?? "no-initiative"}
               selectedInitiative={selectedInitiative}
               resources={resources}
               allocations={allocations}
@@ -178,6 +180,14 @@ export function InvestmentDetailClient({
               onPatchedAllocation={onPatchedAllocation}
               onDeletedAllocation={onDeletedAllocation}
               onCostsStale={refreshCosts}
+            />
+            <InvestmentDetailRevenuePanel
+              initiativeId={selectedInitiative?.jira_key ?? null}
+              year={selectedYear}
+              onRevenueChanged={() => {
+                void loadBudget();
+                void loadYearSummary();
+              }}
             />
           </div>
         </div>

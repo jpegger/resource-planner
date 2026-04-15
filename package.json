@@ -18,6 +18,7 @@
     "db:seed:products": "tsx scripts/seed-products.ts",
     "db:seed:prod": "tsx scripts/seed-production.ts",
     "db:seed:routing": "tsx scripts/seed-eotp-routing.ts",
+    "db:seed:revenues": "tsx scripts/seed-revenues.ts",
     "db:backfill:eotp-routing-fks": "tsx scripts/backfill-eotp-routing-eotp-definition-ids.ts",
     "db:convert:eotp-csv": "tsx scripts/convert-eotp-routing-csv.ts",
     "db:rebuild:routing-csv": "tsx scripts/rebuild-eotp-routing-csv.ts",

@@ -12,9 +12,12 @@ export type BudgetRawRow = {
   external_cost: unknown;
   direct_cost: unknown;
   total_cost: unknown;
+  total_revenue: unknown;
+  revenue_mission: unknown;
+  revenue_subscription: unknown;
 };
 
-/** Initiative cost rollups from `initiative` + `v_allocation_costs` (same source as GET …/budget). */
+/** Initiative cost rollups from `initiative` + `v_allocation_costs` + revenue sums. */
 export async function queryBudgetRawRows(
   productId: string,
   yearFilter: number | null
@@ -30,7 +33,22 @@ export async function queryBudgetRawRows(
         COALESCE(SUM(v.internal_cost), 0) AS internal_cost,
         COALESCE(SUM(v.external_cost), 0) AS external_cost,
         COALESCE(SUM(v.direct_cost), 0) AS direct_cost,
-        COALESCE(SUM(v.computed_cost), 0) AS total_cost
+        COALESCE(SUM(v.computed_cost), 0) AS total_cost,
+        COALESCE((
+          SELECT SUM(ir2.amount)
+          FROM initiative_revenue ir2
+          WHERE ir2.initiative_id = i.id
+        ), 0) AS total_revenue,
+        COALESCE((
+          SELECT SUM(ir2.amount)
+          FROM initiative_revenue ir2
+          WHERE ir2.initiative_id = i.id AND ir2.type = 'Mission'::"RevenueType"
+        ), 0) AS revenue_mission,
+        COALESCE((
+          SELECT SUM(ir2.amount)
+          FROM initiative_revenue ir2
+          WHERE ir2.initiative_id = i.id AND ir2.type = 'Subscription'::"RevenueType"
+        ), 0) AS revenue_subscription
       FROM initiative i
       LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
       WHERE i."allocation_entity_id" = ${id}
@@ -53,6 +71,9 @@ export function mapBudgetRawRowsToInitiatives(rows: BudgetRawRow[]): BudgetIniti
       external_cost: Number(r.external_cost),
       direct_cost: Number(r.direct_cost),
       total_cost: Number(r.total_cost),
+      total_revenue: Number(r.total_revenue ?? 0),
+      revenue_mission: Number(r.revenue_mission ?? 0),
+      revenue_subscription: Number(r.revenue_subscription ?? 0),
     };
   });
 }

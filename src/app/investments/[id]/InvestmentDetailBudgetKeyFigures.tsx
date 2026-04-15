@@ -8,7 +8,13 @@ import { eotpTotal, formatK } from "@/app/investments/[id]/investment-detail-hel
 import type { MainEotpFromViewRow } from "@/app/investments/[id]/investment-detail-types";
 import { cn } from "@/lib/utils";
 
-type BudgetTotals = { internal: number; external: number; direct: number; total: number };
+type BudgetTotals = {
+  internal: number;
+  external: number;
+  direct: number;
+  total: number;
+  revenue: number;
+};
 
 export function InvestmentDetailBudgetKeyFigures({
   className,
@@ -32,6 +38,8 @@ export function InvestmentDetailBudgetKeyFigures({
   yearSummaryLoading: boolean;
 }) {
   const referenceBudget = yearSummary?.totalCost ?? budgetListTotals.total;
+  const revenueTotal = budgetListTotals.revenue;
+  const margin = revenueTotal - referenceBudget;
 
   const displayMainFromView = useMemo(
     () => mainFromView.filter((m) => m.year === filterYear),
@@ -61,7 +69,7 @@ export function InvestmentDetailBudgetKeyFigures({
       <div className="min-w-0 flex-1 space-y-4 p-4 sm:p-5">
         <InvestmentDetailPanelHeading icon={BarChart3} title="Budget overview" />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           <div className="bg-muted/50 flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg px-3 py-4 text-center">
             <p className="text-foreground text-2xl font-bold tabular-nums tracking-tight">{filterYear}</p>
             <p className="text-muted-foreground mt-1.5 text-xs">Year</p>
@@ -126,6 +134,35 @@ export function InvestmentDetailBudgetKeyFigures({
                 >
                   {mainEotpKeyFigure.eotpLabel ?? "—"}
                 </p>
+              </>
+            )}
+          </div>
+          <div className="bg-muted/50 flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg px-3 py-4 text-center">
+            {budgetLoading ? (
+              <Loader2 className="text-muted-foreground size-7 animate-spin" />
+            ) : (
+              <>
+                <p className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+                  {formatK(revenueTotal)}
+                </p>
+                <p className="text-muted-foreground mt-1.5 text-xs">Revenues</p>
+              </>
+            )}
+          </div>
+          <div className="bg-muted/50 flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg px-3 py-4 text-center">
+            {budgetLoading || yearSummaryLoading ? (
+              <Loader2 className="text-muted-foreground size-7 animate-spin" />
+            ) : (
+              <>
+                <p
+                  className={cn(
+                    "text-2xl font-bold tabular-nums tracking-tight",
+                    margin > 0 ? "text-green-600" : margin < 0 ? "text-red-600" : "text-muted-foreground"
+                  )}
+                >
+                  {formatK(margin)}
+                </p>
+                <p className="text-muted-foreground mt-1.5 text-xs">Margin</p>
               </>
             )}
           </div>

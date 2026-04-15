@@ -11,6 +11,20 @@ export type BudgetInitiative = {
   external_cost: number;
   direct_cost: number;
   total_cost: number;
+  total_revenue: number;
+  revenue_mission: number;
+  revenue_subscription: number;
+};
+
+/** API shape for GET /api/revenues */
+export type InitiativeRevenueRowDTO = {
+  id: string;
+  initiativeId: string;
+  type: "Mission" | "Subscription";
+  amount: number;
+  comment: string | null;
+  createdOn: string;
+  modifiedOn: string;
 };
 
 export type AllocationDTO = {

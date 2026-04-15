@@ -104,13 +104,15 @@ export function useInvestmentBudgetRouting(
     let external = 0;
     let direct = 0;
     let total = 0;
+    let revenue = 0;
     for (const ini of initiatives) {
       internal += ini.internal_cost;
       external += ini.external_cost;
       direct += ini.direct_cost;
       total += ini.total_cost;
+      revenue += ini.total_revenue;
     }
-    return { internal, external, direct, total };
+    return { internal, external, direct, total, revenue };
   }, [initiatives]);
 
   return {

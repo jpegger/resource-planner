@@ -7,7 +7,7 @@ import { queryBudgetRawRows } from "@/lib/investment-detail-budget-query";
 
 export const runtime = "nodejs";
 
-/** Per-initiative cost rollups for a product (from v_allocation_costs). Optional ?year= filters initiatives. */
+/** Per-initiative cost rollups (from `v_allocation_costs` + `initiative_revenue`). Optional ?year= filters initiatives. */
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -60,6 +60,9 @@ export async function GET(
       external_cost: external,
       direct_cost: direct,
       total_cost: Number(r.total_cost),
+      total_revenue: Number(r.total_revenue ?? 0),
+      revenue_mission: Number(r.revenue_mission ?? 0),
+      revenue_subscription: Number(r.revenue_subscription ?? 0),
       eotpBreakdown:
         entity?.sapEotpCode
           ? computeEotpBreakdown(

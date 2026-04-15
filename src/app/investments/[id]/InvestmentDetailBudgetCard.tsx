@@ -23,7 +23,13 @@ export function InvestmentDetailBudgetCard({
 }: {
   budgetLoading: boolean;
   initiatives: BudgetInitiative[];
-  budgetListTotals: { internal: number; external: number; direct: number; total: number };
+  budgetListTotals: {
+    internal: number;
+    external: number;
+    direct: number;
+    total: number;
+    revenue: number;
+  };
   selectedInitiative: BudgetInitiative | null;
   onSelectInitiative: (ini: BudgetInitiative) => void | Promise<void>;
 }) {
@@ -77,9 +83,16 @@ export function InvestmentDetailBudgetCard({
             <ul className="space-y-0 divide-y divide-border">
               {initiatives.map((ini) => (
                 <li key={`${ini.jira_key}-${ini.initiative_year}`}>
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => void onSelectInitiative(ini)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void onSelectInitiative(ini);
+                      }
+                    }}
                     className={cn(
                       "hover:bg-muted/50 w-full rounded-md px-3 py-2.5 text-left transition-colors",
                       selectedInitiative?.jira_key === ini.jira_key &&
@@ -126,7 +139,7 @@ export function InvestmentDetailBudgetCard({
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -9,7 +9,7 @@
  * deltas added (additive re-import).
  *
  * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `allocation_entity` rows).
- * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod`
+ * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod` (includes `v_revenues`)
  * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
  *
  * RateStandard.csv: required in data-prod, or falls back to `scripts/data/RateStandard.csv`.
@@ -706,6 +706,41 @@ async function createCostView(): Promise<void> {
   console.log("  ✓ v_allocation_costs created\n");
 }
 
+/** Power BI: one row per revenue line. Do not join to `v_allocation_costs` (different grain). */
+async function createRevenueView(): Promise<void> {
+  console.log("Creating v_revenues view...");
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_revenues`);
+  await prisma.$executeRawUnsafe(`
+    CREATE VIEW v_revenues AS
+    SELECT
+        ir.id                                            AS revenue_id,
+        ir.initiative_id,
+        i.id                                             AS jira_key,
+        i.summary,
+        i.year                                           AS initiative_year,
+        CAST(i."initiativeType" AS VARCHAR)              AS initiative_type,
+        CAST(i.status AS VARCHAR)                        AS status,
+        COALESCE(ae."name", 'Unassigned')                AS product_name,
+        COALESCE(REPLACE(ae."productFamily", '&', 'and'), 'Unassigned') AS product_family,
+        REPLACE(
+            COALESCE(i."productGroup", 'Unassigned'),
+            '&', 'and'
+        )                                                AS product_group,
+        COALESCE(ae."division", 'Unassigned')            AS division,
+        COALESCE(ae."sapEotpCode", 'Unassigned')         AS sap_eotp_code,
+        COALESCE(ae."sapEotpName", 'Unassigned')         AS sap_eotp_name,
+        CAST(ir.type AS VARCHAR)                         AS revenue_type,
+        ir.amount                                        AS revenue_amount,
+        ir.comment                                       AS revenue_comment,
+        ir.created_on,
+        ir.modified_on
+    FROM initiative_revenue ir
+    JOIN initiative i ON i.id = ir.initiative_id
+    LEFT JOIN allocation_entity ae ON ae.id = i."allocation_entity_id"
+  `);
+  console.log("  ✓ v_revenues created\n");
+}
+
 async function seedDimYear(): Promise<void> {
   await prisma.$executeRawUnsafe(`
     INSERT INTO dim_year (year)
@@ -793,10 +828,11 @@ async function main(): Promise<void> {
     process.env["SEED_VIEW_ONLY"] === "true";
 
   if (viewOnly) {
-    console.log("SEED_VIEW_ONLY: recreating v_allocation_costs (no CSV import)…\n");
+    console.log("SEED_VIEW_ONLY: recreating views (no CSV import)…\n");
     await createCostView();
     await createAllocationEntityCostTotalsView();
     await createEotpCostsView(prisma);
+    await createRevenueView();
     await seedDimYear();
     await createSnapshotBaselineViews();
     await createDimEotpView();
@@ -839,6 +875,7 @@ async function main(): Promise<void> {
   await createCostView();
   await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);
+  await createRevenueView();
   await seedDimYear();
   await createSnapshotBaselineViews();
   await createDimEotpView();
