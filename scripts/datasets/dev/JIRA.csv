@@ -1,0 +1,268 @@
+Key,(RI) Year,(RI) Product Group,Components,Summary,Status,(RI) Type,(RI) MoSCoW,(RI) Estimated Customer Invoice EUR,(RI) External EUR,(RI) External Md,(RI) Internal EUR,(RI) Internal Md,(RI) Other Costs EUR,(RI) Pre-Analysis EUR,(RI) Pre-Analysis Md,(RI) SAP PROGR. FIN.,(RI) Total Cost EUR,Assignee,Updated,(RI) Material Costs EUR
+RI-1288,2024,SMART ADMIN,AXON,AXON - Support - 2024,Done,Run,Must Have,0,0,0,17750,30,0,0,0,7D0010002 - Axon,17750,DE PESSEMIER Johan,04/07/2024 09:08,0
+RI-1782,2025,SMART ADMIN,AXON,AXON - Support - 2025,In Progress,Run,Should Have,0,0,0,6300,10,0,0,0,7D0010002 - Axon,6300,DE PESSEMIER Johan,01/04/2025 15:01,0
+RI-15,2023,SMART ADMIN,AXON,AXON - Support 2023,Done,Run,Should Have,0,10000,10,16650,30,13000,0,0,7D0010002 - Axon,39650,DE PESSEMIER Johan,04/07/2024 10:43,0
+RI-71,2022,SMART ADMIN,AXON,Support AXON,Done,Run,Must Have,0,30000,30,80000,160,69000,0,0,,179000,MEULEMANS Evelyne,10/04/2024 16:43,0
+RI-1738,2025,SMART ADMIN,BOS,BOS - AC Ganshoren - 1 nouvelle s×ances,Done,Rollout,Must Have,0,0,0,0,0,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,18/06/2025 08:42,0
+RI-2040,2025,SMART ADMIN,BOS,BOS - AC IXL - 2 Nouvelles s×ances,In Progress,Rollout,Must Have,,0,0,,5,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,01/10/2025 13:23,0
+RI-1984,2026,SMART ADMIN,BOS,BOS - Adaptation formulaire pour les Pouvoirs locaux,Selected for Development,Evolution,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:53,0
+RI-1976,2026,SMART ADMIN,BOS,BOS - BOS IF - D×ploiement instances - 2026,Selected for Development,Rollout,Must Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:17,0
+RI-2056,2025,SMART ADMIN,BOS,BOS - CPAS AND - Nouvelle s×ance,In Progress,Rollout,Must Have,0,0,0,0,0,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,09/10/2025 14:17,0
+RI-2039,2025,SMART ADMIN,BOS,BOS - CPAS AUD - Nouvelle s×ance,In Progress,Rollout,Must Have,,0,0,,5,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,01/10/2025 13:23,0
+RI-1604,2025,SMART ADMIN,BOS,BOS - CPAS GAN - 3 nouvelles s×ances,Done,Rollout,Must Have,9000,0,0,3150,5,0,0,0,7D0028001 - BOS,3150,HALLOT Xavier,17/06/2025 16:31,0
+RI-1996,2026,SMART ADMIN,BOS,BOS - Datastore - 2026,Selected for Development,Analyse,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,07/10/2025 09:59,0
+RI-413,2023,SMART ADMIN,BOS,BOS - Dette Technique 2023,Done,Evolution Technique,Must Have,0,21000,21,45510,82,0,0,0,7D0028001 - BOS,66510,HALLOT Xavier,04/07/2024 10:41,0
+RI-447,2024,SMART ADMIN,BOS,BOS - Dette Technique 2024,Done,Evolution Technique,Should Have,0,0,0,70200,120,0,0,0,7D0028001 - BOS,70200,HALLOT Xavier,20/01/2025 11:14,0
+RI-1473,2023,SMART ADMIN,BOS,BOS - Evolutions Plateforme Commune - 2023,Done,Evolution,Must Have,0,0,0,127950,235,0,0,0,7D0028001 - BOS,127950,HALLOT Xavier,05/07/2024 09:24,0
+RI-1283,2024,SMART ADMIN,BOS,BOS - Evolutions Plateforme Commune - 2024,Done,Evolution,Must Have,0,0,0,181350,310,0,0,0,7D0028001 - BOS,181350,HALLOT Xavier,20/01/2025 11:14,0
+RI-1537,2025,SMART ADMIN,BOS,BOS - Habitation Moderne - Nouveau BOS,In Progress,Rollout,Must Have,14000,0,0,3150,5,0,0,0,7D0028001 - BOS,3150,HALLOT Xavier,01/10/2025 13:16,0
+RI-1987,2026,SMART ADMIN,BOS,BOS - Interfa×age avec WePulse - 2026,Selected for Development,Analyse,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 16:03,0
+RI-1605,2025,SMART ADMIN,BOS,"BOS - Int×gration Flux IF - SPRB ",In Progress,Projet,Must Have,193221,0,0,343980,546,0,0,0,7D0028001 - BOS,343980,HALLOT Xavier,16/07/2025 13:20,0
+RI-1148,2024,SMART ADMIN,BOS,BOS - Int×gration Flux IF - SPRB CONNECT IT,Done,Projet,Must Have,432638,0,0,327600,560,0,0,0,7D0028001 - BOS,321515,HALLOT Xavier,16/07/2025 13:19,0
+RI-1278,2024,SMART ADMIN,BOS,BOS - Iriscare - Ajout de 3 nouvelles s×ances,Done,Rollout,Must Have,22323,0,0,2925,5,0,0,0,7D0028001 - BOS,2925,HALLOT Xavier,03/09/2024 15:16,0
+RI-1995,2025,SMART ADMIN,BOS,BOS - KPI - 2025,Done,Analyse,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,07/10/2025 12:42,0
+RI-1986,2026,SMART ADMIN,BOS,BOS - Lien avec Sharepoint - 2026,Selected for Development,Analyse,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,07/10/2025 09:59,0
+RI-21,2022,SMART ADMIN,BOS,BOS - Maintenance 2022,Done,Run,Must Have,0,0,0,17500,35,0,0,0,,17500,HALLOT Xavier,13/01/2023 14:59,0
+RI-411,2023,SMART ADMIN,BOS,BOS - Maintenance 2023,Done,Run,Must Have,350000,39880,39.88,195360,352,0,0,0,7D0028001 - BOS,235240,HALLOT Xavier,04/07/2024 10:41,0
+RI-445,2024,SMART ADMIN,BOS,BOS - Maintenance 2024,Done,Run,Must Have,413000,0,0,204750,350,0,0,0,7D0028001 - BOS,204750,HALLOT Xavier,20/01/2025 11:14,0
+RI-1337,2025,SMART ADMIN,BOS,BOS - Maintenance Technique et ×volutive - 2025,In Progress,Run,Must Have,0,0,0,373590,593,0,0,0,7D0028001 - BOS,373590,HALLOT Xavier,16/07/2025 15:18,0
+RI-1975,2026,SMART ADMIN,BOS,BOS - Maintenance Technique et ×volutive - 2026,Selected for Development,Evolution Technique,Must Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:13,0
+RI-1610,2025,SMART ADMIN,BOS,BOS - Migration IAM V2 - 2025,Done,Evolution Technique,Must Have,0,0,0,7560,12,0,0,0,7D0028001 - BOS,7560,HALLOT Xavier,01/10/2025 13:11,0
+RI-78,2022,SMART ADMIN,BOS,BOS - Remplacer la solution de signature existante par e-sign,Done,Evolution,Must Have,0,0,0,22500,45,0,0,0,,22500,HALLOT Xavier,22/09/2023 08:54,0
+RI-1985,2026,SMART ADMIN,BOS,BOS - Rollout - 2026,Selected for Development,Rollout,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:57,0
+RI-1475,2023,SMART ADMIN,BOS,BOS - Rollouts Clients - 2023,Done,Rollout,Must Have,26992,8250,8.25,23032.5,41.5,0,0,0,7D0028001 - BOS,31282.5,HALLOT Xavier,05/07/2024 09:02,0
+RI-1333,2025,SMART ADMIN,BOS,BOS - RUN - 2025,In Progress,Run,Must Have,432563,0,0,205380,326,0,0,0,7D0028001 - BOS,205380,HALLOT Xavier,18/06/2025 08:40,0
+RI-1977,2026,SMART ADMIN,BOS,BOS - RUN - 2026,Selected for Development,Run,Must Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:19,0
+RI-1289,2025,SMART ADMIN,BOS,BOS - SIBELGA - Nouveau BOS,In Progress,Rollout,Must Have,35000,0,0,6930,11,0,0,0,7D0028001 - BOS,6930,HALLOT Xavier,09/10/2025 14:16,0
+RI-1603,2025,SMART ADMIN,BOS,BOS - SLRB - Nouveau BOS,In Progress,Rollout,Must Have,8563,0,0,4410,7,0,0,0,7D0028001 - BOS,4410,HALLOT Xavier,01/10/2025 13:10,0
+RI-22,2022,SMART ADMIN,BOS,BOS - Support 2022,Done,Run,Must Have,0,0,0,45000,90,0,0,0,,45000,HALLOT Xavier,13/01/2023 14:59,0
+RI-412,2023,SMART ADMIN,BOS,BOS - Support 2023,Done,Run,Must Have,0,0,0,170940,308,0,0,0,7D0028001 - BOS,170940,HALLOT Xavier,04/07/2024 10:41,0
+RI-446,2024,SMART ADMIN,BOS,BOS - Support 2024,Done,Run,Must Have,0,0,0,81900,140,0,0,0,7D0028001 - BOS,81900,HALLOT Xavier,20/01/2025 11:14,0
+RI-1609,2025,SMART ADMIN,BOS,BOS - S×paration Alfresco et BOS,Selected for Development,Evolution Technique,Should Have,0,0,0,15750,25,0,0,0,7D0028001 - BOS,15750,HALLOT Xavier,16/07/2025 15:55,0
+RI-1978,2026,SMART ADMIN,BOS,BOS - S×paration Alfresco et BOS - 2026,Selected for Development,Evolution Technique,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,16/07/2025 15:21,0
+RI-23,2022,SMART ADMIN,BOS,BOS - Technical Debt 2022,Done,Run,Must Have,0,0,0,75000,150,0,0,0,,75000,HALLOT Xavier,13/01/2023 15:00,0
+RI-1654,2025,SMART ADMIN,BOS,BOS - UserClub - 2025,Done,Product Activation,Must Have,,0,0,6300,10,0,0,0,7D0028001 - BOS,6300,HALLOT Xavier,17/06/2025 16:32,0
+RI-1983,2026,SMART ADMIN,BOS,BOS - UserClub - 2026,Selected for Development,Analyse,Should Have,0,0,0,,,0,0,0,7D0028001 - BOS,,HALLOT Xavier,16/07/2025 15:50,0
+RI-619,2025,SMART ADMIN,BOS,BOS - VIVAQUA - Ajout S×ances,In Progress,Rollout,Must Have,3000,0,0,625,1,0,0,0,7D0028001 - BOS,625,HALLOT Xavier,01/10/2025 13:06,0
+RI-2041,2025,SMART ADMIN,BOS,BOS - ZP5339 - Nouveau client,In Progress,Rollout,Must Have,,0,0,,5,0,0,0,7D0028001 - BOS,0,HALLOT Xavier,01/10/2025 13:24,0
+RI-74,2022,SMART ADMIN,BOS,CPAS BXL - 13 S×ances,Done,Rollout,Must Have,0,0,0,0,0,0,0,0,,0,HALLOT Xavier,21/09/2023 13:47,0
+RI-76,2022,SMART ADMIN,BOS,D×veloppement pr× requis pour roll out CPAS de BXL,Done,Evolution,Must Have,0,0,0,0,0,0,0,0,,0,HALLOT Xavier,22/09/2023 08:50,0
+RI-73,2022,SMART ADMIN,BOS,Migration Alfresco - Dette Technique,Done,Run,Must Have,0,0,0,0,0,0,0,0,,0,HALLOT Xavier,21/09/2023 13:33,0
+RI-77,2022,SMART ADMIN,BOS,"Remplacer la solution de signature existante par e-sign - Phase 1 ",Done,Evolution,Must Have,0,0,0,20000,40,0,0,0,,20000,HALLOT Xavier,22/09/2023 08:52,0
+RI-1657,2025,eCITIZEN,BRUSO,BRUSO - RUN - 2025,In Progress,Run,Must Have,0,56000,75,0,0,0,0,0,7D0040001 - BRUSO,56000,DE PESSEMIER Johan,16/10/2025 14:38,0
+RI-2061,2026,eCITIZEN,BRUSO,BRUSO - RUN - 2026,Selected for Development,Run,Must Have,0,4350,5,0,0,0,0,0,7D0040001 - BRUSO,4350,DE PESSEMIER Johan,16/10/2025 14:39,0
+RI-868,2023,eCITIZEN,CRM,[Analyse] Analyses CRM 2023,Done,Projet,Must Have,0,0,0,0,0,0,0,0,,0,CLEMENT Guillaume,19/02/2024 08:51,0
+RI-1106,2024,eCITIZEN,CRM,[Analyse] Analyses CRM 2024,Done,Projet,Must Have,230000,88000,88,91020,164,0,0,0,7D0043001 - CRM - Customer,179020,MILLER Beno×t,18/11/2025 15:57,0
+RI-489,2023,eCITIZEN,CRM,[Analyse] BEA (Bien-×tre animal - AniTool),Done,Projet,Should Have,0,0,0,5550,10,0,10000,10,,15550,PARIS Vincent,05/07/2023 17:32,0
+RI-168,2023,eCITIZEN,CRM,[Analyse] Bruxelles Environnement (Gestion des subsides) / CIRB,Done,Projet,,0,0,0,2500,5,0,0,0,,2500,PARIS Vincent,05/07/2023 17:33,0
+RI-753,2023,eCITIZEN,CRM,[Analyse] Bruxelles Environnement (Transformation Digitale des Travaux - PEB ),Done,Projet,Must Have,0,0,0,27750,50,0,0,,,27750,ANDERLIN Gil,19/02/2024 08:51,0
+RI-604,2023,eCITIZEN,CRM,[Analyse] CIRB (CiRM Procurement) / CIRB,Done,Projet,Nice to Have,0,0,0,0,0,0,10000,10,,10000,PARIS Vincent,05/07/2023 17:32,0
+RI-149,2023,eCITIZEN,CRM,[Analyse] CITYDEV (Achat et location des b×timents ) / CIRB,Done,Projet,Must Have,0,0,0,0,0,0,20000,20,,20000,DRIJBER Milo,01/03/2024 15:36,0
+RI-154,2023,eCITIZEN,CRM,[Analyse] COCOF (Gestion des subsides et Secteur Non-Marchand) / CIRB,Done,Projet,Must Have,0,0,0,7500,15,0,25000,25,,32500,DJAMILOVA Lola,01/03/2024 14:46,0
+RI-152,2023,eCITIZEN,CRM,[Analyse] COCOF (Handicap.Brussels) / CIRB,Done,Projet,Must Have,0,0,0,10000,20,0,20000,,,30000,DJAMILOVA Lola,05/07/2023 17:33,0
+RI-694,2024,eCITIZEN,CRM,[Analyse] COCOF + COCOM Contact Center CTI,Done,Projet,Must Have,30000,30000,30,0,0,0,0,0,7D0043001 - CRM - Customer,30000,DRIJBER Milo,18/11/2025 15:59,0
+RI-156,2022,eCITIZEN,CRM,[Analyse] COCOM (Contact tracing) / CIRB,Done,Projet,,0,0,0,0,0,0,20000,20,,20000,SCHUMACHER J×r×¤me,05/07/2023 17:33,0
+RI-1933,2026,eCITIZEN,CRM,[Analyse] CRM - Analyse clients 2026,Selected for Development,Projet,Nice to Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,MILLER Beno×t,16/06/2025 11:04,0
+RI-150,2023,eCITIZEN,CRM,[Analyse] INNOVIRIS (Software m×tier) / CIRB,Done,Projet,,0,0,0,2500,5,0,0,0,,2500,DJAMILOVA Lola,05/07/2023 17:33,0
+RI-756,2022,eCITIZEN,CRM,[Analyse] PaRM - SDM,Done,Projet,,0,0,0,0,0,0,0,0,,0,PARIS Vincent,05/10/2025 21:37,0
+RI-755,2022,eCITIZEN,CRM,[Analyse] ParM - Service Now,Done,Projet,,0,0,0,1665,3,0,0,0,,1665,PARIS Vincent,05/10/2025 21:38,0
+RI-752,2023,eCITIZEN,CRM,[Analyse] Urban (Field Inspection),Done,Projet,Must Have,16650,0,0,5550,10,0,0,0,,5550,DJAMILOVA Lola,27/11/2023 19:53,0
+RI-169,2023,eCITIZEN,CRM,[Analyse] URBAN (Gestion des subsides) / CIRB,Done,Projet,Must Have,0,0,0,10000,20,0,20000,,,30000,CHARLES Sandrine,16/06/2025 08:30,0
+RI-158,2022,eCITIZEN,CRM,[Analyse] VGC (Contact Management & Marketing) / CIRB,Done,Projet,,0,120000,120,10000,20,0,0,0,,130000,DJAMILOVA Lola,05/07/2023 17:33,0
+RI-721,2023,eCITIZEN,CRM,AAG Service Cloud Setup,Done,Projet,,0,0,0,0,0,0,0,0,,0,,05/10/2025 21:38,0
+RI-1665,2025,eCITIZEN,CRM,Accompagnement pr×-projets,Done,Product Activation,Must Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,MILLER Beno×t,20/01/2026 15:12,0
+RI-304,2023,eCITIZEN,CRM,Architecture governance accompagement sales force,Done,Evolution,Must Have,,160000,160,0,0,0,0,0,,160000,SCHUMACHER J×r×¤me,16/06/2025 08:28,0
+RI-1661,2025,eCITIZEN,CRM,Automatic testing,Done,Nouveau Service,Must Have,0,0,0,63000,100,0,0,0,7D0043002 - CRM_Plateforme commune,63000,,20/01/2026 15:11,0
+RI-1198,2023,eCITIZEN,CRM,BE (Build Org d×di×e) - 2023,Done,Projet,Should Have,50000,50000,50,0,0,0,0,0,,50000,ANDERLIN Gil,16/06/2025 08:33,0
+RI-164,2023,eCITIZEN,CRM,BE Event / CIRB,Done,Projet,Must Have,0,120000,120,10000,20,0,0,0,,130000,ANDERLIN Gil,16/06/2025 08:31,0
+RI-776,2023,eCITIZEN,CRM,BE Marketing / CIRB,Done,Projet,,0,0,0,0,0,0,0,0,,0,VEKONY Julien,24/05/2023 11:36,0
+RI-855,2023,eCITIZEN,CRM,BEA (Bien-×tre animal - AniTool) - 2023,Done,Projet,Should Have,0,110000,110,22200,40,0,0,0,,132200,BOURDAIRE St×phane,16/06/2025 08:32,0
+RI-166,2022,eCITIZEN,CRM,BeMyGuest.Brussels (Ukraine) / CIRB,Done,Run,,0,250000,250,50000,100,0,0,0,,300000,SCHUMACHER J×r×¤me,03/03/2023 08:20,0
+RI-167,2023,eCITIZEN,CRM,BeMyGuest.Brussels (Ukraine) / CIRB,Done,Projet,Must Have,0,30000,,15000,30,100000,0,0,,145000,DRIJBER Milo,16/06/2025 08:32,0
+RI-1035,2024,eCITIZEN,CRM,BeMyGuest.Brussels (Ukraine) / CIRB 2024,Done,Projet,Must Have,223000,100000,100,22200,40,100000,0,0,7D0043003 - CRM_Help Ukraine,222200,DRIJBER Milo,18/11/2025 15:57,0
+RI-165,2022,eCITIZEN,CRM,BRUSSELS INTERNATIONAL (FEDER) / SPRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,03/03/2023 08:20,0
+RI-151,2023,eCITIZEN,CRM,Brussels International (Gestion des subsides) / SPRB,Done,Projet,Must Have,0,0,0,40000,80,0,0,0,,40000,CLEMENT Guillaume,16/02/2024 14:20,0
+RI-856,2024,eCITIZEN,CRM,Bruxelles Environnement BEA (Bien-×tre animal - AniTool) - 2024,Done,Projet,Should Have,220000,180508,180.508,36630,66,0,0,0,7D0043001 - CRM - Customer,217138,CHARLES Sandrine,18/11/2025 15:58,0
+RI-147,2022,eCITIZEN,CRM,BRUXELLES MOBILITE (Homologation) / SPRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,03/03/2023 08:19,0
+RI-148,2022,eCITIZEN,CRM,BRUXELLES MOBILITE (Taxi) / SPRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,03/03/2023 08:19,0
+RI-1272,2024,eCITIZEN,CRM,Bruxelles.Environnement - TDT - 2024,Done,Analyse,,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,BOURDAIRE St×phane,18/11/2025 15:45,0
+RI-161,2022,eCITIZEN,CRM,CIRB (CiRM FAQ) / CIRB,Done,Nouveau Service,,0,0,0,2250,4.5,0,4500,,,6750,SCHUMACHER J×r×¤me,06/03/2023 09:50,0
+RI-160,2022,eCITIZEN,CRM,CIRB (CRM Sales Cloud) / CIRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,03/03/2023 08:19,0
+RI-170,2023,eCITIZEN,CRM,CoC '23 Global Number of Certification Growth,Done,Nouveau Service,Must Have,0,0,0,40000,80,10000,0,0,,50000,SCHUMACHER J×r×¤me,16/06/2025 08:29,
+RI-144,2022,eCITIZEN,CRM,COCOM (Inburgering) (Phase 1) / CIRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,03/03/2023 08:18,0
+RI-146,2023,eCITIZEN,CRM,COCOM (Inburgering) (Phase 2 & 3) / CIRB,Done,Projet,,0,130000,130,10000,20,0,0,0,,140000,CLEMENT Guillaume,24/05/2023 11:26,0
+RI-978,2023,eCITIZEN,CRM,COCOM (Inburgering) - Evolutions 2023,Done,Projet,Must Have,0,60000,60,5000,10,0,0,0,,65000,CLEMENT Guillaume,16/06/2025 08:33,0
+RI-301,2023,eCITIZEN,CRM,Contact Center r×gional (impl×mentation r×gionale ou par administration),Done,Nouveau Service,Must Have,,100000,100,33300,60,0,0,0,,133300,SCHUMACHER J×r×¤me,16/06/2025 08:29,0
+RI-722,2023,eCITIZEN,CRM,"Continuous improvement - Salesforce Platform Hackathon ",Done,,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,05/10/2025 21:38,0
+RI-2063,2026,eCITIZEN,CRM,CRM - Gestion des Orgs 2026,In Progress,Run,Must Have,0,0,0,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,0,CHARLES Sandrine,20/01/2026 15:11,0
+RI-2137,2026,eCITIZEN,CRM,CRM - Socle de base 2026 (Evolutions produit),In Progress,Evolution,Should Have,0,0,0,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,0,CHARLES Sandrine,20/01/2026 15:14,0
+RI-2062,2026,eCITIZEN,CRM,CRM - Socle de base 2026 (Gouvernance et Release),In Progress,Run,Must Have,0,0,0,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,0,CHARLES Sandrine,20/01/2026 15:10,0
+RI-2064,2026,eCITIZEN,CRM,CRM - Support et Maintenance des Use Cases 2026,In Progress,Run,Must Have,0,0,0,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,0,CHARLES Sandrine,20/01/2026 15:11,0
+RI-1647,2025,eCITIZEN,CRM,CRM BE - TDT (gestion d'agr×ments),RFP,Projet,Must Have,625200,600000,600,25200,40,0,0,0,7D0043001 - CRM - Customer,625200,MILLER Beno×t,16/06/2025 08:35,0
+RI-1928,2026,eCITIZEN,CRM,CRM BE - TDT 2026 (Gestion d'agr×ments),Selected for Development,Projet,Must Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,BOURDAIRE St×phane,17/06/2025 10:06,0
+RI-1643,2025,eCITIZEN,CRM,CRM COCOF (gestion des agr×ments & subsides),In Progress,Projet,Must Have,85200,,,,,0,0,0,7D0043001 - CRM - Customer,0,MILLER Beno×t,16/10/2025 11:44,0
+RI-1930,2026,eCITIZEN,CRM,CRM COCOF - Subsides 2026,Selected for Development,Projet,Must Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,MILLER Beno×t,16/06/2025 10:20,0
+RI-310,2023,eCITIZEN,CRM,CRM Dette Technique,Done,Run,Must Have,,0,0,0,0,0,0,0,,0,,16/06/2025 08:38,0
+RI-920,2024,eCITIZEN,CRM,CRM Dette Technique 2024,Done,Run,Must Have,0,231000,231,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,231000,CLEMENT Guillaume,18/11/2025 15:57,0
+RI-1641,2025,eCITIZEN,CRM,CRM INNOVIRIS (gestion des subsides),In Progress,Projet,Must Have,186300,180000,180,6300,10,0,0,0,7D0043001 - CRM - Customer,186300,MILLER Beno×t,16/06/2025 08:35,0
+RI-309,2023,eCITIZEN,CRM,CRM Interne,Done,Projet,Should Have,,200000,200,55500,100,60000,0,0,,315500,CLEMENT Guillaume,16/06/2025 08:32,0
+RI-2067,2026,eCITIZEN,CRM,CRM INTERNE 2026,In Progress,Run,Must Have,0,0,0,0,0,0,0,0,7D0043005 - CRM Interne,0,CHARLES Sandrine,20/01/2026 15:11,0
+RI-1640,2025,eCITIZEN,CRM,CRM KANAL (gestion des ×v×nements),In Progress,Projet,Must Have,50100,0,0,12600,20,37500,0,0,7D0043001 - CRM - Customer,50100,MILLER Beno×t,16/06/2025 08:35,0
+RI-1109,2022,eCITIZEN,CRM,CRM Maintenance 2022,Done,Run,Must Have,200000,1000000,1000,333000,600,500000,0,0,,1833000,SCHUMACHER J×r×¤me,16/06/2025 08:38,0
+RI-306,2023,eCITIZEN,CRM,CRM Maintenance 2023,Done,Run,Must Have,200000,1000000,1000,333000,600,500000,0,0,,1833000,SCHUMACHER J×r×¤me,16/06/2025 08:38,
+RI-918,2024,eCITIZEN,CRM,CRM Maintenance 2024,Done,Run,Must Have,600000,866800,866.8,111000,200,450000,0,0,7D0043002 - CRM_Plateforme commune,1427800,CLEMENT Guillaume,18/11/2025 15:57,0
+RI-1264,2024,eCITIZEN,CRM,CRM Parking CR (F×vrier 2024),Done,Run,,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,,18/11/2025 15:46,0
+RI-1645,2025,eCITIZEN,CRM,CRM parking.brussels (mise en place d'un CRM d×di×),In Progress,Projet,Must Have,163800,0,0,163800,260,,0,0,7D0043001 - CRM - Customer,163800,MILLER Beno×t,16/06/2025 08:35,0
+RI-1929,2026,eCITIZEN,CRM,CRM parking.brussels 2026 - New CRM,Selected for Development,Projet,Must Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,MILDE Claire,16/06/2025 10:20,0
+RI-1937,2026,eCITIZEN,CRM,CRM parking.brussels 2026 - New CRM (d×commissionnement),Selected for Development,Projet,Must Have,0,0,0,0,0,0,0,0,7D0043001 - CRM - Customer,0,MILDE Claire,16/06/2025 10:21,0
+RI-872,2023,eCITIZEN,CRM,CRM Plateforme Evolution 2023,Done,Evolution,Must Have,0,0,0,0,0,400000,0,0,,400000,CLEMENT Guillaume,16/06/2025 08:28,0
+RI-1270,2024,eCITIZEN,CRM,CRM Plateforme Evolution 2024,Done,Evolution,Must Have,0,646153,646.153,358530,646,400000,0,0,7D0043002 - CRM_Plateforme commune,1404683,CLEMENT Guillaume,18/11/2025 15:46,0
+RI-307,2023,eCITIZEN,CRM,CRM Support,Done,Run,Must Have,,0,0,166500,300,0,0,0,,166500,CHARLES Sandrine,16/06/2025 08:38,0
+RI-866,2024,eCITIZEN,CRM,CRM Support 2024,Done,Run,Must Have,300000,0,0,122100,220,0,0,0,7D0043001 - CRM - Customer,122100,CLEMENT Guillaume,18/11/2025 15:57,0
+RI-1664,2025,eCITIZEN,CRM,Documentation r×gionale,Done,Evolution,Must Have,0,0,0,63000,100,0,0,0,7D0043002 - CRM_Plateforme commune,63000,,20/01/2026 15:11,0
+RI-699,2023,eCITIZEN,CRM,Enablement Sites (myTrailhead),Done,Nouveau Service,Nice to Have,0,25000,25,2775,5,0,0,0,,27775,SCHUMACHER J×r×¤me,16/06/2025 08:29,0
+RI-141,2022,eCITIZEN,CRM,Fondation - Plateforme CRM R×gionale & Am×lioration continue,Done,Evolution,,0,800000,800,200000,400,0,0,0,,1000000,SCHUMACHER J×r×¤me,16/06/2025 08:28,0
+RI-139,2023,eCITIZEN,CRM,GDPR Compliance - Cloud Compliance,Done,Nouveau Service,Must Have,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,16/06/2025 08:29,0
+RI-1682,2025,eCITIZEN,CRM,Gestion du programme - Gouvernance,Done,Run,Must Have,0,0,0,138600,220,0,0,0,7D0043002 - CRM_Plateforme commune,138600,,20/01/2026 15:10,0
+RI-308,2023,eCITIZEN,CRM,Gestion du programme et accompagement des clients pour les projets CRM,Done,Evolution,Must Have,,600000,600,333000,600,0,0,0,,933000,CLEMENT Guillaume,16/06/2025 08:28,0
+RI-1150,2024,eCITIZEN,CRM,Gestion du programme et accompagement des clients pour les projets CRM 2024,Done,Evolution,Must Have,,141381,141.381,0,0,0,0,0,7D0043002 - CRM_Plateforme commune,141381,CLEMENT Guillaume,18/11/2025 15:52,0
+RI-142,2023,eCITIZEN,CRM,"Grant Management - Regional Platform ",Done,Nouveau Service,Must Have,0,100000,100,27750,50,0,50000,50,,177750,SCHUMACHER J×r×¤me,16/06/2025 08:29,0
+RI-1102,2023,eCITIZEN,CRM,Hand-Over CRM,Done,Projet,,0,0,0,0,0,0,0,0,,0,DRIJBER Milo,05/10/2025 21:39,0
+RI-852,2024,eCITIZEN,CRM,INNOVIRIS (Software m×tier) / Paradigm,Done,Projet,Must Have,808000,730000,730,73260,132,0,0,0,7D0043001 - CRM - Customer,803260,MILLER Beno×t,18/11/2025 15:58,0
+RI-1194,2023,eCITIZEN,CRM,INNOVIRIS (Software m×tier) / Paradigm 2023,Done,Projet,Must Have,400000,0,0,0,0,0,0,0,,0,DJAMILOVA Lola,16/06/2025 08:31,0
+RI-157,2023,eCITIZEN,CRM,KANAL (Gestion avanc×e des ×v×nements ) / CIRB,Done,Projet,Must Have,0,400000,400,27750,50,0,25000,25,,452750,MILLER Beno×t,16/06/2025 08:31,0
+RI-851,2024,eCITIZEN,CRM,KANAL (Gestion avanc×e des ×v×nements ) / Paradigm,Done,Projet,Must Have,833462,740000,740,38850,70,,0,,7D0043004 - CRM Projet Kanal,816350,ANDERLIN Gil,18/11/2025 15:59,0
+RI-1683,2025,eCITIZEN,CRM,"Maintenance ",Done,Run,Must Have,1584947,427350,407,50400,80,450000,0,0,7D0043002 - CRM_Plateforme commune,927750,,20/01/2026 15:10,0
+RI-1659,2025,eCITIZEN,CRM,Mise en place eSign - signature externe,Done,Nouveau Service,Must Have,0,0,0,12600,20,0,0,0,7D0043002 - CRM_Plateforme commune,12600,,20/01/2026 15:11,0
+RI-1660,2025,eCITIZEN,CRM,Mise en place webservices SAP consommables par Salesforce pour les OAA de la R×gion,Done,Nouveau Service,Must Have,0,46200,44,6300,10,0,0,0,7D0043002 - CRM_Plateforme commune,52500,,20/01/2026 15:10,0
+RI-1663,2025,eCITIZEN,CRM,Packaging composants r×gionaux,Done,Evolution,Should Have,0,36960,35.2,50400,80,0,0,0,7D0043002 - CRM_Plateforme commune,87360,,20/01/2026 15:11,0
+RI-603,2023,eCITIZEN,CRM,PARADIGM - Int×gration SF <MS> SAP,Done,Projet,Must Have,0,11000,10,11100,20,0,0,0,,22100,CLEMENT Guillaume,31/07/2023 09:18,0
+RI-1265,2024,eCITIZEN,CRM,PARKING - Change Request 24 - Formulaires,Done,Projet,,0,20,15,8775,15,0,0,0,7D0043001 - CRM - Customer,,BOURDAIRE St×phane,18/11/2025 15:46,0
+RI-757,2023,eCITIZEN,CRM,PaRM - Sales Cloud,Done,Run,Must Have,0,0,0,2220,4,0,0,0,,2220,PARIS Vincent,16/06/2025 08:38,0
+RI-853,2024,eCITIZEN,CRM,PaRM 2024 (CRM interne),Done,Projet,Should Have,110000,0,0,0,0,110000,0,0,7D0043005 - CRM Interne,110000,CLEMENT Guillaume,18/11/2025 15:58,0
+RI-1685,2025,eCITIZEN,CRM,Plateforme Evolutions,Done,Evolution,Should Have,0,406560,387.2,100800,160,110000,0,0,7D0043002 - CRM_Plateforme commune,617360,,20/01/2026 15:11,0
+RI-143,2022,eCITIZEN,CRM,Port de Bruxelles (Phase 1) / CIRB,Done,Run,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,21/02/2023 08:55,0
+RI-145,2023,eCITIZEN,CRM,Port de Bruxelles (Phase 2) / CIRB,Done,Projet,Must Have,0,5500,5,2775,5,0,11000,10,,19275,VEKONY Julien,27/11/2023 19:53,0
+RI-305,2023,eCITIZEN,CRM,Portail R×gional unique,Done,Nouveau Service,Must Have,,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,16/06/2025 08:29,0
+RI-1192,2022,eCITIZEN,CRM,Projets Client CRM 2022,Done,Projet,,0,0,0,0,0,0,0,0,,0,CLEMENT Guillaume,16/06/2025 08:34,0
+RI-1107,2023,eCITIZEN,CRM,Projets Client CRM 2023,Done,Projet,Must Have,0,0,0,0,0,0,0,0,,0,CLEMENT Guillaume,16/06/2025 08:34,0
+RI-1108,2024,eCITIZEN,CRM,Projets Client CRM 2024,Done,Projet,Must Have,400000,172675,172.675,222000,400,0,0,0,7D0043001 - CRM - Customer,394675,MILLER Beno×t,18/11/2025 15:57,0
+RI-1686,2025,eCITIZEN,CRM,Projets Clients,In Progress,Projet,,50400,0,0,25200,40,0,0,0,7D0043001 - CRM - Customer,25200,,16/06/2025 08:36,0
+RI-709,2023,eCITIZEN,CRM,Regional Events Salesforce App,Done,Nouveau Service,,0,0,0,0,0,0,0,0,,0,SCHUMACHER J×r×¤me,05/10/2025 21:39,0
+RI-1684,2025,eCITIZEN,CRM,Support,Done,Run,Must Have,0,184800,176,195300,310,0,0,0,7D0043002 - CRM_Plateforme commune,380100,,20/01/2026 15:10,0
+RI-1662,2025,eCITIZEN,CRM,Training program creation for specific targeted audience,Done,Nouveau Service,Nice to Have,0,0,0,18900,30,0,0,0,7D0043002 - CRM_Plateforme commune,18900,,20/01/2026 15:11,0
+RI-302,2023,eCITIZEN,CRM,Ukraine (bemyguest),Done,Run,,,180000,180,69375,125,0,0,0,,249375,SCHUMACHER J×r×¤me,22/05/2023 16:05,0
+RI-903,2023,SMART ADMIN,HMS,HMS - BUILD CLIENTS - 2023,Done,Evolution,Must Have,30415,0,0,35520,64,0,0,0,7D0034001 - HMS,35520,MONACO Fabrice,11/07/2024 11:31,0
+RI-1299,2024,SMART ADMIN,HMS,"HMS - BUILD CLIENTS - Release 3.0 - 2024 ",Done,Projet,Must Have,74528,0,0,37310,70,0,0,0,7D0034001 - HMS,37310,MONACO Fabrice,13/06/2025 09:50,0
+RI-1461,2026,SMART ADMIN,HMS,HMS - BUILD CLIENTS - Release 3.1,Selected for Development,Projet,Must Have,95000,79816,92,14996,35,0,0,0,7D0034001 - HMS,94812,MONACO Fabrice,14/11/2025 09:36,0
+RI-1608,2026,SMART ADMIN,HMS,HMS - BUILD CLIENTS - Release 3.2,Selected for Development,Projet,Must Have,235107.5,136198,157,98910,157,0,0,0,7D0034001 - HMS,235107.5,MONACO Fabrice,14/11/2025 09:47,0
+RI-2044,2026,SMART ADMIN,HMS,HMS - BUILD CLIENTS - Source authentique IPP,Selected for Development,Projet,Must Have,30300,20000,20,6300,10,4000,0,0,7D0034001 - HMS,30300,MONACO Fabrice,07/11/2025 14:21,0
+RI-1794,2025,SMART ADMIN,HMS,HMS - Build CR - 2025,In Progress,Evolution,Must Have,17828,12529,19,1260,2,0,0,0,7D0034001 - HMS,13789,MONACO Fabrice,19/06/2025 09:55,0
+RI-34,2023,SMART ADMIN,HMS,HMS - RUN - 2023,Done,Run,Must Have,21600,0,0,23310,42,0,0,0,7D0034001 - HMS,23310,MONACO Fabrice,11/07/2024 11:32,0
+RI-1161,2024,SMART ADMIN,HMS,HMS - RUN - 2024,Done,Run,Must Have,21600,0,0,21060,36,21600,0,0,7D0034001 - HMS,42660,MONACO Fabrice,20/01/2025 11:17,0
+RI-1298,2025,SMART ADMIN,HMS,HMS - RUN - 2025,In Progress,Run,Must Have,21600,89600,120,15120,24,0,0,0,7D0034001 - HMS,104720,MONACO Fabrice,19/06/2025 13:46,0
+RI-1947,2026,SMART ADMIN,HMS,HMS - RUN - 2026,Selected for Development,Run,Must Have,21600,89600,120,15120,24,0,0,0,7D0034001 - HMS,104720,MONACO Fabrice,30/06/2025 10:30,0
+RI-110,2022,SMART ADMIN,NOVA,Am×lioration du forage et du rep×rage,Done,Evolution,Should Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-505,2022,SMART ADMIN,NOVA,Am×lioration du module pi×ces jointes - Phase 1,Done,Evolution,Must Have,0,40000,40,30000,60,0,0,0,,70000,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-109,2022,SMART ADMIN,NOVA,Am×lioration du module pi×ces jointes - Phase 1,Done,Evolution,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-506,2022,SMART ADMIN,NOVA,Arr×t× sur la consultation transfrontali×re,Done,Legal,Must Have,0,10000,10,10000,20,0,0,0,,20000,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-96,2022,SMART ADMIN,NOVA,Arr×t× sur la consultation transfrontali×re,Done,Legal,Should Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-41,2022,SMART ADMIN,NOVA,MyPermit BE 2022 - Ajout de nouvelles fonctionnalit×s,Done,Evolution,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-40,2022,SMART ADMIN,NOVA,MyPermit URBAN 2022 - Ajout de nouvelles fonctionnalit×s,Done,Evolution,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-383,2022,SMART ADMIN,NOVA,Nova - Admin global â composition â Phase 1,Done,Evolution,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-1598,2025,SMART ADMIN,NOVA,NOVA - Am×liorations recherche pour PEB,Done,Projet,,10000,5098,6.5,630,1,0,0,0,7D0024001 - NOVA,5728,NGUYEN Tu-Anh,07/04/2025 12:45,0
+RI-2098,2026,SMART ADMIN,NOVA,NOVA - AUSA - Archivage - Phase 3 - 2026,Selected for Development,Projet,Must Have,0,,,,,0,0,0,7D0024001 - NOVA,,NGUYEN Tu-Anh,10/11/2025 14:31,0
+RI-39,2023,SMART ADMIN,NOVA,NOVA - AUSA - Int×gration Syst×me Archivage SmalS - Phase 1 (2023),Done,Projet,Must Have,89861,9500,9.5,25147.05,45.31,30820,0,0,7D0024001 - NOVA,65467.05,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-1191,2024,SMART ADMIN,NOVA,NOVA - AUSA - Int×gration Syst×me Archivage SmalS - Phase 1 (2024),Done,Projet,Must Have,13408,3437,3.36,15173.44,26,0,0,0,7D0024001 - NOVA,18610.44,NGUYEN Tu-Anh,20/11/2024 13:45,0
+RI-814,2024,SMART ADMIN,NOVA,NOVA - AUSA - Int×gration Syst×me Archivage SmalS - Phase 2 (2024),Done,Projet,Must Have,94000,110000,96,65500,39,0,0,0,7D0024001 - NOVA,175500,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-1621,2025,SMART ADMIN,NOVA,NOVA - AUSA - Int×gration Syst×me Archivage SmalS - Phase 2 (2025),Done,Projet,Must Have,0,49387,49,20790,33,0,0,0,7D0024001 - NOVA,70177,NGUYEN Tu-Anh,10/11/2025 11:57,0
+RI-53,2023,SMART ADMIN,NOVA,NOVA - AUSA - MyRU - Formulaire RU - Int×gration Irisbox - Phase 1,Done,Projet,Should Have,87730,45000,45,41625,75,0,0,0,7D0024001 - NOVA,86625,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-980,2024,SMART ADMIN,NOVA,NOVA - AUSA - MyRU - Formulaire RU - Int×gration Irisbox - CR,Done,Projet,Must Have,28688,14000,14,35100,60,0,0,0,7D0024001 - NOVA,49100,NGUYEN Tu-Anh,28/10/2024 09:07,0
+RI-45,2023,SMART ADMIN,NOVA,NOVA - Bruxelles - Rollout & Migration Infractions PU,Done,Rollout,Should Have,100877,93380,93.38,22893.75,41.25,0,0,0,7D0024001 - NOVA,116273.75,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-1480,2023,SMART ADMIN,NOVA,NOVA - BUILD - Plateforme Commune - 2023,Done,Evolution,Must Have,0,155000,155,228105,411,0,0,0,7D0024001 - NOVA,383105,NGUYEN Tu-Anh,11/07/2024 09:33,0
+RI-1788,2025,SMART ADMIN,NOVA,NOVA - Change requests BE 2025,Done,Projet,,100000,29923,32,54810,87,0,0,0,7D0024001 - NOVA,84732.95,NGUYEN Tu-Anh,15/01/2026 14:49,0
+RI-826,2025,SMART ADMIN,NOVA,NOVA - Digith×mes - 2025,Done,Projet,Must Have,,,,,,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,15/01/2026 14:49,0
+RI-2086,2026,SMART ADMIN,NOVA,NOVA - Digith×mes - 2026,Selected for Development,Projet,Must Have,,,,,,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,20/01/2026 17:33,0
+RI-1172,2024,SMART ADMIN,NOVA,NOVA - Easy consult - Brusoil,Done,Projet,Must Have,17280,12000,12,5850,10,0,0,0,7D0024001 - NOVA,17850,NGUYEN Tu-Anh,28/10/2024 09:07,0
+RI-111,2023,SMART ADMIN,NOVA,NOVA - Importation du formulaire Proposition PEB,Done,Evolution,Must Have,73525.04,37440,37.44,26989.65,48.63,0,0,0,7D0024001 - NOVA,64429.65,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-1479,2023,SMART ADMIN,NOVA,NOVA - Importation Formulaires Notification et D×claration PEB - 2023,Done,Evolution,Must Have,0,0,0,3885,7,0,0,0,7D0024001 - NOVA,3885,NGUYEN Tu-Anh,11/07/2024 07:28,0
+RI-1173,2024,SMART ADMIN,NOVA,"NOVA - Importation Formulaires Notification et D×claration PEB ",Done,Projet,Must Have,18575,5400,6,20485,35,0,0,0,7D0024001 - NOVA,25885,NGUYEN Tu-Anh,04/10/2024 13:50,0
+RI-61,2023,SMART ADMIN,NOVA,NOVA - Int×gration avec SAPHIR - Donn×es Logement - Pr×-analyse,Done,Analyse,Should Have,0,0,0,1459.65,2.63,0,0,0,7D0024001 - NOVA,1459.65,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-759,2023,SMART ADMIN,NOVA,NOVA - ISA-Int×gration Amendes administratives - Pr×-analyse,Done,Analyse,Should Have,0,0,,1282.05,2.31,0,0,,7D0024001 - NOVA,1282.05,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-434,2023,SMART ADMIN,NOVA,NOVA - Maintenance Adaptative - 2023,Done,Evolution Technique,Must Have,0,27000,27,44400,80,0,0,0,7D0024001 - NOVA,71400,NGUYEN Tu-Anh,10/07/2024 15:08,0
+RI-824,2024,SMART ADMIN,NOVA,NOVA - Maintenance Adaptative - 2024,Done,Evolution Technique,Must Have,0,85000,85,40950,70,0,0,0,7D0024001 - NOVA,125950,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-432,2023,SMART ADMIN,NOVA,NOVA - Maintenance Corrective - 2023,Done,Run,Must Have,180000,350000,350,388500,700,0,0,0,7D0024001 - NOVA,738500,NGUYEN Tu-Anh,11/07/2024 09:16,0
+RI-823,2024,SMART ADMIN,NOVA,NOVA - Maintenance Corrective - 2024,Done,Run,Must Have,203023,240000,240,397800,680,0,0,0,7D0024001 - NOVA,637800,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-1292,2025,SMART ADMIN,NOVA,NOVA - Maintenance Corrective - 2025,Selected for Development,Run,Must Have,243636,358986,400,497070,789,0,0,0,7D0024001 - NOVA,856056,,02/12/2025 10:52,0
+RI-1320,2026,SMART ADMIN,NOVA,NOVA - Maintenance Corrective - 2026,Selected for Development,Run,Must Have,0,0,0,0,0,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,10/11/2025 14:34,0
+RI-1998,2026,SMART ADMIN,NOVA,NOVA - Maintenance Technique et ×volutive - 2026,Selected for Development,Evolution Technique,Must Have,0,0,0,0,0,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,10/11/2025 14:36,0
+RI-104,2023,SMART ADMIN,NOVA,NOVA - Migration IDM/IAM - Phase 1 (2023),Done,Evolution,Must Have,0,21000,21,16500,30,0,0,0,7D0024001 - NOVA,37500,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-1291,2024,SMART ADMIN,NOVA,NOVA - Migration IDM/IAM - Phase 1 (2024),Done,Evolution,Must Have,0,15000,15,58500,100,0,0,0,7D0024001 - NOVA,73500,NGUYEN Tu-Anh,28/10/2024 09:07,0
+RI-103,2023,SMART ADMIN,NOVA,"NOVA - Migration RU, INF, PU, parcelle, documents - Etterbeek",Done,Rollout,Should Have,10609,16560,16.56,9500,19,0,0,0,7D0024001 - NOVA,26060,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-384,2022,SMART ADMIN,NOVA,Nova - Migrations Techniques,Done,Run,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-2100,2026,SMART ADMIN,NOVA,NOVA - MyPermit and CR Environnement - 2026,Selected for Development,Projet,Must Have,,,,,,0,0,0,7D0024001 - NOVA,,NGUYEN Tu-Anh,13/11/2025 16:49,0
+RI-2099,2026,SMART ADMIN,NOVA,NOVA - MyPermit and CR Urbanisme - 2026,Selected for Development,Projet,Must Have,,,,,,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,13/11/2025 16:49,0
+RI-1596,2025,SMART ADMIN,NOVA,NOVA - MyPermit Environnement - 2025,Done,Projet,,97543,22826,27,54810,87,0,0,0,7D0024001 - NOVA,77636,NGUYEN Tu-Anh,15/01/2026 14:48,0
+RI-431,2023,SMART ADMIN,NOVA,NOVA - MyPermit Environnement 2023,Done,Projet,Should Have,244606,120440,120.44,91402.95,164.69,0,0,0,7D0024001 - NOVA,211842.95,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-819,2024,SMART ADMIN,NOVA,NOVA - MyPermit Environnement 2024,Done,Projet,Must Have,103000,100000,100,125575,215,0,0,0,7D0024001 - NOVA,225575,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-1595,2025,SMART ADMIN,NOVA,NOVA - MyPermit Urbanisme - 2025,Done,Projet,,60000,26843,29,22680,36,0,0,0,7D0024001 - NOVA,49523,NGUYEN Tu-Anh,15/01/2026 14:48,0
+RI-430,2023,SMART ADMIN,NOVA,NOVA - MyPermit Urbanisme 2023,Done,Projet,Should Have,179935,157380,157.38,58030.8,104.56,0,0,0,7D0024001 - NOVA,215410.8,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-818,2024,SMART ADMIN,NOVA,NOVA - MyPermit Urbanisme 2024,Done,Projet,Must Have,200000,70000,70,93600,160,0,0,0,7D0024001 - NOVA,163600,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-2087,2026,SMART ADMIN,NOVA,NOVA - NIS 2 - 2026,Selected for Development,Evolution Technique,Must Have,0,0,0,0,0,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,10/11/2025 14:31,0
+RI-1284,2024,SMART ADMIN,NOVA,NOVA - Plateforme Commune - 2024,Done,Evolution,Must Have,0,120000,120,175500,300,0,0,0,7D0024001 - NOVA,295500,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-1594,2025,SMART ADMIN,NOVA,NOVA - Plateforme Commune - Evolutions fonctionnelles - 2025,Done,Evolution,Must Have,0,24828,24,35910,57,0,0,0,7D0024001 - NOVA,60738,NGUYEN Tu-Anh,15/01/2026 14:48,0
+RI-1293,2025,SMART ADMIN,NOVA,NOVA - Plateforme Commune - Evolutions techniques - 2025,Done,Evolution Technique,Must Have,0,143781,149,127260,202,0,0,0,7D0024001 - NOVA,271041,NGUYEN Tu-Anh,15/01/2026 14:47,0
+RI-761,2023,SMART ADMIN,NOVA,NOVA - Supernova,Done,Analyse,Should Have,9330,9690,9.69,555,1,0,,,7D0024001 - NOVA,10245,NGUYEN Tu-Anh,10/07/2024 15:07,0
+RI-433,2023,SMART ADMIN,NOVA,NOVA - Support - 2023,Done,Run,Must Have,0,0,0,199800,360,0,0,0,7D0024001 - NOVA,199800,NGUYEN Tu-Anh,10/07/2024 15:08,0
+RI-825,2024,SMART ADMIN,NOVA,NOVA - Support - 2024,Done,Run,Must Have,0,0,0,251550,430,0,0,0,7D0024001 - NOVA,251550,NGUYEN Tu-Anh,20/01/2025 11:16,0
+RI-1294,2025,SMART ADMIN,NOVA,NOVA - Support - 2025,Done,Run,Must Have,0,0,0,321930,511,0,0,0,7D0024001 - NOVA,321930,NGUYEN Tu-Anh,15/01/2026 14:47,0
+RI-1302,2026,SMART ADMIN,NOVA,NOVA - Support - 2026,Selected for Development,Run,Must Have,0,0,0,0,0,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,10/11/2025 14:13,0
+RI-817,2025,SMART ADMIN,NOVA,NOVA - Transformation digitale des travaux PEB (Saleforce) 2025,Done,Projet,Nice to Have,70000,5276,4.94,17891,18.31,0,0,0,7D0024001 - NOVA,117497,NGUYEN Tu-Anh,15/01/2026 14:49,0
+RI-2085,2026,SMART ADMIN,NOVA,NOVA - Transformation digitale des travaux PEB (Saleforce) 2026,Selected for Development,Projet,Must Have,70000,0,0,116783,147,0,0,0,7D0024001 - NOVA,0,NGUYEN Tu-Anh,13/11/2025 16:49,0
+RI-55,2022,SMART ADMIN,NOVA,NOVA Maintenance 2022,Done,Run,Must Have,,0,,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-56,2022,SMART ADMIN,NOVA,NOVA Support 2022,Done,Run,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-58,2022,SMART ADMIN,NOVA,NOVA Technical Debt 2022,Done,Run,Must Have,0,0,0,0,0,0,0,0,,0,NGUYEN Tu-Anh,04/01/2023 15:26,0
+RI-95,2022,SMART ADMIN,NOVA,SMTP/GRAPH sur XCO,Done,Evolution,Must Have,15000,10000,10,5000,10,0,0,0,,15000,NGUYEN Tu-Anh,04/01/2023 15:27,0
+RI-497,2022,eCITIZEN,REGIONAL WEB PORTAL,CMS - Selection CMS Technology,Done,Analyse,,0,0,0,0,0,0,0,0,,0,SNICK Benjamin,04/01/2023 15:26,0
+RI-934,2023,eCITIZEN,REGIONAL WEB PORTAL,CMS Drupal Headless - Specifics,Done,Evolution,Must Have,0,257000,257,128760,232,0,0,0,,385760,SNICK Benjamin,11/02/2025 21:56,
+RI-513,2023,eCITIZEN,REGIONAL WEB PORTAL,CMS Support & Maintenance,Done,Run,Must Have,0,91000,91,45510,82,33.1,0,0,,136543.1,SNICK Benjamin,10/02/2025 20:59,
+RI-490,2022,eCITIZEN,REGIONAL WEB PORTAL,Digital Playbook - Top tasks Families,Done,Analyse,,0,0,0,0,0,0,0,0,,0,SNICK Benjamin,04/01/2023 15:27,0
+RI-501,2022,eCITIZEN,REGIONAL WEB PORTAL,Family 1 - A propos de la R×gion (Pilot),Done,Projet,Must Have,0,0,0,0,0,0,0,0,,0,SNICK Benjamin,15/11/2023 14:45,0
+RI-504,2023,eCITIZEN,REGIONAL WEB PORTAL,"Family 2 - Transport, Mobilit×",Done,Projet,Must Have,0,129000,129,64380,116,0,0,0,,193380,SNICK Benjamin,07/01/2025 09:37,0
+RI-502,2023,eCITIZEN,REGIONAL WEB PORTAL,Family 3 - Logement,Done,Projet,Must Have,0,129000,129,64380,116,0,0,0,,193380,SNICK Benjamin,07/01/2025 09:37,0
+RI-514,2022,eCITIZEN,REGIONAL WEB PORTAL,Infrastructure Azure - Cluster AKS,Done,Nouveau Service,Must Have,0,0,0,102500,0,0,0,0,,102500,SNICK Benjamin,15/11/2023 14:45,0
+RI-493,2022,eCITIZEN,REGIONAL WEB PORTAL,Operating Model - Service Blueprint & Service Delivery Model,Done,Analyse,Must Have,0,0,0,0,0,0,0,0,,0,SNICK Benjamin,17/05/2023 09:31,0
+RI-925,2022,eCITIZEN,REGIONAL WEB PORTAL,Platform CMS Drupal Headless (Pilot),Done,Nouveau Service,Must Have,0,,0,,0,,0,0,,,SNICK Benjamin,15/11/2023 14:45,0
+RI-1702,2025,eCITIZEN,REGIONAL WEB PORTAL,Regional Web Portal - BUILD Catalogue of procedures,Done,Evolution,Must Have,0,56390,56,22050,35,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),78440,SNICK Benjamin,24/06/2025 09:35,0
+RI-931,2024,eCITIZEN,REGIONAL WEB PORTAL,Regional Web Portal - BUILD Plateforme,Done,Evolution,Must Have,0,1166000,1166,377400,680,0,0,0,,1543400,SNICK Benjamin,07/01/2025 09:43,0
+RI-1713,2025,eCITIZEN,REGIONAL WEB PORTAL,"Regional Web Portal - Employment, Training (DPM) v1",Selected for Development,Rollout,Must Have,0,0,,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,,14/07/2025 23:18,0
+RI-926,2024,eCITIZEN,REGIONAL WEB PORTAL,Regional Web Portal - Logement,Done,Evolution,Must Have,0,,,,,0,0,0,,0,SNICK Benjamin,07/01/2025 09:38,0
+RI-930,2024,eCITIZEN,REGIONAL WEB PORTAL,Regional Web Portal - RUN,Done,Run,Must Have,0,374000,374,288600,520,75600,0,0,,738200,SNICK Benjamin,07/01/2025 09:43,
+RI-1721,2025,eCITIZEN,REGIONAL WEB PORTAL,Regional Web Portal - RUN Support & Maintenance,In Progress,Run,Must Have,1618955.2,79490,80,56700,90,75600,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),211790,SNICK Benjamin,14/07/2025 23:49,0
+RI-927,2024,eCITIZEN,REGIONAL WEB PORTAL,"Regional Web Portal - Transport, Mobilit×",Done,Evolution,Must Have,0,,,,,0,0,0,,,SNICK Benjamin,07/01/2025 09:38,0
+RI-1715,2025,eCITIZEN,REGIONAL WEB PORTAL,"RWS Editorial - Entrepreneurship, Innovation, Research - 2025",In Progress,Rollout,Must Have,28803.6,0,,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,14/07/2025 23:55,0
+RI-1459,2025,eCITIZEN,REGIONAL WEB PORTAL,"RWS Editorial - Events, Leisure, Sports - 2025",In Progress,Rollout,Must Have,28803.6,0,0,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,14/07/2025 23:51,0
+RI-1714,2025,eCITIZEN,REGIONAL WEB PORTAL,"RWS Editorial - Tax, Financing, Bonuses - 2025",Selected for Development,Rollout,Must Have,28803.6,0,,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,14/07/2025 23:55,0
+RI-1703,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Brussels Event Connect - BUILD - 2025,In Progress,Evolution,Must Have,136693,105193,101.2,31500,50,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),136693,SNICK Benjamin,29/10/2025 08:50,0
+RI-1710,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Citizen Interaction Funnel - BUILD - 2025,Done,Evolution,Should Have,136693,105193,101.2,31500,50,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),136693,SNICK Benjamin,15/07/2025 14:52,0
+RI-1964,2026,eCITIZEN,REGIONAL WEB PORTAL,SWR - Continuit× de Service & Maintenance - RUN - 2026,Selected for Development,Run,Must Have,461000,194000,194,182000,280,85000,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),461000,SNICK Benjamin,18/07/2025 10:07,0
+RI-1783,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Design System - BUILD - 2025,In Progress,Evolution,,0,0,0,0,0,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),0,SNICK Benjamin,15/07/2025 14:53,0
+RI-1965,2026,eCITIZEN,REGIONAL WEB PORTAL,SWR - D×ploiement de Services Num×riques par client - BUILD - 2026,Selected for Development,Evolution,Must Have,1389000,856000,856,533000,820,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),1389000,SNICK Benjamin,18/07/2025 10:11,0
+RI-1717,2025,eCITIZEN,REGIONAL WEB PORTAL,"SWR - Fortifying security, performance & upgrades - BUILD - 2025",In Progress,Evolution,Must Have,161893,105193,101.2,56700,90,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),161893,SNICK Benjamin,29/10/2025 08:50,0
+RI-1704,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Job connect - BUILD - 2025,In Progress,Evolution,Must Have,214733,164333,164,50400,80,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),214733,SNICK Benjamin,29/10/2025 08:50,0
+RI-1709,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Layered GeoSolutions - BUILD - 2025,In Progress,Evolution,Must Have,143840,109190,109,34650,55,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),143840,SNICK Benjamin,29/10/2025 08:50,0
+RI-1780,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Project Management (All Families) - BUILD - 2025,In Progress,Projet,,0,572000,440,0,0,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),572000,SNICK Benjamin,14/07/2025 23:50,0
+RI-1711,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - SEO & Editorial Content Draft Wizard - BUILD - 2025,In Progress,Evolution,Should Have,216783,163233,166,53550,85,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),216783,SNICK Benjamin,29/10/2025 08:50,0
+RI-1706,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - Smart-FAQ Suite - BUILD - 2025,In Progress,Evolution,Must Have,78440,56390,56,22050,35,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),78440,SNICK Benjamin,29/10/2025 08:50,0
+RI-1707,2025,eCITIZEN,REGIONAL WEB PORTAL,SWR - User flow enhancer & inclusive interactions - BUILD - 2025,Done,Evolution,Must Have,140690,109190,109,31500,50,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),140690,SNICK Benjamin,17/07/2025 10:03,0
+RI-1720,2025,eCITIZEN,REGIONAL WEB PORTAL,"SWR Editorial - Europe, International - 2025",In Progress,Rollout,Must Have,28803.6,0,0,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,14/07/2025 23:55,0
+RI-1716,2025,eCITIZEN,REGIONAL WEB PORTAL,"SWR Editorial - Legislation, Regulations - 2025",In Progress,Rollout,Must Have,28803.6,0,0,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,14/07/2025 23:55,0
+RI-1719,2025,eCITIZEN,REGIONAL WEB PORTAL,"SWR Editorial - Safety, Prevention - 2025",Done,Rollout,Must Have,28803.6,0,0,28803.6,45.72,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),28803.6,SNICK Benjamin,15/07/2025 14:52,0
+RI-1966,2026,eCITIZEN,REGIONAL WEB PORTAL,SWR â Change & Pilotage op×rationnel transversal â BUILD â 2026,Selected for Development,Evolution,Must Have,815514,815514,714,0,0,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),815514,SNICK Benjamin,18/07/2025 09:46,0
+RI-1967,2026,eCITIZEN,REGIONAL WEB PORTAL,SWR â Recherche UX & Design UI eCitizen â BUILD â 2026,Selected for Development,Evolution,Must Have,210000,80000,80,130000,200,0,0,0,7D0045001 - Strat×gie Web R×gionale (SWR),210000,SNICK Benjamin,18/07/2025 10:02,0
+RI-66,2023,SMART ADMIN,SAP,SAP  - Support Business 2023,Done,Run,Must Have,0,0,0,33300,60,11378.85,0,0,7D0010001 - SAP R×gional,44678.85,DE PESSEMIER Johan,05/07/2024 14:34,0
+RI-715,2023,SMART ADMIN,SAP,SAP - Finalisation Mise en Production IRISTEAM/PARADIGM,Done,Projet,Must Have,0,238653,370,166500,300,0,0,0,7D0010001 - SAP R×gional,405153,MEULEMANS Evelyne,08/07/2024 10:25,0
+RI-1252,2024,SMART ADMIN,SAP,SAP - Support Business & Maintenance 2024,Done,Run,Must Have,0,40000,40,0,0,11378.85,0,0,7D0010001 - SAP R×gional,51378.85,DE PESSEMIER Johan,20/01/2025 11:14,0
+RI-423,2023,SMART ADMIN,TESTING,TESTING - Support Transversal - 2023,Done,Run,Must Have,0,452000,452,0,0,0,0,0,7D0020001 - Testing,452388,DE PESSEMIER Johan,01/08/2024 15:57,0
+RI-971,2024,SMART ADMIN,TESTING,TESTING - Support Transversal - 2024,Done,Run,Must Have,0,0,0,0,0,389557,0,0,,389557,DE PESSEMIER Johan,20/01/2025 11:14,0
+RI-1520,2026,DATA,WePulse DATA,WP DATA - Int×gration Data Hub - 2026,Selected for Development,Run,Must Have,0,0,0,0,0,0,0,0,7D0077001 - WePulse M7,0,,18/07/2025 13:02,0

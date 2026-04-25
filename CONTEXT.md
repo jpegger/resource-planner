@@ -586,7 +586,7 @@ npm run db:recreate:eotp-costs
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
 - **RESSOURCES encoding** — File is **UTF-8 with BOM**. **`seed-production.ts`** reads **`RESSOURCES.csv`** as **`utf8`** (not `latin1`) so headers **`Nom` / `Prénom`** parse correctly; **`JIRA.csv`** remains **`latin1`**.
-- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) but **does not** delete rows in **`allocation_entity`** — allocation-entity catalog survives full reloads.
+- **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) and clears **`eotp_routing`**, but **does not** delete rows in **`allocation_entity`** — allocation-entity catalog survives full reloads.
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
 **Manual truncate (rare)** — If you need a clean slate including the allocation-entity catalog, truncate `allocation_entity` explicitly or use SQL; default reset keeps those rows.

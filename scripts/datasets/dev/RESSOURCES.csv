@@ -1,0 +1,155 @@
+Nom,Prénom,Fonction,Pôle,Cellule,Groupe,Internal or External,Comment,Full Name,ID
+ABDI,Khalid,Analyst Programmer,DF,Applications Factories,NOVA,Internal,,Khalid ABDI, MAT-0000006 
+AMS HMS/BRUSO/SINCRHO,Consultance,Consultant,CRPS,Smart Admin,--,External,,Consultance AMS HMS/BRUSO/SINCRHO, MAT-0000019 
+Analyst Programmer,BuSI,Analyst Programmer,CRPS,Smart Admin,NOVA,External,,BuSI Analyst Programmer, MAT-0000021 
+Analyst Programmer,Paradigm,Analyst Programmer,DF,Applications Factories,--,Internal,,Paradigm Analyst Programmer, MAT-0000025 
+Anderlin,Gil,Project Manager,CRPS,eCitizen,CRM - Salesforce,External,,Gil Anderlin, MAT-0000030 
+Application Support Manager,Paradigm,Application Support Manager,CRPS,Smart Admin,--,Internal,,Paradigm Application Support Manager, MAT-0000036 
+ASAERT,Yves,Test Analyst,CRPS,eCitizen,CRM - Salesforce,Internal,,Yves ASAERT, MAT-0000041 
+BASTI,Amira,Test Analyst,CRPS,Smart Admin,NOVA,Internal,,Amira BASTI, MAT-0000052 
+Bernardinello,Alexis ,Consultant,CRPS,Smart Admin,BOS,External,,Alexis  Bernardinello, MAT-0000054 
+Blackman,Emilie,Content Specialist SWR,CRPS,Marketing,SWR,External,,Emilie Blackman, MAT-0000057 
+Boujjia,Hakim,Support,DF,,--,Internal,,Hakim Boujjia, MAT-0000065 
+BOURDAIRE,Stéphane,Project Manager,CRPS,Smart Admin,--,Internal,,Stéphane BOURDAIRE, MAT-0000068 
+Bury,Mélanie,Change Manager,CRPS,,--,Internal,,Mélanie Bury, MAT-0000077 
+Caldana,Laethitia,Change Manager,CRPS,eCitizen,SWR,External,,Laethitia Caldana, MAT-0000084 
+CALMEAU,Pierre,Implementation Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Pierre CALMEAU, MAT-0000085 
+CASSANO,Stefano,Functional Analyst,CRPS,Smart Admin,BOS,Internal,,Stefano CASSANO, MAT-0000092 
+CASTRONOVO,Claudio,Analyst Programmer,DF,Applications Factories,IRISbox,Internal,,Claudio CASTRONOVO, MAT-0000094 
+CHARLES,Sandrine,Project manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Sandrine CHARLES, MAT-0000098 
+Civadis,Licences ,Licences ,CRPS,eCitizen,IRISbox,Direct Costs,,Licences  Civadis, MAT-0000101 
+CLEMENT,Guillaume,Program Manager,CRPS,eCitizen,CRM - Salesforce,External,,Guillaume CLEMENT, MAT-0000103 
+Consultant,SmalS,Support Archivage as a Service,CRPS,Smart Admin,NOVA,Direct Costs,,SmalS Consultant, MAT-0000115 
+Consultant,SAP,SAP Consultant,CRPS,Smart Admin,SAP,External,,SAP Consultant, MAT-0000117 
+Consultant Architecte Nova,,Software Architect,CRPS,Smart Admin,NOVA,External,, Consultant Architecte Nova, MAT-0000128 
+Consultant Développeur Senior Nova,,Développeur Senior,CRPS,Smart Admin,NOVA,External,, Consultant Développeur Senior Nova, MAT-0000129 
+Consultant Développeur Medior Nova,,Développeur Medior,CRPS,Smart Admin,NOVA,External,, Consultant Développeur Medior Nova, MAT-0000130 
+CRM - Salesforce,Platform Lead,Analyst Programmer Platform Lead,DF,Applications Factories,CRM - Salesforce,External,,Platform Lead CRM - Salesforce, MAT-0000145 
+CRM - Salesforce,Tech Lead,Analyst Programmer Tech Lead ,DF,Applications Factories,CRM - Salesforce,External,,Tech Lead CRM - Salesforce, MAT-0000146 
+CRM - Salesforce,Factory Deloitte Analyst Programmer Mulesoft,Analyst Programmer Mulesoft,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Analyst Programmer Mulesoft CRM - Salesforce, MAT-0000147 
+CRM - Salesforce,Factory Deloitte Analyst Programmer SF,Analyst Programmer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Analyst Programmer SF CRM - Salesforce, MAT-0000148 
+CRM - Salesforce,Factory Deloitte Functional Analyst SF,Functional Analyst SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Functional Analyst SF CRM - Salesforce, MAT-0000149 
+CRM - Salesforce,Factory Deloitte Release Engineer SF,Release Engineer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Release Engineer SF CRM - Salesforce, MAT-0000150 
+CRM - Salesforce,Factory Deloitte Manager,Release Engineer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Manager CRM - Salesforce, MAT-0000151 
+CRM - Salesforce,Cronos 2023 (Professional Services Salesforce - org strategy),Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos 2023 (Professional Services Salesforce - org strategy) CRM - Salesforce, MAT-0000152 
+CRM - Salesforce,Mission spécifique Deloitte 2023,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Mission spécifique Deloitte 2023 CRM - Salesforce, MAT-0000153 
+CRM - Salesforce,Factory Deloitte 2023,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Factory Deloitte 2023 CRM - Salesforce, MAT-0000154 
+CRM - Salesforce,Bechtle (licences Salesforce pour PaRM),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour PaRM) CRM - Salesforce, MAT-0000155 
+CRM - Salesforce,Bechtle (licences Salesforce pour PaRM additionels),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour PaRM additionels) CRM - Salesforce, MAT-0000156 
+CRM - Salesforce,Bechtle (licences Copado),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Copado) CRM - Salesforce, MAT-0000158 
+CRM - Salesforce,Bechtle (licences Salesforce pour Kanal),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour Kanal) CRM - Salesforce, MAT-0000161 
+CRM - Salesforce,Cronos (licences Salesforce pour CiRM),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos (licences Salesforce pour CiRM) CRM - Salesforce, MAT-0000162 
+CRM - Salesforce,Cronos (licences Salesforce pour CiRM additionels),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos (licences Salesforce pour CiRM additionels) CRM - Salesforce, MAT-0000163 
+CRM - Salesforce,Cronos/Bechtle (licences Salesforce),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos/Bechtle (licences Salesforce) CRM - Salesforce, MAT-0000164 
+CRM - Salesforce,Cronos/Bechtle (licences Copado),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos/Bechtle (licences Copado) CRM - Salesforce, MAT-0000165 
+CRM - Salesforce,Cronos/Bechtle (licences Ownbackup),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos/Bechtle (licences Ownbackup) CRM - Salesforce, MAT-0000166 
+CRM - Salesforce,PwC (RUN BeMyGuest),Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,PwC (RUN BeMyGuest) CRM - Salesforce, MAT-0000167 
+CRM - Salesforce,PwC (évolutions BeMyGuest),Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,PwC (évolutions BeMyGuest) CRM - Salesforce, MAT-0000168 
+CRM - Salesforce,Cronos (licences Salesforce pour be MyGuest),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos (licences Salesforce pour be MyGuest) CRM - Salesforce, MAT-0000169 
+CRM - Salesforce,PwC (évolutions CIRM),Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,PwC (évolutions CIRM) CRM - Salesforce, MAT-0000170 
+CRM - Salesforce,TBC implémentation Kanal,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,TBC implémentation Kanal CRM - Salesforce, MAT-0000171 
+CRM - Salesforce,TBC implémentation BE Subside,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,TBC implémentation BE Subside CRM - Salesforce, MAT-0000172 
+CRM - Salesforce,TBC implémentation Innoviris Subside,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,TBC implémentation Innoviris Subside CRM - Salesforce, MAT-0000173 
+CRM - Salesforce,Cronos (licences Salesforce pour Kanal),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos (licences Salesforce pour Kanal) CRM - Salesforce, MAT-0000174 
+CRM - Salesforce,TBC implémentation BE BEA,Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,TBC implémentation BE BEA CRM - Salesforce, MAT-0000175 
+CRM - Salesforce,Analyst,Analyste,CRPS,eCitizen,CRM - Salesforce,Internal,,Analyst CRM - Salesforce, MAT-0000176 
+CRM - Salesforce,Business analyst External,Business analyst,CRPS,eCitizen,CRM - Salesforce,External,,Business analyst External CRM - Salesforce, MAT-0000178 
+CRM - Salesforce,Cronos 2024 (Professional Services Salesforce - Design Authority),Consultance Fixed price,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Cronos 2024 (Professional Services Salesforce - Design Authority) CRM - Salesforce, MAT-0000179 
+CRM - Salesforce, SI Fix Price External,SI Fix Price ,CRPS,eCitizen,CRM - Salesforce,External,, SI Fix Price External CRM - Salesforce, MAT-0000180 
+CRM - Salesforce,Laurent Colin,Business Consultant,CRPS,eCitizen,CRM - Salesforce,External,sur les projets BE CRM,Laurent Colin CRM - Salesforce, MAT-0000182 
+CRM - Salesforce,Factory Deloitte Technical Lead SF,Technical Leader,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Technical Lead SF CRM - Salesforce, MAT-0000183 
+CRM - Salesforce,Bechtle (licences Salesforce pour Big Org),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour Big Org) CRM - Salesforce, MAT-0000184 
+CRM - Salesforce,Bechtle (licences Salesforce pour Copado),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour Copado) CRM - Salesforce, MAT-0000185 
+CRM - Salesforce,Bechtle (licences Salesforce pour Service Org),Licences ,CRPS,eCitizen,CRM - Salesforce,Direct Costs,,Bechtle (licences Salesforce pour Service Org) CRM - Salesforce, MAT-0000186 
+CRM - Salesforce AC6,Factory Deloitte Analyst Programmer Mulesoft,Analyst Programmer Mulesoft,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Analyst Programmer Mulesoft CRM - Salesforce AC6, MAT-0000187 
+CRM - Salesforce AC6,Factory Deloitte Analyst Programmer SF,Analyst Programmer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Analyst Programmer SF CRM - Salesforce AC6, MAT-0000188 
+CRM - Salesforce AC6,Factory Deloitte Functional Analyst SF,Functional Analyst SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Functional Analyst SF CRM - Salesforce AC6, MAT-0000189 
+CRM - Salesforce AC6,Factory Deloitte Release Engineer SF,Release Engineer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Release Engineer SF CRM - Salesforce AC6, MAT-0000190 
+CRM - Salesforce AC6,Factory Deloitte Manager,Release Engineer SF,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Manager CRM - Salesforce AC6, MAT-0000191 
+CRM - Salesforce AC6,Factory Deloitte Technical Lead SF,Technical Leader,CRPS,eCitizen,CRM - Salesforce,External,,Factory Deloitte Technical Lead SF CRM - Salesforce AC6, MAT-0000192 
+DE SANY,Thibaut,Software Architect,CRPS,Smart Admin,NOVA,External,,Thibaut DE SANY, MAT-0000203 
+DE TREMERIE,Amaury,Analyst Programmer,CRPS,Smart Admin,NOVA,External,,Amaury DE TREMERIE, MAT-0000204 
+De Wolf,Stefaan,Support,CRPS,,SAP,Internal,,Stefaan De Wolf, MAT-0000205 
+DIRCKX,David,Application Support Manager,CRPS,Smart Admin,NOVA,Internal,,David DIRCKX, MAT-0000218 
+DJAMILOVA,Lola,Project Analyst,CRPS,eCitizen,IRISbox,Internal,,Lola DJAMILOVA, MAT-0000219 
+DRIJBER ,Milo,Project Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Milo DRIJBER , MAT-0000222 
+DUFRASNE,Jean,IT Technician,DF,Applications Factories,SOFT HR,Internal,,Jean DUFRASNE, MAT-0000224 
+Efstathiou,Christina,Project Manager,CRPS,eCitizen,SWR,External,,Christina Efstathiou, MAT-0000228 
+EL HASSANI,Elias,Analyst Programmer,DF,Applications Factories,BOS,Internal,,Elias EL HASSANI, MAT-0000231 
+Ennaji,Tarik,Test Analyst,CRPS,eCitizen,SWR,Internal,,Tarik Ennaji, MAT-0000233 
+ENNAJI,Tarik (OLD),Test Analyst,CRPS,Smart Admin,NOVA,Internal,,Tarik (OLD) ENNAJI, MAT-0000234 
+Feupissi,Collins,Consultant,CRPS,Smart Admin,NOVA,External,,Collins Feupissi, MAT-0000242 
+FIELZ,Yul,Application Support Manager,CRPS,Smart Admin,ESM,Internal,,Yul FIELZ, MAT-0000243 
+FRANKLIN,David,Analyst Programmer,DF,Applications Factories,IRISbox,Internal,,David FRANKLIN, MAT-0000257 
+Functional Analyst,Paradigm,Project analyst,CRPS,Smart Admin,--,Internal,,Paradigm Functional Analyst, MAT-0000261 
+Gannouni,Khouloud,Consultant,CRPS,Smart Admin,BOS,External,,Khouloud Gannouni, MAT-0000264 
+GRAVANO,Matilde,Project analyst,CRPS,eCitizen,CRM - Salesforce,Internal,,Matilde GRAVANO, MAT-0000277 
+Gueuning,Cédric,IS Architect,CRPS,eCitizen,CRM - Salesforce,External,,Cédric Gueuning, MAT-0000278 
+HAJJI,Amal,Functional Analyst,CRPS,Smart Admin,NOVA,Internal,,Amal HAJJI, MAT-0000279 
+HALLOT,Xavier,Product Manager,CRPS,Smart Admin,BOS,Internal,,Xavier HALLOT, MAT-0000280 
+HAMMAMI,Samy,Test Analyst,CRPS,eCitizen,SWR,External,,Samy HAMMAMI, MAT-0000281 
+HASSINE,Maroua,Analyst Programmer,DF,Applications Factories,NOVA,Internal,,Maroua HASSINE, MAT-0000284 
+HIMPE,Rita,Functional Analyst,CRPS,Smart Admin,NOVA,Internal,,Rita HIMPE, MAT-0000286 
+Intégrateur externe BE TDT,CRM,Consultant,CRPS,eCitizen,CRM - Salesforce,External,,CRM Intégrateur externe BE TDT, MAT-0000297 
+Intégrateur externe BE TDT 1,CRM,Consultant,CRPS,eCitizen,CRM - Salesforce,External,,CRM Intégrateur externe BE TDT 1, MAT-0000298 
+Intégrateur externe INNOVIRIS,CRM,Consultant,CRPS,eCitizen,CRM - Salesforce,External,,CRM Intégrateur externe INNOVIRIS, MAT-0000300 
+IS Engineer,Paradigm,IS engineer,DF,Applications Factories,--,Internal,,Paradigm IS Engineer, MAT-0000312 
+Isimbi,Fabiola,Support,CRPS,,SAP,Internal,,Fabiola Isimbi, MAT-0000313 
+IT Technician,Paradigm,IT Technician,DF,Applications Factories,--,Internal,,Paradigm IT Technician, MAT-0000316 
+JBALI,Yosri,Analyst Programmer,CRPS,Smart Admin,NOVA,External,,Yosri JBALI, MAT-0000317 
+KAMDEM,Christelle-Renée,Test Analyst,CRPS,Smart Admin,BOS,Internal,,Christelle-Renée KAMDEM, MAT-0000320 
+KINET,Cécile,Application Support Manager,CRPS,Smart Admin,NOVA,Internal,,Cécile KINET, MAT-0000323 
+KINNARD,Sandrine,Application Support Manager,CRPS,Smart Admin,BOS,Internal,,Sandrine KINNARD, MAT-0000324 
+LAABOUCH,Rezlan ,Implementation Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Rezlan  LAABOUCH, MAT-0000328 
+LAMPE,Valérie,Test Analyst,CRPS,Smart Admin,MyPermit,External,Pool testing,Valérie LAMPE, MAT-0000333 
+LEFEVRE,Marc,Techninal Analyst,DF,Applications Factories,BOS,Internal,,Marc LEFEVRE, MAT-0000338 
+Licences,SAP,Licences SAP,CRPS,Smart Admin,SAP,Direct Costs,,SAP Licences, MAT-0000346 
+Licences Mulesoft,WePulse,Licences,CRPS,Data,WePulse,Direct Costs,,WePulse Licences Mulesoft, MAT-0000379 
+Licences Mulesoft,CRM,Licences,CRPS,Data,WePulse,Direct Costs,,CRM Licences Mulesoft, MAT-0000380 
+Maloens,Tim,Project Manager,CRPS,eCitizen,SWR,External,,Tim Maloens, MAT-0000393 
+MARTEL,Christophe,Analyst Programmer,DF,Applications Factories,IRISbox,Internal,,Christophe MARTEL, MAT-0000402 
+Michaux,Christophe,Service Head,CRPS,,SAP,Internal,,Christophe Michaux, MAT-0000412 
+MILDE,Claire,Project Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Claire MILDE, MAT-0000414 
+MILLER,Benoit,Project Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Benoit MILLER, MAT-0000415 
+MONACO,Fabrice,Product Manager,CRPS,Smart Admin,--,Internal,,Fabrice MONACO, MAT-0000419 
+MZOUGHI,Hedi,Analyst Programmer,DF,Applications Factories,BOS,Internal,,Hedi MZOUGHI, MAT-0000427 
+NETELS,Nicolas,Application Support Manager,CRPS,Smart Admin,BOS,Internal,,Nicolas NETELS, MAT-0000430 
+NGUYEN,Tu-Anh,Product Manager,CRPS,Smart Admin,NOVA,Internal,,Tu-Anh NGUYEN, MAT-0000432 
+NUNKOVICS,Jérémy,Test Analyst,CRPS,eCitizen,CRM - Salesforce,Internal,,Jérémy NUNKOVICS, MAT-0000436 
+OBEZ,Frédéric,Product Owner,CRPS,Smart Admin,NOVA,External,,Frédéric OBEZ, MAT-0000437 
+PAPELOER,Jacques,IS Architect,CRPS,eCitizen,CRM - Salesforce,Internal,,Jacques PAPELOER, MAT-0000445 
+PARIS,Vincent,Project analyst,CRPS,eCitizen,CRM - Salesforce,Internal,,Vincent PARIS, MAT-0000447 
+PLASMAN,Christian,Trainer,CRPS,Smart Admin,--,Internal,,Christian PLASMAN, MAT-0000455 
+Product Manager,Paradigm,Product Manager,CRPS,Smart Admin,--,Internal,,Paradigm Product Manager, MAT-0000462 
+Product Owner,BuSI,Product Owner,CRPS,Smart Admin,NOVA,External,,BuSI Product Owner, MAT-0000464 
+Raes,Ronald,AXON Consultant,CRPS,Smart Admin,AXON,External,,Ronald Raes, MAT-0000475 
+Schairsée,Yves,Consultant,CRPS,Smart Admin,NOVA,External,,Yves Schairsée, MAT-0000493 
+SCHUMACHER,Jérôme,Product Manager,CRPS,eCitizen,CRM - Salesforce,Internal,,Jérôme SCHUMACHER, MAT-0000496 
+Snick,Benjamin,Product Manager,CRPS,eCitizen,SWR,Internal,,Benjamin Snick, MAT-0000504 
+Software Architect,BuSI,Software Architect,CRPS,Smart Admin,NOVA,External,,BuSI Software Architect, MAT-0000506 
+Soyeurt,Jennifer,Business analyst,CRPS,eCitizen,SWR,Internal,,Jennifer Soyeurt, MAT-0000511 
+SUREAU,Thibault,Analyst Programmer,DF,Applications Factories,BOS,Internal,,Thibault SUREAU, MAT-0000523 
+SWR  - Analyste Externe ,Project analyst,Project analyst,CRPS,eCitizen,SWR,External,,Project analyst SWR  - Analyste Externe , MAT-0000525 
+SWR  - Devops Externe ,Devops ,Devops ,CRPS,eCitizen,SWR,External,,Devops  SWR  - Devops Externe , MAT-0000526 
+SWR  - QA Tester Externe,Test Analyst,Test Analyst,CRPS,eCitizen,SWR,External,,Test Analyst SWR  - QA Tester Externe, MAT-0000527 
+SWR  - UI designer  Externe ,UI Designer ,UI Designer ,CRPS,eCitizen,SWR,External,,UI Designer  SWR  - UI designer  Externe , MAT-0000529 
+SWR  - UX designer  Externe ,UX Designer ,UX Designer ,CRPS,eCitizen,SWR,External,,UX Designer  SWR  - UX designer  Externe , MAT-0000530 
+SWR  - UX researcher  Externe ,UX Researcher ,UX Researcher ,CRPS,eCitizen,SWR,External,,UX Researcher  SWR  - UX researcher  Externe , MAT-0000531 
+SWR - Azure ,Infrastructure,Infra ,CRPS,eCitizen,SWR,Direct Costs,,Infrastructure SWR - Azure , MAT-0000532 
+SWR - Developpeur Full Stack,Analyst Programmer,Analyst Programmer,CRPS,eCitizen,SWR,External,,Analyst Programmer SWR - Developpeur Full Stack, MAT-0000533 
+SWR - Licences ,Figma,Licences,CRPS,eCitizen,SWR,Direct Costs,,Figma SWR - Licences , MAT-0000534 
+SWR - Project Manager Externe ,Project Manager,Project Manager,CRPS,eCitizen,SWR,External,,Project Manager SWR - Project Manager Externe , MAT-0000536 
+SWR - Scrumm Master Externe,Analyst Programmer,Analyst Programmer,CRPS,eCitizen,SWR,External,,Analyst Programmer SWR - Scrumm Master Externe, MAT-0000537 
+SWR - Tech lead Interne,Analyst Programmer,Analyst Programmer,CRPS,eCitizen,SWR,Internal,,Analyst Programmer SWR - Tech lead Interne, MAT-0000538 
+Technical Analyst,Paradigm,Techninal Analyst,DF,Applications Factories,--,Internal,,Paradigm Technical Analyst, MAT-0000544 
+Test Analyst,ORDINA,Test Analyst,CRPS,Smart Admin,TESTING,External,,ORDINA Test Analyst, MAT-0000546 
+Test Analyst,Paradigm,Project analyst,CRPS,Smart Admin,--,Internal,,Paradigm Test Analyst, MAT-0000547 
+Trainer,Paradigm,Trainer,CRPS,Smart Admin,--,Internal,,Paradigm Trainer, MAT-0000556 
+Van Aelst,Nicolas,Program manager,CRPS,eCitizen,SWR,External,,Nicolas Van Aelst, MAT-0000567 
+Vandenbroek,Sebastien ,Implementation Manager,CRPS,eCitizen,SWR,Internal,,Sebastien  Vandenbroek, MAT-0000572 
+Vekony,Julien,Project Manager,CRPS,eCitizen,CRM - Salesforce,External,,Julien Vekony, MAT-0000578 
+WAFIK,Zouhaïr,Functional Analyst,CRPS,Smart Admin,NOVA,Internal,,Zouhaïr WAFIK, MAT-0000587 
+WOUTERS,Mark,Analyst Programmer,DF,Applications Factories,NOVA,Internal,,Mark WOUTERS, MAT-0000590 
+AMS Analyst Programmer Senior,Consultance,Consultant,CRPS,Smart Admin,--,External,,Consultance AMS Analyst Programmer Senior, MAT-0000596 
+GUEUDRE,Thomas,Project Analyst,CRPS,eCitizen,UX/UI Design,Internal,,Thomas GUEUDRE, MAT-0000607 
+CRM - Salesforce,Analyst Testeur,Analyst Testeur,CRPS,eCitizen,CRM - Salesforce,Internal,à engager,Analyst Testeur CRM - Salesforce, MAT-0000608 

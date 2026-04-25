@@ -11,6 +11,10 @@
  * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `allocation_entity` rows).
  * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod` (includes `v_revenues`)
  * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
+ *
+ * EOTP routing:
+ * - When `EOTP_ROUTING.csv` is present in the selected dataset directory, routing rows are upserted.
+ * - On `SEED_PROD_RESET=1`, `eotp_routing` is cleared to avoid stale exception rows affecting `v_eotp_costs`.
  */
 
 import "dotenv/config";
@@ -297,11 +301,106 @@ async function seedRateStandard(): Promise<void> {
 }
 
 async function clearPlannerTables(): Promise<void> {
+  // Keep allocation_entity catalog, clear planning data.
+  await prisma.eotpRouting.deleteMany({});
   await prisma.allocation.deleteMany({});
   await prisma.rate.deleteMany({});
   await prisma.initiative.deleteMany({});
   await prisma.rateStandard.deleteMany({});
   await prisma.resource.deleteMany({});
+}
+
+async function seedEotpRoutingIfPresent(): Promise<void> {
+  const csvPath = resolveCsvPath("EOTP_ROUTING.csv");
+  if (!fs.existsSync(csvPath)) {
+    console.log("No EOTP_ROUTING.csv found — skipping eotp_routing seed.\n");
+    return;
+  }
+
+  console.log(`Seeding eotp_routing from ${path.relative(process.cwd(), csvPath)}...`);
+  const content = fs.readFileSync(csvPath, { encoding: "utf-8" });
+  const cleaned = content.replace(/^\uFEFF/, "");
+  const parsed = Papa.parse<Record<string, string>>(cleaned, {
+    header: true,
+    skipEmptyLines: true,
+  });
+
+  const rows = (parsed.data ?? []).filter((r) => !!r && typeof r === "object");
+  if (rows.length === 0) {
+    console.log("  ✓ eotp_routing: CSV empty (no rows)\n");
+    return;
+  }
+
+  const entities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
+  const entityMap = new Map(entities.map((p) => [p.name.trim().toLowerCase(), p.id]));
+
+  let upserted = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const productName = (row["productName"] ?? "").trim();
+    const allocationEntityId = entityMap.get(productName.toLowerCase());
+    if (!allocationEntityId) {
+      skipped++;
+      continue;
+    }
+
+    const year = Number.parseInt((row["year"] ?? "").trim(), 10);
+    const eotp = (row["eotp"] ?? "").trim();
+    if (!Number.isFinite(year) || !eotp) {
+      skipped++;
+      continue;
+    }
+
+    const internalAmount = parseNum(row["internal"]) ?? 0;
+    const externalAmount = parseNum(row["external"]) ?? 0;
+    const directAmount = parseNum(row["direct"]) ?? 0;
+    if (internalAmount === 0 && externalAmount === 0 && directAmount === 0) {
+      skipped++;
+      continue;
+    }
+
+    const eopLabel = (row["eopLabel"] ?? "").trim();
+    const comment = (row["comment"] ?? "").trim();
+
+    const def = await prisma.eotpDefinition.findFirst({
+      where: { sapEotpCode: { equals: eotp, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    await prisma.eotpRouting.upsert({
+      where: {
+        allocationEntityId_year_eotp: {
+          allocationEntityId,
+          year,
+          eotp,
+        },
+      },
+      create: {
+        allocationEntityId,
+        year,
+        eotp,
+        eopLabel: eopLabel || null,
+        eotpDefinitionId: def?.id ?? null,
+        internalAmount,
+        externalAmount,
+        directAmount,
+        comment: comment || null,
+      },
+      update: {
+        eopLabel: eopLabel || null,
+        eotpDefinitionId: def?.id ?? null,
+        internalAmount,
+        externalAmount,
+        directAmount,
+        comment: comment || null,
+      },
+    });
+
+    upserted++;
+  }
+
+  console.log(`  ✓ eotp_routing: ${upserted} upserted, ${skipped} skipped\n`);
 }
 
 // ─── 3. Rates ────────────────────────────────────────────────────────────────
@@ -857,6 +956,7 @@ async function main(): Promise<void> {
   await seedRateStandard();
   await seedRates();
   await seedAllocations();
+  await seedEotpRoutingIfPresent();
   await createCostView();
   await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);

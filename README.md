@@ -144,6 +144,9 @@ SEED_PROD_RESET=1 npm run db:seed:prod
 SEED_VIEW_ONLY=1 npm run db:seed:prod
 ```
 
+Notes:
+- `SEED_PROD_RESET=1` clears planner tables (allocations, rates, initiatives, resources) and also clears `eotp_routing` so EOTP splits are not left stale between runs. It preserves the `allocation_entity` catalog.
+
 ---
 
 ## Tests
