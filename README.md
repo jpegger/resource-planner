@@ -12,7 +12,7 @@ For the full design doc and business rules, see `CONTEXT.md`.
 
 ## Prerequisites
 
-- Node.js **20**
+- Node.js **20** (Prisma/tooling effectively requires **≥ 20.19** — run `nvm use` if you use NVM; see `.nvmrc`)
 - Docker (for local Postgres) or access to the company PostgreSQL cluster
 
 ---
@@ -20,6 +20,7 @@ For the full design doc and business rules, see `CONTEXT.md`.
 ## Quick start (local DB)
 
 ```bash
+nvm use
 npm install
 npm run db:up
 npm run db:migrate

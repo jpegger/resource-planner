@@ -145,6 +145,7 @@ Financial initiative costs (INT / EXT / DIR) for a product can be **split across
 | Database | PostgreSQL — company-hosted cluster (dev: Docker local) |
 | Reporting | Power BI Desktop connected directly to PostgreSQL view |
 | Jira Sync | jira.js (Version3Client) — official TypeScript Jira client |
+| Salesforce (optional) | jsforce — used for describing / integrating custom objects |
 | IDE | Cursor (AI-assisted) running against WSL2 on Windows |
 | Runtime | Node.js 20 inside WSL2 (Ubuntu) |
 
@@ -575,6 +576,7 @@ npm run db:recreate:eotp-costs
 ### 9.2 Production Seed Notes
 
 - **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for allocation-entity master data (table `allocation_entity`). `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
+- **EOTP definition reset** — `SEED_PROD_RESET=1 npm run db:seed:eotp` clears `eotp_definition` (and nulls optional FKs) before re-importing from `EOTP-Budget-Owner.csv`.
 - **Drop order / idempotency** — some views depend on others. Seed scripts use `DROP VIEW ... CASCADE` when necessary (e.g. `v_allocation_costs`, snapshot/baseline views) so repeated runs work even if reporting views were already created.
 - **`v_comparison`** — created as part of the views pipeline; used by `/reports/comparison` (snapshot vs baseline gap drilldown).
 - **ID-based linking** — `InitiativeId` (RI-xxx), `RessourceId` (MAT-xxx), etc.
@@ -622,6 +624,7 @@ The header includes operational buttons used during the Excel → CSV → DB ref
 # 2. Open WSL terminal: Win+R → wsl
 docker start resource-planner-db   # skip if restart:always is set
 cd ~/projects/resource-planner
+nvm use   # uses .nvmrc (Node >=20.19 required by Prisma/tooling)
 npm run db:migrate   # after pulling schema/migration changes (alias for prisma migrate deploy)
 cursor .   # optional
 npm run dev   # → http://localhost:3000
