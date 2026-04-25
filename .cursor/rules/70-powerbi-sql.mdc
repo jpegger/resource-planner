@@ -27,7 +27,7 @@ PostgreSQL enum types are not foldable by the ODBC driver.
 
 NULL values in slicer or filter fields break Power BI's DirectQuery button slicers.
 Apply `COALESCE(..., 'Unassigned')` to:
-- `product_group`
+- `jira_component_product` (raw Jira component name, if used as a slicer)
 - `product_name`
 - `product_family`, `division`, `sub_division`, `team`
 - `sap_eotp_code`, `sap_eotp_name`

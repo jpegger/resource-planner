@@ -689,10 +689,7 @@ async function createCostView(): Promise<void> {
       i."powerId"                                                   AS power_id,
       i.summary,
       i.year                                                        AS initiative_year,
-      i.components                                                  AS product,
-      COALESCE(REPLACE(i."productGroup", '&', 'and'),
-                'Unassigned'
-              )                                                     AS product_group,
+      i.components                                                  AS jira_component_product,
 
       COALESCE(p."name", 'Unassigned')                              AS product_name,
       COALESCE(REPLACE(p."productFamily", '&', 'and'), 'Unassigned') AS product_family,
@@ -828,10 +825,6 @@ async function createRevenueView(): Promise<void> {
         CAST(i.status AS VARCHAR)                        AS status,
         COALESCE(ae."name", 'Unassigned')                AS product_name,
         COALESCE(REPLACE(ae."productFamily", '&', 'and'), 'Unassigned') AS product_family,
-        REPLACE(
-            COALESCE(i."productGroup", 'Unassigned'),
-            '&', 'and'
-        )                                                AS product_group,
         COALESCE(ae."division", 'Unassigned')            AS division,
         COALESCE(ae."sapEotpCode", 'Unassigned')         AS sap_eotp_code,
         COALESCE(ae."sapEotpName", 'Unassigned')         AS sap_eotp_name,

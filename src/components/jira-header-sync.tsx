@@ -115,14 +115,14 @@ export function JiraHeaderSync() {
         className="h-8 shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20"
         disabled={syncing}
         onClick={syncJira}
-        title="Sync initiatives from Jira"
+        title="Sync products + initiatives from Jira"
       >
         {syncing ? (
           <Loader2 className="size-4 animate-spin" aria-hidden />
         ) : (
           <RefreshCw className="size-4" aria-hidden />
         )}
-        <span className="ml-1.5">Jira update</span>
+        <span className="ml-1.5">Jira sync</span>
       </Button>
       <Button
         type="button"

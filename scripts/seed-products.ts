@@ -72,6 +72,7 @@ async function main(): Promise<void> {
       create: {
         id: row.id.trim(),
         name: row.name.trim(),
+        source: "csv",
         productFamily: nullableStr(row.productFamily ?? ""),
         division: nullableStr(row.division ?? ""),
         subDivision: nullableStr(row.subDivision ?? ""),
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
       },
       update: {
         name: row.name.trim(),
+        source: "csv",
         productFamily: nullableStr(row.productFamily ?? ""),
         division: nullableStr(row.division ?? ""),
         subDivision: nullableStr(row.subDivision ?? ""),

@@ -8,6 +8,21 @@ export const dynamic = "force-dynamic";
 type JiraFieldMeta = { id: string; name: string };
 
 type JiraIssueFields = Record<string, unknown>;
+type JiraIssueRow = { key: string; issueId: string | null; fields: JiraIssueFields };
+
+type AllocationEntityTypeString = "PRODUCT" | "PROJECT" | "PROGRAM" | "INFRASTRUCTURE" | "TEAM";
+
+function sameDateOrNull(a: Date | null, b: Date | null): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return a.getTime() === b.getTime();
+}
+
+function sameStringOrNull(a: string | null, b: string | null): boolean {
+  const aa = a ?? null;
+  const bb = b ?? null;
+  return aa === bb;
+}
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -44,6 +59,39 @@ function normalizeJiraIssueKey(key: string | undefined): string | null {
   return t.toUpperCase();
 }
 
+function outwardLinkedProductKeys(fields: JiraIssueFields): string[] {
+  const links = fields["issuelinks"];
+  if (!Array.isArray(links) || links.length === 0) return [];
+
+  const keys: string[] = [];
+  for (const link of links) {
+    if (!link || typeof link !== "object") continue;
+    const outward = (link as { outwardIssue?: unknown }).outwardIssue;
+    if (!outward || typeof outward !== "object") continue;
+
+    const outwardKey =
+      "key" in outward ? normalizeJiraIssueKey(String((outward as { key?: unknown }).key)) : null;
+    if (!outwardKey) continue;
+
+    const outwardFields =
+      "fields" in outward && (outward as { fields?: unknown }).fields && typeof (outward as { fields?: unknown }).fields === "object"
+        ? ((outward as { fields?: unknown }).fields as Record<string, unknown>)
+        : null;
+    const outwardIssueTypeName =
+      outwardFields &&
+      typeof outwardFields.issuetype === "object" &&
+      outwardFields.issuetype !== null &&
+      "name" in (outwardFields.issuetype as Record<string, unknown>)
+        ? String((outwardFields.issuetype as { name?: unknown }).name)
+        : null;
+
+    if (outwardIssueTypeName !== "Product") continue;
+    keys.push(outwardKey);
+  }
+
+  return Array.from(new Set(keys));
+}
+
 function firstComponentName(fields: JiraIssueFields): string | null {
   const c = fields.components;
   if (!Array.isArray(c) || c.length === 0) return null;
@@ -75,6 +123,16 @@ function statusName(fields: JiraIssueFields): string {
     return String((s as { name: unknown }).name);
   }
   return "";
+}
+
+function issueTypeName(fields: JiraIssueFields): string | null {
+  const it = fields.issuetype;
+  if (it && typeof it === "object" && it !== null && "name" in it) {
+    const n = (it as { name?: unknown }).name;
+    const t = typeof n === "string" ? n.trim() : String(n ?? "").trim();
+    return t ? t : null;
+  }
+  return null;
 }
 
 function extractAdfPlainText(node: unknown): string | null {
@@ -287,6 +345,39 @@ function parseDate(iso: unknown): Date {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
+function parseNullableFloat(raw: string | null): number | null {
+  if (raw == null) return null;
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function splitSapProgFin(raw: string | null): { code: string | null; name: string | null } {
+  if (raw == null) return { code: null, name: null };
+  const t = raw.trim();
+  if (!t) return { code: null, name: null };
+  const parts = t.split(" - ");
+  if (parts.length === 1) return { code: t, name: null };
+  const code = parts[0]?.trim() || null;
+  const name = parts.slice(1).join(" - ").trim() || null;
+  return { code, name };
+}
+
+function allocationEntityTypeFromJira(raw: string | null): AllocationEntityTypeString | null {
+  if (raw == null) return null;
+  const t = raw.trim().toUpperCase();
+  if (!t) return null;
+  const map: Record<string, AllocationEntityTypeString> = {
+    PRODUCT: "PRODUCT",
+    PROJECT: "PROJECT",
+    PROGRAM: "PROGRAM",
+    INFRASTRUCTURE: "INFRASTRUCTURE",
+    TEAM: "TEAM",
+  };
+  return map[t] ?? null;
+}
+
 function normalizeJqlTypography(jql: string): string {
   return jql
     .replace(/[\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
@@ -320,7 +411,127 @@ function toFieldCatalog(rows: unknown): JiraFieldMeta[] {
   return out;
 }
 
-export async function GET() {
+function resolveProductFieldIds(
+  fields: JiraFieldMeta[],
+  env: {
+    productFamily?: string;
+    division?: string;
+    subDivision?: string;
+    team?: string;
+    sapProgFin?: string;
+    attractiveness?: string;
+    competitiveness?: string;
+    typeProduct?: string;
+  }
+): {
+  productFamily?: string;
+  division?: string;
+  subDivision?: string;
+  team?: string;
+  sapProgFin?: string;
+  attractiveness?: string;
+  competitiveness?: string;
+  typeProduct?: string;
+} {
+  const exclude = new Set<string>();
+  const resolve = (explicit: string | undefined, candidates: string[], regex?: RegExp) => {
+    const fromEnv = tryResolveFieldFromNameOrId(fields, explicit, exclude);
+    if (fromEnv) return fromEnv;
+    const id =
+      findFieldIdByExactNames(fields, candidates) ??
+      (regex ? findFieldIdByRegex(fields, regex) : undefined);
+    if (id) exclude.add(id);
+    return id;
+  };
+
+  const productFamily = resolve(env.productFamily, ["(RI) ProductFamily", "(RI) Product Family", "ProductFamily"]);
+  const division = resolve(env.division, ["(RI) DIVISION", "(RI) Division", "Division"]);
+  const subDivision = resolve(env.subDivision, ["(RI) SubDivision", "(RI) Sub Division", "SubDivision", "Sub-division"]);
+  const team = resolve(env.team, ["(RI) TEAM", "(RI) Team", "Team"]);
+  const sapProgFin = resolve(
+    env.sapProgFin,
+    [
+      "(RI) SAP PROG. FIN.",
+      "(RI) SAP PROG FIN",
+      "(RI) SAP PROG. FIN",
+      "(RI) SAP PROGR. FIN.",
+      "(RI) SAP PROGR FIN",
+      "(RI) SAP PROGRAM FIN",
+      "SAP PROG. FIN.",
+    ],
+    /\bsap\b.*\bprog(r|ram)?\b.*\bfin\b/i
+  );
+  const attractiveness = resolve(env.attractiveness, ["(RI) Attractiveness", "Attractiveness"]);
+  const competitiveness = resolve(env.competitiveness, ["(RI) Competitiveness", "Competitiveness"]);
+  const typeProduct = resolve(env.typeProduct, ["(RI) Type Product", "(RI) Type product", "Type Product"], /\btype\b.*\bproduct\b/i);
+
+  return {
+    productFamily,
+    division,
+    subDivision,
+    team,
+    sapProgFin,
+    attractiveness,
+    competitiveness,
+    typeProduct,
+  };
+}
+
+async function searchAllIssues(params: {
+  client: Version3Client;
+  jql: string;
+  fields: string[];
+  maxResults?: number;
+}): Promise<JiraIssueRow[]> {
+  const { client, jql, fields } = params;
+  const maxResults = params.maxResults ?? 100;
+
+  const issues: JiraIssueRow[] = [];
+  let nextPageToken: string | undefined;
+
+  while (true) {
+    const parsed = await client.issueSearch.searchForIssuesUsingJqlEnhancedSearchPost({
+      jql,
+      maxResults,
+      fields,
+      nextPageToken,
+    });
+
+    const batch = parsed.issues ?? [];
+    for (const issue of batch) {
+      const key = normalizeJiraIssueKey(issue.key);
+      if (!key || !issue.fields) continue;
+      const issueId = typeof issue.id === "string" && issue.id.trim() ? issue.id.trim() : null;
+      issues.push({ key, issueId, fields: issue.fields as JiraIssueFields });
+    }
+
+    if (batch.length === 0) break;
+    const resp = parsed as { isLast?: boolean; nextPageToken?: string };
+    if (resp.isLast === true) break;
+    const tokenNext =
+      typeof resp.nextPageToken === "string" && resp.nextPageToken.length > 0
+        ? resp.nextPageToken
+        : undefined;
+    if (tokenNext) {
+      nextPageToken = tokenNext;
+      continue;
+    }
+    if (batch.length < maxResults) break;
+    throw new Error("Jira returned a full page of issues but no nextPageToken; cannot load more pages.");
+  }
+
+  return issues;
+}
+
+export async function GET(request: Request) {
+  const debug = (() => {
+    try {
+      return new URL(request.url).searchParams.get("debug") === "1";
+    } catch {
+      return false;
+    }
+  })();
+
   let host: string;
   let email: string;
   let token: string;
@@ -365,6 +576,14 @@ export async function GET() {
     jiraFieldCatalog = [];
   }
 
+  const debugFieldHints = debug
+    ? {
+        sapLike: jiraFieldCatalog
+          .filter((f) => /\bsap\b/i.test(f.name) || /\bprog\b/i.test(f.name) || /\bfin\b/i.test(f.name))
+          .slice(0, 20),
+      }
+    : null;
+
   const resolvedYearFieldId = resolveYearFieldId(jiraFieldCatalog, fieldYearEnv, new Set());
   const resolvedInitiativeTypeFieldId = resolveInitiativeTypeFieldId(
     jiraFieldCatalog,
@@ -373,11 +592,24 @@ export async function GET() {
     new Set([resolvedYearFieldId].filter((x): x is string => Boolean(x)))
   );
 
+  const productFieldIds = resolveProductFieldIds(jiraFieldCatalog, {
+    productFamily: process.env.JIRA_FIELD_PRODUCT_FAMILY?.trim(),
+    division: process.env.JIRA_FIELD_DIVISION?.trim(),
+    subDivision: process.env.JIRA_FIELD_SUB_DIVISION?.trim(),
+    team: process.env.JIRA_FIELD_TEAM?.trim(),
+    sapProgFin: process.env.JIRA_FIELD_SAP_PROG_FIN?.trim(),
+    attractiveness: process.env.JIRA_FIELD_ATTRACTIVENESS?.trim(),
+    competitiveness: process.env.JIRA_FIELD_COMPETITIVENESS?.trim(),
+    typeProduct: process.env.JIRA_FIELD_TYPE_PRODUCT?.trim(),
+  });
+
   const jiraFields = Array.from(
     new Set([
       "summary",
       "status",
+      "issuetype",
       "components",
+      "issuelinks",
       "created",
       "updated",
       ...(resolvedYearFieldId ? [resolvedYearFieldId] : []),
@@ -385,72 +617,297 @@ export async function GET() {
     ])
   );
 
-  const maxResults = 100;
-  const issues: { key: string; fields: JiraIssueFields }[] = [];
+  const now = new Date();
+  const debugProducts: Array<Record<string, unknown>> = [];
+  const debugProductFieldIds = debug ? productFieldIds : null;
+
+  // 1) Sync Products → AllocationEntity (match by jiraIssueId → jiraKey → name; create id=jiraKey when missing)
+  const productJql = normalizeJqlTypography(process.env.JIRA_PRODUCT_JQL?.trim() || "issuetype = Product");
+  const productFields = Array.from(
+    new Set([
+      "summary",
+      "status",
+      "updated",
+      "issuetype",
+      "components",
+      ...Object.values(productFieldIds).filter((x): x is string => Boolean(x)),
+    ])
+  );
+
+  let productsFetched = 0;
+  let productsCreated = 0;
+  let productsUpdated = 0;
+  let productsIdCollision = 0;
 
   try {
-    let nextPageToken: string | undefined;
+    const productIssues = await searchAllIssues({ client, jql: productJql, fields: productFields, maxResults: 100 });
+    productsFetched = productIssues.length;
 
-    while (true) {
-      const parsed = await client.issueSearch.searchForIssuesUsingJqlEnhancedSearchPost({
-        jql,
-        maxResults,
-        fields: jiraFields,
-        nextPageToken,
-      });
+    for (const issue of productIssues) {
+      const summary = typeof issue.fields.summary === "string" ? issue.fields.summary.trim() : "";
+      if (!summary) continue;
+      const jiraUpdatedAt = parseDate(issue.fields.updated);
+      const nextJiraKey = issue.key;
+      const nextIssueId = issue.issueId;
+      const nextStatus = statusName(issue.fields) || null;
 
-      const batch = parsed.issues ?? [];
-      for (const issue of batch) {
-        const key = normalizeJiraIssueKey(issue.key);
-        if (key && issue.fields) {
-          issues.push({ key, fields: issue.fields as JiraIssueFields });
+      const nextProductFamily = readScalarField(issue.fields, productFieldIds.productFamily) ?? null;
+      const nextDivision = readScalarField(issue.fields, productFieldIds.division) ?? null;
+      const nextSubDivision = readScalarField(issue.fields, productFieldIds.subDivision) ?? null;
+      const nextTeam = readScalarField(issue.fields, productFieldIds.team) ?? null;
+      const sapProgFinRaw = readScalarField(issue.fields, productFieldIds.sapProgFin) ?? null;
+      const nextSap = splitSapProgFin(sapProgFinRaw);
+      const nextAttractiveness = parseNullableFloat(
+        readScalarField(issue.fields, productFieldIds.attractiveness)
+      );
+      const nextCompetitiveness = parseNullableFloat(
+        readScalarField(issue.fields, productFieldIds.competitiveness)
+      );
+      const nextTypeProduct = allocationEntityTypeFromJira(
+        readScalarField(issue.fields, productFieldIds.typeProduct)
+      );
+
+      const byIssueId = nextIssueId
+        ? await prisma.allocationEntity.findFirst({
+            where: { jiraIssueId: nextIssueId },
+            select: {
+              id: true,
+              name: true,
+              jiraKey: true,
+              jiraIssueId: true,
+              jiraStatus: true,
+              jiraUpdatedAt: true,
+              productFamily: true,
+              division: true,
+              subDivision: true,
+              team: true,
+              sapEotpCode: true,
+              sapEotpName: true,
+              attractiveness: true,
+              competitiveness: true,
+              type: true,
+            },
+          })
+        : null;
+
+      const byJiraKey =
+        byIssueId == null && nextJiraKey
+          ? await prisma.allocationEntity.findFirst({
+              where: { jiraKey: nextJiraKey },
+              select: {
+                id: true,
+                name: true,
+                jiraKey: true,
+                jiraIssueId: true,
+                jiraStatus: true,
+                jiraUpdatedAt: true,
+                productFamily: true,
+                division: true,
+                subDivision: true,
+                team: true,
+                sapEotpCode: true,
+                sapEotpName: true,
+                attractiveness: true,
+                competitiveness: true,
+                type: true,
+              },
+            })
+          : null;
+
+      const byName =
+        byIssueId == null && byJiraKey == null
+          ? await prisma.allocationEntity.findUnique({
+              where: { name: summary },
+              select: {
+                id: true,
+                name: true,
+                jiraKey: true,
+                jiraIssueId: true,
+                jiraStatus: true,
+                jiraUpdatedAt: true,
+                productFamily: true,
+                division: true,
+                subDivision: true,
+                team: true,
+                sapEotpCode: true,
+                sapEotpName: true,
+                attractiveness: true,
+                competitiveness: true,
+                type: true,
+              },
+            })
+          : null;
+
+      const existing = byIssueId ?? byJiraKey ?? byName;
+      const matchSource = byIssueId ? "jiraIssueId" : byJiraKey ? "jiraKey" : byName ? "name" : null;
+
+      if (existing) {
+        const nameTakenByOther =
+          existing.name !== summary
+            ? (await prisma.allocationEntity.findUnique({
+                where: { name: summary },
+                select: { id: true },
+              })) != null
+            : false;
+
+        const nextName = nameTakenByOther ? existing.name : summary;
+
+        if (nameTakenByOther && existing.name !== summary) {
+          console.warn(
+            {
+              jiraKey: nextJiraKey,
+              jiraIssueId: nextIssueId,
+              fromName: existing.name,
+              toName: summary,
+            },
+            "Cannot rename AllocationEntity to new Jira Product summary because name is already taken"
+          );
         }
-      }
 
-      if (batch.length === 0) break;
+        const changed =
+          existing.name !== nextName ||
+          !sameStringOrNull(existing.jiraKey, nextJiraKey) ||
+          !sameStringOrNull(existing.jiraIssueId, nextIssueId) ||
+          !sameStringOrNull(existing.jiraStatus, nextStatus) ||
+          !sameDateOrNull(existing.jiraUpdatedAt, jiraUpdatedAt) ||
+          (existing.productFamily ?? null) !== nextProductFamily ||
+          (existing.division ?? null) !== nextDivision ||
+          (existing.subDivision ?? null) !== nextSubDivision ||
+          (existing.team ?? null) !== nextTeam ||
+          (existing.sapEotpCode ?? null) !== (nextSap.code ?? null) ||
+          (existing.sapEotpName ?? null) !== (nextSap.name ?? null) ||
+          (existing.attractiveness ?? null) !== (nextAttractiveness ?? null) ||
+          (existing.competitiveness ?? null) !== (nextCompetitiveness ?? null) ||
+          (nextTypeProduct != null && String(existing.type) !== nextTypeProduct);
 
-      const resp = parsed as {
-        isLast?: boolean;
-        nextPageToken?: string;
-      };
-      if (resp.isLast === true) break;
-
-      const tokenNext =
-        typeof resp.nextPageToken === "string" && resp.nextPageToken.length > 0
-          ? resp.nextPageToken
-          : undefined;
-      if (tokenNext) {
-        nextPageToken = tokenNext;
+        if (changed) {
+          await prisma.allocationEntity.update({
+            where: { id: existing.id },
+            data: {
+              name: nextName,
+              jiraKey: nextJiraKey,
+              jiraIssueId: nextIssueId,
+              jiraStatus: nextStatus,
+              jiraUpdatedAt,
+              jiraLastSyncedAt: now,
+              productFamily: nextProductFamily,
+              division: nextDivision,
+              subDivision: nextSubDivision,
+              team: nextTeam,
+              sapEotpCode: nextSap.code,
+              sapEotpName: nextSap.name,
+              attractiveness: nextAttractiveness,
+              competitiveness: nextCompetitiveness,
+              ...(nextTypeProduct ? { type: nextTypeProduct } : {}),
+            },
+          });
+          productsUpdated++;
+        }
+        if (debug && debugProducts.length < 50) {
+          debugProducts.push({
+            jiraKey: nextJiraKey,
+            jiraIssueId: nextIssueId,
+            summary,
+            jiraUpdatedAt: jiraUpdatedAt.toISOString(),
+            matchSource,
+            entityId: existing.id,
+            entityNameBefore: existing.name,
+            entityNameAfter: nextName,
+            mapped: {
+              type: nextTypeProduct,
+              productFamily: nextProductFamily,
+              division: nextDivision,
+              subDivision: nextSubDivision,
+              team: nextTeam,
+              sapEotpCode: nextSap.code,
+              sapEotpName: nextSap.name,
+              attractiveness: nextAttractiveness,
+              competitiveness: nextCompetitiveness,
+            },
+            changed,
+          });
+        }
         continue;
       }
-      if (batch.length < maxResults) break;
 
-      return Response.json(
-        {
-          ok: false,
-          error:
-            "Jira returned a full page of issues but no nextPageToken; cannot load more pages.",
+      const idPreferred = issue.key;
+      const idCollision = await prisma.allocationEntity.findUnique({
+        where: { id: idPreferred },
+        select: { id: true },
+      });
+
+      const id = idCollision ? `PRD-JIRA-${issue.key}` : idPreferred;
+      if (idCollision) productsIdCollision++;
+
+      await prisma.allocationEntity.create({
+        data: {
+          id,
+          name: summary,
+          type: nextTypeProduct ?? "PRODUCT",
+          source: "jira",
+          jiraKey: issue.key,
+          jiraIssueId: issue.issueId,
+          jiraStatus: statusName(issue.fields) || null,
+          jiraUpdatedAt,
+          jiraLastSyncedAt: now,
+          productFamily: nextProductFamily,
+          division: nextDivision,
+          subDivision: nextSubDivision,
+          team: nextTeam,
+          sapEotpCode: nextSap.code,
+          sapEotpName: nextSap.name,
+          attractiveness: nextAttractiveness,
+          competitiveness: nextCompetitiveness,
         },
-        { status: 502 }
-      );
+      });
+      productsCreated++;
+      if (debug && debugProducts.length < 50) {
+        debugProducts.push({
+          jiraKey: nextJiraKey,
+          jiraIssueId: nextIssueId,
+          summary,
+          jiraUpdatedAt: jiraUpdatedAt.toISOString(),
+          matchSource,
+          created: true,
+          entityId: id,
+        });
+      }
     }
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Jira request failed";
-    return Response.json({ ok: false, error: message }, { status: 502 });
+    const message = e instanceof Error ? e.message : "Jira product sync failed";
+    return Response.json({ ok: false, error: message, step: "syncProducts" }, { status: 502 });
   }
 
-  const now = new Date();
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-
+  // Rebuild component → allocation entity map after product sync (names may have changed).
   const allocationEntityMap = new Map<string, string>();
-  const allEntities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
-  for (const p of allEntities) {
+  const allEntitiesAfterProducts = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
+  for (const p of allEntitiesAfterProducts) {
     allocationEntityMap.set(p.name.trim().toLowerCase(), p.id);
   }
 
-  for (const issue of issues) {
+  // 2) Sync Initiatives and map AllocationEntity
+  let initiativesFetched = 0;
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  let skippedNonInitiativeIssueType = 0;
+
+  let mappedByOutwardLink = 0;
+  let mappedByComponentFallback = 0;
+  let unmapped = 0;
+  let ambiguousMultipleOutwardLinks = 0;
+  let outwardLinkProductNotFound = 0;
+
+  let initiativeIssues: JiraIssueRow[] = [];
+  try {
+    initiativeIssues = await searchAllIssues({ client, jql, fields: jiraFields, maxResults: 100 });
+    initiativesFetched = initiativeIssues.length;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Jira initiative sync failed";
+    return Response.json({ ok: false, error: message, step: "syncInitiatives" }, { status: 502 });
+  }
+
+  for (const issue of initiativeIssues) {
     const id = issue.key;
     const f = issue.fields;
     if (!id) {
@@ -458,9 +915,23 @@ export async function GET() {
       continue;
     }
 
+    // Guard: the Jira filter/JQL can include non-Initiative items; do not upsert them into `Initiative`.
+    const itName = issueTypeName(f);
+    if (itName !== "Initiative") {
+      skippedNonInitiativeIssueType++;
+      if (debug && skippedNonInitiativeIssueType <= 20) {
+        console.warn(
+          { key: id, issuetype: itName ?? null },
+          "Skipping non-Initiative issue returned by Jira JQL/filter"
+        );
+      }
+      continue;
+    }
+
     const summary = typeof f.summary === "string" ? f.summary : "";
     const modifiedOn = parseDate(f.updated ?? f.created);
     const createdOn = parseDate(f.created);
+    const jiraUpdatedAt = parseDate(f.updated);
 
     const yearRaw = readScalarField(f, resolvedYearFieldId);
     const year = parseYear(yearRaw, modifiedOn);
@@ -468,12 +939,50 @@ export async function GET() {
     const jiraInitiativeType = readScalarField(f, resolvedInitiativeTypeFieldId);
     const componentsStr = firstComponentName(f);
 
+    const productKeys = outwardLinkedProductKeys(f);
+
     let allocationEntityId: string | null = null;
-    for (const comp of componentNamesFromFields(f)) {
-      const found = allocationEntityMap.get(comp.toLowerCase());
+    let linkedProductKey: string | null = null;
+    let mappingSource: string | null = null;
+
+    if (productKeys.length === 1) {
+      linkedProductKey = productKeys[0];
+      const found = await prisma.allocationEntity.findFirst({
+        where: {
+          OR: [{ jiraKey: linkedProductKey }, { id: linkedProductKey }],
+        },
+        select: { id: true },
+      });
       if (found) {
-        allocationEntityId = found;
-        break;
+        allocationEntityId = found.id;
+        mappingSource = "jira_outward_product_link";
+        mappedByOutwardLink++;
+      } else {
+        mappingSource = "jira_outward_product_link_no_match";
+        outwardLinkProductNotFound++;
+        console.warn(
+          { initiativeKey: id, linkedProductKey },
+          "Initiative has outward Product link but AllocationEntity not found"
+        );
+      }
+    } else if (productKeys.length > 1) {
+      mappingSource = "ambiguous_jira_outward_product_link";
+      ambiguousMultipleOutwardLinks++;
+      console.warn(
+        { initiativeKey: id, productKeys },
+        "Initiative has multiple outward Product links; not choosing one"
+      );
+    } else {
+      const firstComp = firstComponentName(f);
+      if (firstComp) {
+        const foundId = allocationEntityMap.get(firstComp.toLowerCase()) ?? null;
+        allocationEntityId = foundId;
+        mappingSource = foundId ? "jira_component_name_fallback" : "jira_component_name_fallback_no_match";
+        if (foundId) mappedByComponentFallback++;
+        else unmapped++;
+      } else {
+        mappingSource = "no_product_link_no_component";
+        unmapped++;
       }
     }
 
@@ -483,43 +992,141 @@ export async function GET() {
 
     const jiraTypeTrimmed = jiraInitiativeType?.trim() ? jiraInitiativeType.trim() : null;
 
-    await prisma.initiative.upsert({
+    const nextStatus = statusName(f);
+    const nextInitiativeType = resolvedInitiativeTypeFieldId ? jiraTypeTrimmed : null;
+
+    if (!existedBefore) {
+      await prisma.initiative.create({
+        data: {
+          id,
+          powerId: null,
+          summary,
+          status: nextStatus,
+          year,
+          components: componentsStr,
+          productGroup: null,
+          initiativeType: nextInitiativeType,
+          allocationEntityId,
+          jiraIssueId: issue.issueId,
+          jiraUpdatedAt,
+          jiraLastSyncedAt: now,
+          linkedProductKey,
+          componentNameFallback: componentsStr,
+          allocationMappingSource: mappingSource,
+          createdOn,
+          modifiedOn,
+        },
+      });
+      created++;
+      continue;
+    }
+
+    const existing = await prisma.initiative.findUnique({
       where: { id },
-      create: {
-        id,
-        powerId: null,
-        summary,
-        status: statusName(f),
-        year,
-        components: componentsStr,
-        productGroup: null,
-        initiativeType: resolvedInitiativeTypeFieldId ? jiraTypeTrimmed : null,
-        allocationEntityId,
-        createdOn,
-        modifiedOn,
-      },
-      update: {
-        summary,
-        status: statusName(f),
-        year,
-        components: componentsStr,
-        allocationEntityId,
-        ...(resolvedInitiativeTypeFieldId ? { initiativeType: jiraTypeTrimmed } : {}),
-        modifiedOn,
+      select: {
+        summary: true,
+        status: true,
+        year: true,
+        components: true,
+        initiativeType: true,
+        allocationEntityId: true,
+        jiraIssueId: true,
+        jiraUpdatedAt: true,
+        linkedProductKey: true,
+        componentNameFallback: true,
+        allocationMappingSource: true,
       },
     });
 
-    if (existedBefore) updated++;
-    else created++;
+    if (!existing) {
+      // Extremely rare (race), but keep behaviour explicit.
+      await prisma.initiative.create({
+        data: {
+          id,
+          powerId: null,
+          summary,
+          status: nextStatus,
+          year,
+          components: componentsStr,
+          productGroup: null,
+          initiativeType: nextInitiativeType,
+          allocationEntityId,
+          jiraIssueId: issue.issueId,
+          jiraUpdatedAt,
+          jiraLastSyncedAt: now,
+          linkedProductKey,
+          componentNameFallback: componentsStr,
+          allocationMappingSource: mappingSource,
+          createdOn,
+          modifiedOn,
+        },
+      });
+      created++;
+      continue;
+    }
+
+    const changed =
+      existing.summary !== summary ||
+      existing.status !== nextStatus ||
+      existing.year !== year ||
+      (existing.components ?? null) !== (componentsStr ?? null) ||
+      (existing.initiativeType ?? null) !== (nextInitiativeType ?? null) ||
+      (existing.allocationEntityId ?? null) !== (allocationEntityId ?? null) ||
+      (existing.jiraIssueId ?? null) !== (issue.issueId ?? null) ||
+      !sameDateOrNull(existing.jiraUpdatedAt, jiraUpdatedAt) ||
+      (existing.linkedProductKey ?? null) !== (linkedProductKey ?? null) ||
+      (existing.componentNameFallback ?? null) !== (componentsStr ?? null) ||
+      (existing.allocationMappingSource ?? null) !== (mappingSource ?? null);
+
+    if (changed) {
+      await prisma.initiative.update({
+        where: { id },
+        data: {
+          summary,
+          status: nextStatus,
+          year,
+          components: componentsStr,
+          allocationEntityId,
+          jiraIssueId: issue.issueId,
+          jiraUpdatedAt,
+          jiraLastSyncedAt: now,
+          linkedProductKey,
+          componentNameFallback: componentsStr,
+          allocationMappingSource: mappingSource,
+          ...(resolvedInitiativeTypeFieldId ? { initiativeType: nextInitiativeType } : {}),
+          modifiedOn,
+        },
+      });
+      updated++;
+    }
   }
 
   return Response.json({
     ok: true,
+    products: {
+      jql: productJql,
+      fetched: productsFetched,
+      created: productsCreated,
+      updated: productsUpdated,
+      idCollisions: productsIdCollision,
+      fieldsRequested: productFields,
+    },
+    ...(debug
+      ? { debug: { productFieldIds: debugProductFieldIds, fieldHints: debugFieldHints, products: debugProducts } }
+      : {}),
     jql,
-    fetched: issues.length,
+    fetched: initiativesFetched,
     created,
     updated,
     skipped,
+    mapping: {
+      mappedByOutwardLink,
+      mappedByComponentFallback,
+      unmapped,
+      ambiguousMultipleOutwardLinks,
+      outwardLinkProductNotFound,
+    },
+    skippedNonInitiativeIssueType,
     finishedAt: now.toISOString(),
     fieldsRequested: jiraFields,
     fieldMapping: {

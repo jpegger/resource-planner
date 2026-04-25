@@ -156,6 +156,15 @@ model AllocationEntity {
   id                 String                @id // PRD-XXXX — generated slug
   name               String                @unique // Jira Components value, exact match
   type               AllocationEntityType  @default(PRODUCT) @map("entity_type")
+  /// Provenance of this allocation entity (e.g. seeded from CSV vs created by Jira sync).
+  source             String?
+  /// Jira Product issue key (stable external reference; optional for CSV-seeded rows).
+  jiraKey            String?               @unique @map("jira_key")
+  /// Jira issue id (immutable) for the linked Jira Product issue.
+  jiraIssueId        String?               @map("jira_issue_id")
+  jiraStatus         String?               @map("jira_status")
+  jiraUpdatedAt      DateTime?             @map("jira_updated_at")
+  jiraLastSyncedAt   DateTime?             @map("jira_last_synced_at")
   productFamily      String? // Portfolio family (SALES, WORKPLACE, SMART ADMIN, etc.)
   division           String? // Division (e.g. CRPS, PDS)
   subDivision        String? // Sub-division within the division
@@ -301,8 +310,14 @@ model Initiative {
   components     String?                   // = Product (from Jira components field)
   productGroup   String?
   initiativeType String?
+  jiraIssueId    String?                   @map("jira_issue_id")
+  jiraUpdatedAt  DateTime?                 @map("jira_updated_at")
+  jiraLastSyncedAt DateTime?               @map("jira_last_synced_at")
   allocationEntityId String?          @map("allocation_entity_id")
   allocationEntity   AllocationEntity? @relation(fields: [allocationEntityId], references: [id])
+  linkedProductKey    String?               @map("linked_product_key")
+  componentNameFallback String?             @map("component_name_fallback")
+  allocationMappingSource String?           @map("allocation_mapping_source")
   createdOn      DateTime
   modifiedOn     DateTime
 

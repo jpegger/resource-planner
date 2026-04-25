@@ -86,6 +86,13 @@ JIRA_HOST=https://your-company.atlassian.net
 JIRA_EMAIL=your.email@company.be
 JIRA_TOKEN=your_api_token_from_jira_profile
 JIRA_FILTER_ID=12345
+
+# Optional overrides
+# Use a raw JQL instead of a saved filter:
+# JIRA_JQL=project = RI AND status in (Done, "In Progress", RFP, "Selected for Development") ORDER BY component, summary ASC
+#
+# JQL for syncing Product work items into AllocationEntity:
+# JIRA_PRODUCT_JQL=issuetype = Product
 ```
 
 Notes:
@@ -129,7 +136,9 @@ npm run db:seed:revenues      # optional (initiative revenue lines)
 - **Production import dataset** (generated from Excel, imported on demand): `scripts/datasets/prod-import/`
 - **Dev/test dataset**: `scripts/datasets/dev/`
 
-The production seed (`npm run db:seed:prod`) reads from `scripts/datasets/prod-import/` by default.\nIf you need to import from a different directory, set `SEED_DATASET_DIR=/absolute/or/relative/path`.
+The production seed (`npm run db:seed:prod`) reads from `scripts/datasets/prod-import/` by default.
+
+If you need to import from a different directory, set `SEED_DATASET_DIR=/absolute/or/relative/path`.
 
 ### Seed flags (production seed)
 
@@ -153,11 +162,19 @@ Notes:
 
 The test suite includes SQL/view validation tests and **requires a running Postgres** at `DATABASE_URL`:
 
+### Layer 1 (SQL) tests
+
 ```bash
 npm test
 ```
 
 If you see `Can't reach database server at 127.0.0.1:5432`, start the DB (`npm run db:up`) or fix `DATABASE_URL`.
+
+Note for Cursor/IDE-run commands: shells may not automatically load your `.env`. If tests fail with `P1001` but your DB is running, run:
+
+```bash
+DATABASE_URL=postgresql://admin:admin@localhost:5432/resource_planner?schema=public npm test
+```
 
 ### Layer 2 (API) tests
 
@@ -184,6 +201,27 @@ Terminal 2 (while `npm run dev` is running):
 ```bash
 npm run test:ui
 ```
+
+---
+
+## Jira sync (`GET /api/jira/sync`)
+
+`/api/jira/sync` performs a two-step sync:
+
+1) **Products** (`issuetype = Product`, or `JIRA_PRODUCT_JQL`) → upserts `AllocationEntity`
+   - Match order:
+     - **`jiraIssueId`**: `AllocationEntity.jiraIssueId === Jira issue id` (most stable)
+     - Else **`jiraKey`**: `AllocationEntity.jiraKey === Jira Product key`
+     - Else **exact name**: `AllocationEntity.name === Jira Product summary.trim()` (CSV-seeded rows before first sync attaches ids)
+   - If a Product is renamed in Jira, the sync updates `AllocationEntity.name` to the new summary **when possible** (if the new name is already taken by another row, it logs a warning and keeps the old name).
+   - If not found, creates a new allocation entity with `id = jiraKey` (collision guard falls back to `PRD-JIRA-${jiraKey}`)
+   - Sets Jira metadata fields on the allocation entity (`jiraKey`, `jiraIssueId`, `jiraStatus`, timestamps)
+   - Sets `AllocationEntity.source = "jira"` only for Jira-created entities (`seed-products.ts` sets `"csv"`)
+
+2) **Initiatives** (`JIRA_JQL` or `JIRA_FILTER_ID`) → upserts `Initiative` and sets `allocationEntityId` using:
+   - Preferred mapping: exactly one outward Product issue link (`issuelinks[].outwardIssue` of issuetype `"Product"`)
+   - Fallback: first initiative component name → `AllocationEntity.name` match
+   - Ambiguity: multiple outward Product links → no silent choice; stored as an ambiguous mapping source
 
 ---
 

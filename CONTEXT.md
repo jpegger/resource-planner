@@ -121,8 +121,7 @@ If **both** are present (rare), **man-days** take precedence for FTE so the same
 
 ### 2.8 Power BI Compatibility Notes
 
-- `product_group` values containing `&` (e.g. `CLOUD & SECURITY`) break Power BI's query folding. The view uses `REPLACE(i."productGroup", '&', 'and')` to sanitise this.
-- NULL values in slicer fields also break DirectQuery button slicers. The view uses `COALESCE(..., 'Unassigned')` on `product_group`.
+- `product_group` was removed from `v_allocation_costs` and `v_revenues`. The canonical grouping is now the allocation-entity dimensions (not an initiative-level grouping). If you need this dimension again later, add it to `allocation_entity` and expose it from the views.
 - The `::` cast syntax is avoided in the view — `CAST(... AS float)` is used instead for ODBC compatibility.
 - `<>` is used instead of `!=` for the same reason.
 - **Enum columns must always be cast to `VARCHAR` in any view exposed to Power BI.** PostgreSQL enum types are not foldable by the ODBC driver. Apply `CAST(col AS VARCHAR)` to every enum column in every Power BI-facing view.
@@ -371,7 +370,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `sap_eotp_code` / `sap_eotp_name` | From `Product` (`Unassigned` if null) |
 | `attractiveness` / `competitiveness` | Raw floats from `Product` (nullable) |
 | `man_days` / `quantity` | Raw allocation fields (for validation / BI) |
-| `product_group` | Higher grouping (`&` → `and`, NULL → `Unassigned`) |
+| `jira_component_product` | Raw Jira component name from the initiative (traceability). |
 | `initiative_type` | Run / Evolution / Rollout / etc. |
 | `status` | Initiative status from Jira |
 | `resource_id` | Resource PK (MAT-xxx) |
@@ -508,10 +507,30 @@ Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) a
 |---|---|
 | Library | jira.js (Version3Client) — preferred over raw fetch calls |
 | Auth method | Basic auth: email + API token (not password) |
-| Source | Single JQL filter ID covering all relevant initiatives |
+| Source | Initiatives: JQL from `JIRA_JQL` (preferred) or saved filter `JIRA_FILTER_ID`. Products: JQL from `JIRA_PRODUCT_JQL` (default `issuetype = Product`). |
 | Pagination | 100 results per page, loop with startAt until all fetched (~1,200 initiatives) |
-| Strategy | Upsert — create new, update existing matched by jira_key |
-| Allocation entity link | After upsert, `allocationEntityId` (DB `allocation_entity_id`) is set when a Jira **component** string (split on comma) **case-insensitively matches** `AllocationEntity.name` (first match wins) |
+| Strategy | Upsert — initiatives matched by initiative key (`RI-xxx`); allocation entities matched for Product sync by `jiraIssueId` → `jiraKey` → `name` |
+| Allocation entity link | Initiative upsert sets `allocationEntityId` (DB `allocation_entity_id`) using the mapping priority below. **Important:** `AllocationEntity.name` must match Jira Initiative **component name** exactly (after trim) for auto prod update compatibility. |
+
+Mapping priority (Initiative → AllocationEntity):
+
+1. **Preferred**: exactly one Jira issue link where:
+   - link has an `outwardIssue`
+   - `outwardIssue.fields.issuetype.name === "Product"`
+   - resolve the allocation entity by `AllocationEntity.jiraKey` **or** by `AllocationEntity.id` (Jira-created entities use `id = jiraKey`)
+2. **Fallback**: no outward Product link → use the initiative’s first component name and match `AllocationEntity.name` (case-insensitive match as a fallback)
+3. **Ambiguous**: multiple outward Product links → do not choose; log and persist mapping source as ambiguous
+
+Product sync (Product → AllocationEntity):
+
+- Products are synced **first** in the same `/api/jira/sync` call.
+- Upsert / attach rule (in order):
+  - match by `AllocationEntity.jiraIssueId` (most stable)
+  - else match by `AllocationEntity.jiraKey`
+  - else match by **exact** `AllocationEntity.name === Jira Product summary.trim()` (CSV-seeded rows before first sync attaches ids)
+- If a Product is renamed in Jira, the sync updates `AllocationEntity.name` to the new summary **when possible** (if the new name is already taken by another row, it logs a warning and keeps the old name).
+- If not found, create a new AllocationEntity with `id = jiraKey` (collision guard: `PRD-JIRA-${jiraKey}`), `name = summary.trim()`, and `source = "jira"`.
+- CSV-seeded allocation entities set `source = "csv"` (see `seed-products.ts`).
 
 Required environment variables:
 
@@ -520,9 +539,15 @@ JIRA_HOST=https://your-company.atlassian.net
 JIRA_EMAIL=your.email@company.be
 JIRA_TOKEN=your_api_token_from_jira_profile
 JIRA_FILTER_ID=12345
+
+# Optional
+# JIRA_JQL=project = RI AND status in (Done, "In Progress", RFP, "Selected for Development") ORDER BY component, summary ASC
+# JIRA_PRODUCT_JQL=issuetype = Product
 ```
 
-> **Open question:** the custom field IDs for `year` and `initiativeType` (`customfield_xxxxx`) need to be confirmed by inspecting a live Jira API response before the sync route can be completed.
+Jira custom fields:
+
+- `year` and `initiativeType` are resolved by heuristics at runtime (the sync route loads Jira’s field catalog and tries common labels). Env overrides are available when needed (`JIRA_FIELD_YEAR`, `JIRA_FIELD_INITIATIVE_TYPE`, `JIRA_FIELD_INITIATIVE_TYPE_NAME`).
 
 ---
 
