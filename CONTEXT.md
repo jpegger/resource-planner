@@ -388,7 +388,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `fte_decimal` / `fte_percent` | See §2.7 — FTE from % or implied from man-days (staff only) |
 | `calculated_man_days` | See §2.6 — unified man-days / direct-cost quantity path |
 
-**Cost safeguards (implementation):** FTE and direct-cost quantity paths multiply by **`rate.nbrDaysPerYear` only** (see `createCostView` in `seed-production.ts` / `seed.ts`). **`dailyRate`** may still fall back to **`rate_standard`** when the individual rate row has no `dailyRate`; days/year do not.
+**Cost safeguards (implementation):** FTE and direct-cost quantity paths multiply by **`rate.nbrDaysPerYear` only** (see `createCostView` in `seed-production.ts` / `seed-dev.ts`). **`dailyRate`** may still fall back to **`rate_standard`** when the individual rate row has no `dailyRate`; days/year do not.
 
 **Key guarantee:** `internal_cost + external_cost + direct_cost = computed_cost` for every row.
 
@@ -706,7 +706,7 @@ Consolidated documentation of major changes since the initial design doc:
 - **Planning vs budget baseline (v1.7)** — **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**; **`takeSnapshot`** (`src/lib/snapshot.ts`) freezes **`computeEotpBreakdown`** + **`v_allocation_costs`** aggregates; baseline Excel via **`xlsx`** (`src/lib/baseline-parser.ts`). APIs: **`/api/snapshots`**, **`/api/baselines`**. UI **`/budget-comparison`**. Seed: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, **`dim_year`** in **`scripts/seed-production.ts`**. Power BI: **`dim_eotp`** bridges **`eotp`** on both detail views. **`getUserFromRequest`** (`src/lib/auth.ts`). README: Power BI setup for baseline comparison.
 - **EOTP definition catalog + routing UI (v1.6)** — Prisma **`EotpDefinition`** / table **`eotp_definition`**; optional **`eotp_definition_id`** on **`allocation_entity`** and **`eotp_routing`** (migration **`20260412130000_eotp_definition_catalog`**). Seeds: **`npm run db:seed:eotp`** (`EOTP-Budget-Owner.csv`); optional **`npm run db:backfill:eotp-routing-fks`**. APIs: **`GET /api/eotp-routing-target-options`**; **`GET/PATCH`** allocation-entity and eotp-routing routes resolve or persist definition links (**`src/lib/eotp-definition-resolve.ts`**, **`eotp-target-options.ts`**, **`eotp-routing-target-options-query.ts`**). Investment **EOTP routing** panel: main lines from **`eotp-main-from-view`**; **Exception Routing** title **aligned with Edit routing**; exception target combobox from **definitions only**; delete **Dialog**. **Tests:** **`tests/fixtures/load-csv.ts`** typing fix for Vitest. After markup changes, **`rm -rf .next`** / hard refresh avoids stale SSR hydration mismatches in dev.
 - **Investment detail layout + resources UX (v1.5)** — Modular **`InvestmentDetailClient`** and panels; **title** = name **·** year; year selector column-aligned with **Details**; **Budget Summary {year}** card (EOTP routing) top-right vs Details; **separator**; **Budget by initiative** + **Allocations** row. **Resources** screen: **`PANEL_CARD_CLASS`**, details/rates editing, rate **auto-save**, add-rate draft row, delete **modal**, **CRPS/PDS** direction validation, **`resource-display-name`**. **Prod seed:** **`RESSOURCES.csv`** read as **UTF-8**. Shared **`src/lib/panel-card.ts`**, **`resource-direction.ts`**, **`resource-display-name.ts`**.
-- **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. Plan notes: **`prisma/RENAME_BASELINE_PLAN.md`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
+- **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
 - **Investments list error UX (v1.4)** — **`GET /api/allocation-entities`** returns JSON **`{ error }`** on failure; **`/investments`** shows HTTP/Prisma errors and distinguishes empty DB vs filter mismatch.
 - **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`allocation_entity`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`allocation_entity_id`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (no legacy redirects in dev).
 - **Rate.nbrDaysPerYear NOT NULL** — **`rate.nbrDaysPerYear`** is required; **`v_allocation_costs`** uses only the individual rate row for days/year (no fallback to **`rate_standard`** for FTE multipliers). Migration backfills legacy nulls; **`RATES.csv`** / dev **`Rates.csv`** rows without days are skipped at seed. **`dailyRate`** may still **`COALESCE`** to **`rate_standard`** when missing.
@@ -720,7 +720,7 @@ Consolidated documentation of major changes since the initial design doc:
 - **Allocations CSV merge** — Duplicate MAT×RI rows: **sum** `quantity` (%); **first positive man-days** in CSV order wins (not summed).
 - **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `allocation_entity`.
 - **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost quantity path uses per-unit days from the individual rate or **1** if absent (see §2.6 — avoids treating missing licence rates as 200 “man-days”).
-- **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
+- **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed-dev.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
 - **Initiatives Product card (v1.2.2)** — Flat `InitiativeDTO` + `JSON.parse(JSON.stringify)` on the server list; client fetches full **`Product`** via `/api/products/[id]` (or list + name match) on selection so SAP/org fields display reliably despite `dynamic(..., { ssr: false })` (see §6.3). `initiatives-dynamic-shell.tsx` wraps the page client.
 - **Migrations** — When altering columns referenced by `v_allocation_costs`, migrations may need `DROP VIEW IF EXISTS v_allocation_costs` first.
 - **Repository** — Large or sensitive production CSVs may be gitignored; initiative/assignment exports are excluded from version control by policy.
@@ -790,9 +790,8 @@ deploy/
 prisma/
   schema.prisma                 ← Database schema (source of truth)
   migrations/                   ← Baseline + incremental (e.g. eotp_definition catalog)
-  RENAME_BASELINE_PLAN.md        ← Notes on allocation_entity rename + baseline procedure
 scripts/
-  seed.ts                       ← Dev seed from PowerApps CSV exports
+  seed-dev.ts                   ← Dev/test seed dataset
   seed-products.ts              ← Upsert AllocationEntity rows from PRODUCTS.csv (table `allocation_entity`)
   seed-production.ts            ← Prod seed + v_allocation_costs + v_eotp_costs + snapshot/baseline views + dim_eotp + dim_year seed
   eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
@@ -802,8 +801,8 @@ scripts/
   convert-eotp-routing-csv.ts   ← Legacy CSV → three-column EUR format
   rebuild-eotp-routing-csv.ts   ← Rebuild EOTP_ROUTING.csv from source export
   recreate-eotp-costs-view.ts    ← Recreate v_eotp_costs only
-  data/                         ← PowerApps CSV files (dev)
-  data-prod/                    ← Excel CSV files (production migration); EOTP_ROUTING.csv
+  datasets/dev/                 ← Dev/test CSV dataset
+  datasets/prod-import/         ← Production import dataset (generated from Excel)
 ```
 
 ---

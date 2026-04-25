@@ -124,6 +124,13 @@ npm run db:seed:routing       # optional (EOTP routing exceptions)
 npm run db:seed:revenues      # optional (initiative revenue lines)
 ```
 
+### Seed datasets (where CSVs live)
+
+- **Production import dataset** (generated from Excel, imported on demand): `scripts/datasets/prod-import/`
+- **Dev/test dataset**: `scripts/datasets/dev/`
+
+The production seed (`npm run db:seed:prod`) reads from `scripts/datasets/prod-import/` by default.\nIf you need to import from a different directory, set `SEED_DATASET_DIR=/absolute/or/relative/path`.
+
 ### Seed flags (production seed)
 
 ```bash
