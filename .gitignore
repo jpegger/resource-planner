@@ -54,7 +54,5 @@ next-env.d.ts
 /src/generated/prisma
 
 # Seed and prod CSV exports (never push; .gitignore does not untrack already-committed files)
-scripts/data/**
-scripts/data-prod/**
-scripts/data-prod-auto/**
+scripts/datasets/**
 

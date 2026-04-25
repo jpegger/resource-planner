@@ -1,15 +1,15 @@
 /**
- * Seed script — imports all 5 CSV exports into the database.
+ * Dev/test seed — imports the small dataset under `scripts/datasets/dev/`.
  *
  * Usage:
- *   npm run db:seed
+ *   npm run db:seed:dev
  *
  * Prerequisites:
  *   npm install --save-dev ts-node @types/node papaparse @types/papaparse
  *   npm install @prisma/client
  *   npx prisma migrate dev --name init
  *
- * Place your 5 CSV files in scripts/data/:
+ * Place your CSV files in scripts/datasets/dev/:
  *   Ressources.csv
  *   Rates.csv
  *   RateStandard.csv
@@ -37,7 +37,7 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = path.join(__dirname, "datasets", "dev");
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

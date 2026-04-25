@@ -23,8 +23,9 @@ export async function POST(): Promise<Response> {
     const repoRoot = process.cwd();
 
     const input =
+      process.env["PROD_IMPORT_XLSX_PATH"] ??
       "/mnt/c/Users/jegger/Paradigm/CRPS_Customer Relation Product & Strategy-Budget - Documents/Budget/Paradigm_Financials_Budget_v2.2_16.11.20241.xlsx";
-    const outDir = "scripts/data-prod-auto";
+    const outDir = "scripts/datasets/prod-import";
 
     const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
     const scriptPath = path.join(repoRoot, "scripts", "xlsx-to-prod-data-auto.ts");

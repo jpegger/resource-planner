@@ -143,7 +143,7 @@ export function InvestmentsListClient({
         <p className="text-muted-foreground mt-4 max-w-2xl text-sm">
           No allocation entities in this database. Import the catalog with{" "}
           <code className="bg-muted rounded px-1 py-0.5 text-xs">npm run db:seed:products</code>{" "}
-          (needs <code className="bg-muted rounded px-1 py-0.5 text-xs">scripts/data-prod/PRODUCTS.csv</code>
+          (needs <code className="bg-muted rounded px-1 py-0.5 text-xs">scripts/datasets/dev/PRODUCTS.csv</code>
           ). Use the same <code className="bg-muted rounded px-1 py-0.5 text-xs">DATABASE_URL</code> as{" "}
           <code className="bg-muted rounded px-1 py-0.5 text-xs">next dev</code>.
         </p>

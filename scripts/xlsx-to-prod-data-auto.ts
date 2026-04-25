@@ -264,11 +264,11 @@ async function main(): Promise<void> {
   const input =
     (args["input"] as string) ??
     "/mnt/c/Users/jegger/Paradigm/CRPS_Customer Relation Product & Strategy-Budget - Documents/Budget/Paradigm_Financials_Budget_v2.2_16.11.20241.xlsx";
-  const outDir = (args["outDir"] as string) ?? "scripts/data-prod-auto";
+  const outDir = (args["outDir"] as string) ?? "scripts/datasets/prod-import";
   const dryRun = Boolean(args["dryRun"]);
 
   const repoRoot = process.cwd();
-  const refDir = path.join(repoRoot, "scripts", "data-prod");
+  const refDir = path.join(repoRoot, "scripts", "datasets", "dev");
 
   const refAssignHeaderLine = readReferenceHeaderLine(path.join(refDir, "Assignement.csv"));
   const refResHeaderLine = readReferenceHeaderLine(path.join(refDir, "RESSOURCES.csv"));

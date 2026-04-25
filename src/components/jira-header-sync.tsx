@@ -64,7 +64,7 @@ export function JiraHeaderSync() {
       router.refresh();
       setStatus({
         kind: "ok",
-        text: `Generated prod_data_auto CSVs → ${payload.outDir ?? "scripts/data-prod-auto"}.`,
+        text: `Generated prod import CSVs → ${payload.outDir ?? "scripts/datasets/prod-import"}.`,
       });
     } catch (e) {
       setStatus({
@@ -131,7 +131,7 @@ export function JiraHeaderSync() {
         className="h-8 shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20"
         disabled={generating}
         onClick={generateProdDataAuto}
-        title="Generate scripts/data-prod-auto CSVs from Excel"
+        title="Generate scripts/datasets/prod-import CSVs from Excel"
       >
         {generating ? (
           <Loader2 className="size-4 animate-spin" aria-hidden />

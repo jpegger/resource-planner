@@ -1,5 +1,5 @@
 /**
- * Seed EOTP routing from scripts/data-prod/EOTP_ROUTING.csv.
+ * Seed EOTP routing from scripts/datasets/dev/EOTP_ROUTING.csv.
  *
  * CSV columns: productName, eotp, eopLabel, year, internal, external, direct, comment
  * — EUR amounts routed to the target EOTP per cost bucket (exceptions only).
@@ -19,7 +19,7 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(__dirname, "data-prod");
+const DATA_DIR = path.join(__dirname, "datasets", "dev");
 
 type RoutingRow = {
   productName: string;
@@ -48,7 +48,7 @@ function normalizeEopLabel(label: string): string {
 async function main(): Promise<void> {
   const filePath = path.join(DATA_DIR, "EOTP_ROUTING.csv");
   if (!fs.existsSync(filePath)) {
-    console.error(`Missing: ${path.join("scripts/data-prod", "EOTP_ROUTING.csv")}`);
+    console.error(`Missing: ${path.join("scripts/datasets/dev", "EOTP_ROUTING.csv")}`);
     process.exit(1);
   }
 

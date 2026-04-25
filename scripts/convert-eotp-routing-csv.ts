@@ -95,7 +95,7 @@ function routedEur(
 
 async function main(): Promise<void> {
   const inPath =
-    process.argv[2] ?? path.join(__dirname, "data-prod", "EOTP_ROUTING.csv");
+    process.argv[2] ?? path.join(__dirname, "datasets", "dev", "EOTP_ROUTING.csv");
   if (!fs.existsSync(inPath)) {
     console.error(`Missing file: ${inPath}`);
     process.exit(1);

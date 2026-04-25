@@ -1,5 +1,5 @@
 /**
- * Upserts products from `scripts/data-prod/PRODUCTS.csv`.
+ * Upserts products from `scripts/datasets/dev/PRODUCTS.csv`.
  *
  * Usage: `npm run db:seed:products`
  *
@@ -49,7 +49,7 @@ function nullableFloat(val: string): number | null {
 }
 
 async function main(): Promise<void> {
-  const filePath = path.join(__dirname, "data-prod", "PRODUCTS.csv");
+  const filePath = path.join(__dirname, "datasets", "dev", "PRODUCTS.csv");
   if (!fs.existsSync(filePath)) {
     console.error(`Missing: ${path.relative(process.cwd(), filePath)}`);
     process.exit(1);

@@ -1,5 +1,5 @@
 /**
- * Production seed — ID-linked CSVs under `scripts/data-prod/`.
+ * Production seed — regularly imported CSVs under `scripts/datasets/prod-import/`.
  *
  * JIRA: latin-1 · RESSOURCES / RATES / Assignement / RateStandard: utf-8 (BOM stripped).
  * Initiatives get `allocationEntityId` (DB column `allocation_entity_id`) from PRODUCTS + Jira Components (run `npm run db:seed:products` first).
@@ -11,8 +11,6 @@
  * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `allocation_entity` rows).
  * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod` (includes `v_revenues`)
  * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
- *
- * RateStandard.csv: required in data-prod, or falls back to `scripts/data/RateStandard.csv`.
  */
 
 import "dotenv/config";
@@ -35,30 +33,19 @@ const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
 });
 const prisma = new PrismaClient({ adapter });
-const DATA_DIR = path.join(__dirname, "data-prod");
-const AUTO_DATA_DIR = path.join(__dirname, "data-prod-auto");
-const DEV_DATA_DIR = path.join(__dirname, "data");
-const OVERRIDE_DIR = process.env["SEED_OVERRIDE_DIR"]
-  ? path.resolve(process.cwd(), process.env["SEED_OVERRIDE_DIR"])
+const PROD_IMPORT_DIR = path.join(__dirname, "datasets", "prod-import");
+const SEED_DATASET_DIR = process.env["SEED_DATASET_DIR"]
+  ? path.resolve(process.cwd(), process.env["SEED_DATASET_DIR"])
   : null;
-
-function resolveRateStandardPath(): string | null {
-  const prod = path.join(DATA_DIR, "RateStandard.csv");
-  if (fs.existsSync(prod)) return prod;
-  const dev = path.join(DEV_DATA_DIR, "RateStandard.csv");
-  return fs.existsSync(dev) ? dev : null;
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function resolveCsvPath(filename: string): string {
-  if (OVERRIDE_DIR) {
-    const overridePath = path.join(OVERRIDE_DIR, filename);
+  if (SEED_DATASET_DIR) {
+    const overridePath = path.join(SEED_DATASET_DIR, filename);
     if (fs.existsSync(overridePath)) return overridePath;
   }
-  const autoPath = path.join(AUTO_DATA_DIR, filename);
-  if (fs.existsSync(autoPath)) return autoPath;
-  return path.join(DATA_DIR, filename);
+  return path.join(PROD_IMPORT_DIR, filename);
 }
 
 function readCsv(filename: string, encoding: "latin1" | "utf8"): Record<string, string>[] {
@@ -246,12 +233,11 @@ async function seedResources(): Promise<void> {
 }
 
 async function seedRateStandard(): Promise<void> {
-  const csvPath = resolveRateStandardPath();
-  if (!csvPath) {
-    console.warn(
-      "  ⚠ No RateStandard.csv in data-prod or scripts/data — rate_standard skipped\n"
+  const csvPath = resolveCsvPath("RateStandard.csv");
+  if (!fs.existsSync(csvPath)) {
+    throw new Error(
+      `Missing RateStandard.csv. Expected at: ${path.relative(process.cwd(), csvPath)}`
     );
-    return;
   }
 
   console.log(`Seeding standard rates from ${path.relative(process.cwd(), csvPath)}...`);
@@ -833,17 +819,21 @@ async function main(): Promise<void> {
   }
 
   console.log("🌱 Production seed\n");
-  console.log(`   ${DATA_DIR}\n`);
+  console.log(`   ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)}\n`);
 
   const required = ["JIRA.csv", "RESSOURCES.csv", "RATES.csv", "Assignement.csv"];
   for (const f of required) {
     if (!fs.existsSync(resolveCsvPath(f))) {
-      console.error(`Missing: ${f} (looked in scripts/data-prod${OVERRIDE_DIR ? ` and ${OVERRIDE_DIR}` : ""})`);
+      console.error(
+        `Missing: ${f} (looked in ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)})`
+      );
       process.exit(1);
     }
   }
-  if (!resolveRateStandardPath()) {
-    console.error("Missing: RateStandard.csv in scripts/data-prod or scripts/data/RateStandard.csv");
+  if (!fs.existsSync(resolveCsvPath("RateStandard.csv"))) {
+    console.error(
+      `Missing: RateStandard.csv (looked in ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)})`
+    );
     process.exit(1);
   }
 

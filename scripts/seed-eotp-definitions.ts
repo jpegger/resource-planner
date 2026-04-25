@@ -1,5 +1,5 @@
 /**
- * Upserts canonical EOTP rows from `scripts/data-prod/EOTP-Budget-Owner.csv`.
+ * Upserts canonical EOTP rows from `scripts/datasets/dev/EOTP-Budget-Owner.csv`.
  *
  * Columns: Division, Budget Owner, Director, SubDivision, Team, Prog Fin (SAP code), Prog Fin lib (label).
  *
@@ -25,7 +25,7 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(__dirname, "data-prod");
+const DATA_DIR = path.join(__dirname, "datasets", "dev");
 const FILE = "EOTP-Budget-Owner.csv";
 
 function trimStr(v: unknown): string {

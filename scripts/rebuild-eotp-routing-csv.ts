@@ -1,5 +1,5 @@
 /**
- * Rebuild scripts/data-prod/EOTP_ROUTING.csv from the original wide routing export.
+ * Rebuild scripts/datasets/dev/EOTP_ROUTING.csv from the original wide routing export.
  *
  * Input CSV columns (expected headers):
  * Product,SAP Programme de Financement,Year,Assignement Type,
@@ -209,8 +209,8 @@ function mergeToWide(
 async function main(): Promise<void> {
   const sourcePath =
     process.env["EOTP_ROUTING_SOURCE"] ??
-    path.join(__dirname, "data-prod", "EOTP_ROUTING_SOURCE.csv");
-  const outPath = path.join(__dirname, "data-prod", "EOTP_ROUTING.csv");
+    path.join(__dirname, "datasets", "dev", "EOTP_ROUTING_SOURCE.csv");
+  const outPath = path.join(__dirname, "datasets", "dev", "EOTP_ROUTING.csv");
 
   if (!fs.existsSync(sourcePath)) {
     console.error(

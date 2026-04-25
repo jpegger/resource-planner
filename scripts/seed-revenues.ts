@@ -1,5 +1,5 @@
 /**
- * Seed InitiativeRevenue from scripts/data-prod/REVENU.csv (one row per CSV line; type = Mission).
+ * Seed InitiativeRevenue from scripts/datasets/dev/REVENU.csv (one row per CSV line; type = Mission).
  * Idempotent: delete-then-insert for affected initiatives.
  */
 
@@ -15,14 +15,14 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(__dirname, "data-prod");
-const OVERRIDE_DIR = process.env["SEED_OVERRIDE_DIR"]
-  ? path.resolve(process.cwd(), process.env["SEED_OVERRIDE_DIR"])
+const DATA_DIR = path.join(__dirname, "datasets", "dev");
+const SEED_DATASET_DIR = process.env["SEED_DATASET_DIR"]
+  ? path.resolve(process.cwd(), process.env["SEED_DATASET_DIR"])
   : null;
 
 function resolveCsvPath(filename: string): string {
-  if (OVERRIDE_DIR) {
-    const overridePath = path.join(OVERRIDE_DIR, filename);
+  if (SEED_DATASET_DIR) {
+    const overridePath = path.join(SEED_DATASET_DIR, filename);
     if (fs.existsSync(overridePath)) return overridePath;
   }
   return path.join(DATA_DIR, filename);
@@ -40,7 +40,7 @@ type ValidRow = { initiativeId: string; amount: number };
 async function main(): Promise<void> {
   const filePath = resolveCsvPath("REVENU.csv");
   if (!fs.existsSync(filePath)) {
-    console.error(`Missing: ${path.join("scripts/data-prod", "REVENU.csv")}`);
+    console.error(`Missing: ${path.join("scripts/datasets/dev", "REVENU.csv")}`);
     process.exit(1);
   }
 
