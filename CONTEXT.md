@@ -635,6 +635,23 @@ npm run dev   # → http://localhost:3000
 npm test
 ```
 
+**Layer 2 (API) tests** require a running dev server against the same DB:
+
+```bash
+# Terminal 1
+DATABASE_URL=postgresql://... npm run dev
+
+# Terminal 2
+npm run test:api
+```
+
+**Layer 3 (UI) smoke tests** use Playwright against that same running dev server:
+
+```bash
+# Terminal 2
+npm run test:ui
+```
+
 On a fresh clone or after schema updates, run **`npm run db:migrate`** (production-like) or **`npx prisma migrate dev`** (local dev, applies pending migrations and regenerates the client) before **`npm run dev`**.
 
 **Prisma client:** `src/generated/prisma` is **gitignored** — **`npm install`** runs **`prisma generate`** via **`postinstall`**. After schema changes, run **`npx prisma generate`** if needed. If **`next dev`** errors with table **`public.product`** (or other stale names) while the schema uses **`allocation_entity`**, delete **`.next`** and restart the dev server so Turbopack picks up the regenerated client.

@@ -159,6 +159,32 @@ npm test
 
 If you see `Can't reach database server at 127.0.0.1:5432`, start the DB (`npm run db:up`) or fix `DATABASE_URL`.
 
+### Layer 2 (API) tests
+
+Layer 2 tests hit real HTTP routes (no mocks) and require a running Next.js dev server pointed at the same DB.
+
+Terminal 1:
+
+```bash
+DATABASE_URL=postgresql://... npm run dev
+```
+
+Terminal 2:
+
+```bash
+npm run test:api
+```
+
+### Layer 3 (UI) smoke tests
+
+Layer 3 tests use Playwright against the same running dev server.
+
+Terminal 2 (while `npm run dev` is running):
+
+```bash
+npm run test:ui
+```
+
 ---
 
 ## Power BI notes (planning vs baseline)
