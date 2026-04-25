@@ -1,0 +1,66 @@
+---
+description: TypeScript strict mode rules and code quality patterns
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: false
+---
+
+# TypeScript — Quality Rules
+
+## Strict Mode
+
+- Strict mode is **on**. No `any`. No `@ts-ignore` without an explanatory comment.
+- `strictNullChecks` is active — always handle `null` and `undefined` explicitly.
+
+## Exports
+
+Use **named exports** for all components and utilities — never `default export`:
+
+```ts
+// Correct
+export function ResourceCard({ title }: ResourceCardProps): JSX.Element { ... }
+
+// Wrong
+export default function ResourceCard() { ... }
+```
+
+## Types and Interfaces
+
+- Prefer `type` for plain data shapes.
+- Use `interface` only when extending another type.
+- Props interfaces must be named `<ComponentName>Props`:
+
+```ts
+export type AllocationCardProps = {
+  allocationId: string;
+  resourceName: string;
+  isEditable: boolean;
+};
+```
+
+- All **exported functions must have explicit return types**.
+- Use **descriptive variable names with auxiliary verbs**: `isLoading`, `hasError`, `canEdit`,
+  `shouldRefetch`.
+
+## Prisma Types
+
+- Use Prisma's generated types from `src/generated/prisma` — never re-declare them manually.
+- Import them directly:
+
+```ts
+import type { Allocation, Resource, Initiative } from "@/generated/prisma";
+```
+
+## After Schema Changes
+
+```bash
+npx prisma generate      # regenerates client types
+rm -rf .next             # clears Turbopack cache
+npm run dev
+```
+
+## Code Quality
+
+- Co-locate types with the code that uses them.
+- Lift to `src/lib/` only when a type is shared across two or more modules.
+- No `console.log` in production code — use structured error logging only.
+- Delete dead code immediately — no commented-out blocks, no unused imports.

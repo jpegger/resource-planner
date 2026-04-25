@@ -1,0 +1,113 @@
+---
+description: Domain business logic — cost model, rate resolution, EOTP routing. Read before touching any calculation code.
+globs: ["src/lib/**/*.ts", "src/app/api/**/*.ts", "scripts/**/*.ts"]
+alwaysApply: false
+---
+
+# Business Logic — Cost Model
+
+> Read this file completely before touching any code that involves costs, rates,
+> allocations, or EOTP. Getting this wrong produces incorrect billing data.
+
+---
+
+## Resource Types
+
+Every resource belongs to one of three types. The type determines the entire cost calculation.
+
+| Type | Cost Formula |
+|---|---|
+| `INTERNAL` | `quantity × nbrDaysPerYear × effective_rate` (FTE path) **OR** `manDays × effective_rate` (man-days path) |
+| `EXTERNAL` | Same formulas as INTERNAL — different (higher) rates |
+| `DIRECT_COST` | `quantity × Rate.dailyRate` — unit model, not man-days |
+
+---
+
+## manDays vs. quantity — Precedence
+
+- If `manDays > 0`, it takes **precedence** over `quantity` for both cost and FTE calculations.
+- In practice the two fields are mutually exclusive (only 2 historical rows use both).
+- `nbrDaysPerYear` on the individual `Rate` row is **NOT NULL** — it is required.
+  **Never** fall back to `RateStandard.nbrDaysPerYear` for days. Only `dailyRate` may fall back.
+
+```
+FTE path:       cost = quantity  × Rate.nbrDaysPerYear × effective_rate
+Man-days path:  cost = manDays                         × effective_rate
+Direct cost:    cost = quantity  × Rate.dailyRate       (nbrDaysPerYear = 1.0 for licences)
+```
+
+---
+
+## Rate Resolution — Always by `initiative.year`
+
+Rates are **always** resolved using the `year` field of the **initiative**, never the current
+calendar year. A 2023 initiative always uses 2023 rates, even when consulted in 2026.
+
+**Resolution order:**
+
+1. Look for a `Rate` row matching `(resourceId, initiative.year)` → use its `dailyRate`.
+2. If not found, fall back to `RateStandard` matching `(type, initiative.year)` — INTERNAL or
+   EXTERNAL only.
+3. `DIRECT_COST` has **no** standard fallback. It always requires an individual `Rate` row.
+
+**Never use `new Date().getFullYear()` to select a rate.** Always use `initiative.year`.
+
+---
+
+## FTE / Man-Days Conversion
+
+```
+Man Days = quantity × nbrDaysPerYear        (e.g. 0.5 FTE × 200 days = 100 man-days)
+FTE %    = manDays  / nbrDaysPerYear × 100  (e.g. 60 days / 200      = 30% FTE)
+```
+
+Typical `nbrDaysPerYear` values: **200** internal staff, **220** external, **1.0** direct-cost.
+
+---
+
+## Cost Split — Three Buckets
+
+The `v_allocation_costs` view always produces three non-overlapping columns:
+
+```
+internal_cost + external_cost + direct_cost = computed_cost   (guaranteed for every row)
+```
+
+Never break this invariant when writing or modifying view SQL.
+
+---
+
+## EOTP Exception Routing
+
+EOTP routing stores **exception-only** EUR amounts. Anything not explicitly routed stays on
+the product's default `sapEotpCode` (the "main" bucket — a computed remainder).
+
+**Rules:**
+- POST/PATCH to `/api/allocation-entities/[id]/eotp-routing` must **reject** any `eotp` value
+  equal to the entity's `sapEotpCode`. The main bucket is never stored — it is always derived.
+- Always call `src/lib/eotp-routing-validation.ts` before any write to `eotp_routing`.
+- `EotpRouting` rows store EUR amounts (`internalAmount`, `externalAmount`, `directAmount`),
+  not percentages.
+- Unique constraint: `(allocationEntityId, year, eotp)` — one row per target code per year.
+
+---
+
+## `v_eotp_costs` Structure
+
+- **Non-main rows:** one line per exception routing row (target EOTP ≠ `sapEotpCode`).
+- **Main row** (`is_main_eotp = true`): amounts = product-year totals minus non-main routing.
+- Derived columns on every row: `cash_out = external_cost + direct_cost`,
+  `total_cost = internal_cost + external_cost + direct_cost`.
+
+To recreate only this view: `npm run db:recreate:eotp-costs` (requires `v_allocation_costs`).
+
+---
+
+## What Lives Where
+
+| Concern | Location |
+|---|---|
+| `computeEotpBreakdown()` | `src/lib/eotp.ts` |
+| EOTP target validation | `src/lib/eotp-routing-validation.ts` |
+| `v_allocation_costs` SQL | `createCostView()` in `scripts/seed-production.ts` |
+| `v_eotp_costs` SQL | `scripts/eotp-views.ts` (shared) |

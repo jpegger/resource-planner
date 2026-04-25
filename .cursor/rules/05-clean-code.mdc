@@ -1,0 +1,45 @@
+---
+description: Clean Code — pragmatic standards (concise, direct, no over-engineering, no obvious comments)
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+alwaysApply: false
+---
+
+# Clean Code — Pragmatic Standards
+
+## Core principles
+
+- Prefer the **smallest change that works** (KISS/YAGNI).
+- Keep each function focused (SRP); split only when it clarifies intent.
+- Remove duplication when it meaningfully reduces complexity (DRY).
+- Leave the codebase cleaner than you found it (Boy Scout rule).
+
+## Naming
+
+- Names must reveal intent. If you need a comment to explain a name, **rename it**.
+- Function names are **verb + noun** (`fetchResources`, `computeRollup`, `formatK`).
+- Boolean names read like questions: `isLoading`, `hasRouting`, `canEdit`, `shouldRefetch`.
+- Use `SCREAMING_SNAKE_CASE` for constants that are truly constant across the module.
+
+## Functions
+
+- Prefer **small functions**; avoid “do-everything” blocks.
+- Prefer **0–2 parameters**. If you need more, use a single options object.
+- Avoid surprising side effects. Don’t mutate inputs unless it’s clearly expected by the type/API.
+- Keep one level of abstraction per function (don’t mix parsing + I/O + formatting in one body).
+
+## Structure
+
+- Use **guard clauses**; keep the happy path last.
+- Prefer flat code over deep nesting (avoid nesting beyond 2 levels).
+- Compose small helpers rather than building “god functions”.
+- Co-locate code with its usage; avoid dumping single-use helpers into generic `utils`.
+
+## Comments (only when they add information)
+
+- Delete obvious comments and commented-out code.
+- Comments may explain **why** (constraints/trade-offs) — not what the code already states.
+
+## Before editing a file
+
+- Check what imports this module and what it imports.
+- If you change a signature or contract, update dependents in the **same** change.

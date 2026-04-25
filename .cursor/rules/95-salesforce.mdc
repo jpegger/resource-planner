@@ -1,0 +1,405 @@
+---
+description: Salesforce integration — jsforce client, SOQL queries, Calls for Resources object
+globs: ["src/lib/salesforce*.ts", "src/app/api/salesforce/**/*.ts"]
+alwaysApply: false
+---
+
+# Salesforce Integration
+
+## Context
+
+The app connects to Salesforce Commercial Office to read **Calls for Resources** — a custom
+Salesforce object (`Call_For_Resources__c`) with a child object **Call For Resources Line Items**
+(`Call_For_Resources_Line_Item__c`). This data is read-only from the app's perspective.
+Nothing is ever written back to Salesforce.
+
+The Salesforce org is the Brussels Capital Region (Paradigm) production instance.
+For dev/testing, use a sandbox — set `SF_LOGIN_URL=https://test.salesforce.com`.
+
+---
+
+## Library
+
+Use **`jsforce`** — the only supported Salesforce client library in this project.
+
+```bash
+npm install jsforce
+npm install --save-dev @types/jsforce
+```
+
+Never use raw `fetch` against the Salesforce REST API. Always go through the `jsforce`
+connection from the singleton.
+
+---
+
+## Client Singleton
+
+The connection is managed in `src/lib/salesforce.ts`. Never instantiate `new jsforce.Connection()`
+anywhere else.
+
+```ts
+// src/lib/salesforce.ts
+import jsforce from "jsforce";
+
+let conn: jsforce.Connection | null = null;
+
+export async function getSalesforceConnection(): Promise<jsforce.Connection> {
+  if (conn) return conn;
+
+  conn = new jsforce.Connection({
+    loginUrl: process.env.SF_LOGIN_URL ?? "https://login.salesforce.com",
+  });
+
+  await conn.login(
+    process.env.SF_USERNAME!,
+    process.env.SF_PASSWORD! + process.env.SF_SECURITY_TOKEN!
+  );
+
+  return conn;
+}
+```
+
+### Auth method
+
+Username + Password + Security Token (server-to-server). The password and security token
+are concatenated as a single string — this is the jsforce convention.
+
+```
+SF_PASSWORD + SF_SECURITY_TOKEN  →  passed as the second argument to conn.login()
+```
+
+---
+
+## Environment Variables
+
+These must be present in `.env.local` (dev) and in the OpenShift Secret (prod).
+Never commit real values. The `.env` file contains placeholder strings only.
+
+```env
+SF_CLIENT_ID=changeme
+SF_CLIENT_SECRET=changeme
+SF_USERNAME=changeme@paradigm.brussels
+SF_PASSWORD=changeme
+SF_SECURITY_TOKEN=changeme
+SF_LOGIN_URL=https://login.salesforce.com
+# For sandbox: SF_LOGIN_URL=https://test.salesforce.com
+```
+
+Add these six variables to `openshift/secret.yaml.example` alongside `DATABASE_URL`.
+
+---
+
+## API Name Discovery (run once)
+
+**Before writing any SOQL query**, run the describe script to get exact API field names.
+Salesforce UI labels ("Account Name", "WBS", "SAP Product Code") are not the same as
+API names. Custom fields end in `__c`; relationship traversal fields end in `__r`.
+
+```ts
+// scripts/sf-describe.ts  —  run with: npx tsx scripts/sf-describe.ts
+import { getSalesforceConnection } from "../src/lib/salesforce";
+
+async function describe() {
+  const conn = await getSalesforceConnection();
+
+  for (const objectName of [
+    "Call_For_Resources__c",
+    "Call_For_Resources_Line_Item__c",
+  ]) {
+    const meta = await conn.describe(objectName);
+    console.log(`\n=== ${objectName} ===`);
+    meta.fields.forEach(f =>
+      console.log(`${f.label.padEnd(45)} ${f.name}  (${f.type})`)
+    );
+  }
+}
+
+describe().catch(console.error);
+```
+
+Run this against the sandbox first. The output maps every UI label to its API name.
+Record the API names in a comment at the top of `src/lib/salesforce-queries.ts` for
+future reference — do not rely on memory or guesswork.
+
+---
+
+## SOQL Conventions
+
+### Object and field naming
+
+| Pattern | Meaning | Example |
+|---|---|---|
+| `Object__c` | Custom object or field | `Call_For_Resources__c` |
+| `Object__r` | Relationship traversal | `Account__r.Name` |
+| `(SELECT ... FROM ChildRelationship__r)` | Subquery for child records | see below |
+
+### Fetching parent + child in one query
+
+Use a **subquery** inside the parent SELECT. This is the correct way to fetch
+Calls for Resources with their line items — do not make two separate queries.
+
+```ts
+const soql = `
+  SELECT
+    Id,
+    Name,
+    Account__c,
+    Account__r.Name,
+    Contract__c,
+    Contract__r.ContractNumber,
+    Contract__r.Name,
+    Document_Status__c,
+    Signed_Date__c,
+    Counterpart_Reference__c,
+    Total_Price__c,
+    (
+      SELECT
+        Id,
+        Name,
+        Line_Item_Number__c,
+        Product_Name__c,
+        SAP_Product_Code__c,
+        Quantity__c,
+        Sales_Price__c,
+        Total_Price__c,
+        WBS__c,
+        Description__c,
+        Start_Date__c,
+        End_Date__c
+      FROM Call_For_Resources_Line_Items__r
+      ORDER BY Line_Item_Number__c ASC
+    )
+  FROM Call_For_Resources__c
+  WHERE Document_Status__c = 'Signed'
+  ORDER BY Name ASC
+`;
+```
+
+The child relationship name (`Call_For_Resources_Line_Items__r`) comes from the
+**relationship name** field on the lookup/master-detail field in Salesforce Setup,
+not from the object name. Verify it with the describe script above.
+
+### Filtering
+
+Build `WHERE` clauses dynamically from validated input — never concatenate raw user
+input into SOQL strings (SOQL injection risk).
+
+```ts
+const conditions: string[] = [];
+if (filters?.accountId) conditions.push(`Account__c = '${filters.accountId}'`);
+if (filters?.status)    conditions.push(`Document_Status__c = '${filters.status}'`);
+if (filters?.year)      conditions.push(`CALENDAR_YEAR(Signed_Date__c) = ${filters.year}`);
+const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+```
+
+For production, use jsforce's parameterised query helper when available to avoid
+injection risk entirely.
+
+### Pagination
+
+Salesforce returns a maximum of **2000 records per page**. Always handle pagination.
+
+For moderate datasets (<10 000 records), use auto-fetch:
+
+```ts
+const records: CallForResources[] = [];
+
+await conn
+  .query<CallForResources>(soql)
+  .on("record", (r) => records.push(r))
+  .on("end", () => console.log(`Fetched ${records.length} records`))
+  .on("error", (err) => { throw err; })
+  .run({ autoFetch: true, maxFetch: 10000 });
+```
+
+For large exports (>10 000 records), switch to Bulk API 2.0 — document that separately
+and do not implement it in the same route.
+
+---
+
+## TypeScript Types
+
+Define types in `src/lib/salesforce-queries.ts`. Always type the jsforce query
+result — `conn.query<T>()` accepts a generic.
+
+```ts
+export type SfLineItem = {
+  Id: string;
+  Name: string;
+  Line_Item_Number__c: string | null;
+  Product_Name__c: string | null;
+  SAP_Product_Code__c: string | null;
+  Quantity__c: number | null;
+  Sales_Price__c: number | null;
+  Total_Price__c: number | null;
+  WBS__c: string | null;
+  Description__c: string | null;
+  Start_Date__c: string | null;  // ISO date string
+  End_Date__c: string | null;
+};
+
+export type SfCallForResources = {
+  Id: string;
+  Name: string;
+  Account__c: string | null;
+  Account__r: { Name: string } | null;
+  Contract__c: string | null;
+  Contract__r: { ContractNumber: string; Name: string } | null;
+  Document_Status__c: string | null;
+  Signed_Date__c: string | null;
+  Counterpart_Reference__c: string | null;
+  Total_Price__c: number | null;
+  Call_For_Resources_Line_Items__r: {
+    totalSize: number;
+    records: SfLineItem[];
+  } | null;
+};
+```
+
+**All custom fields are nullable** — Salesforce returns `null` for empty fields, never
+`undefined`. Always guard with `?? null` or `?? 0` before using values in calculations.
+
+---
+
+## Query Functions
+
+All Salesforce query logic lives in `src/lib/salesforce-queries.ts`. Never write SOQL
+inline inside API route files.
+
+```ts
+// src/lib/salesforce-queries.ts
+import { getSalesforceConnection } from "./salesforce";
+import type { SfCallForResources } from "./salesforce-types";
+
+export async function fetchCallsForResources(filters?: {
+  accountId?: string;
+  year?: number;
+  status?: string;
+}): Promise<SfCallForResources[]> {
+  const conn = await getSalesforceConnection();
+
+  const conditions: string[] = [];
+  if (filters?.accountId) conditions.push(`Account__c = '${filters.accountId}'`);
+  if (filters?.status)    conditions.push(`Document_Status__c = '${filters.status}'`);
+  if (filters?.year)      conditions.push(`CALENDAR_YEAR(Signed_Date__c) = ${filters.year}`);
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const soql = `
+    SELECT Id, Name,
+      Account__c, Account__r.Name,
+      Contract__c, Contract__r.ContractNumber, Contract__r.Name,
+      Document_Status__c, Signed_Date__c,
+      Counterpart_Reference__c, Total_Price__c,
+      (
+        SELECT Id, Name, Line_Item_Number__c, Product_Name__c,
+          SAP_Product_Code__c, Quantity__c, Sales_Price__c,
+          Total_Price__c, WBS__c, Description__c,
+          Start_Date__c, End_Date__c
+        FROM Call_For_Resources_Line_Items__r
+        ORDER BY Line_Item_Number__c ASC
+      )
+    FROM Call_For_Resources__c
+    ${where}
+    ORDER BY Name ASC
+  `;
+
+  const result = await conn.query<SfCallForResources>(soql);
+  return result.records;
+}
+```
+
+---
+
+## API Route
+
+Salesforce routes live under `src/app/api/salesforce/`. They follow the same conventions
+as all other API routes in this project — Zod validation, try/catch, guard clauses first.
+
+```ts
+// src/app/api/salesforce/calls-for-resources/route.ts
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { fetchCallsForResources } from "@/lib/salesforce-queries";
+
+const querySchema = z.object({
+  year:      z.coerce.number().int().min(2020).max(2099).optional(),
+  accountId: z.string().optional(),
+  status:    z.string().optional(),
+});
+
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const { searchParams } = new URL(request.url);
+    const parsed = querySchema.safeParse(Object.fromEntries(searchParams));
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });
+    }
+
+    const records = await fetchCallsForResources(parsed.data);
+    return NextResponse.json(records);
+  } catch (err) {
+    console.error("Salesforce fetch error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch from Salesforce" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+---
+
+## File Structure
+
+```
+src/
+  lib/
+    salesforce.ts              <- connection singleton
+    salesforce-types.ts        <- SfCallForResources, SfLineItem types
+    salesforce-queries.ts      <- all SOQL query functions
+  app/
+    api/
+      salesforce/
+        calls-for-resources/
+          route.ts             <- GET handler
+scripts/
+  sf-describe.ts               <- run once to discover API names
+```
+
+---
+
+## Error Handling
+
+jsforce throws on auth failure, network errors, and SOQL syntax errors. All errors
+surface as generic 500 — never expose Salesforce error details to the client.
+
+Common errors and their causes:
+
+| Error message | Cause | Fix |
+|---|---|---|
+| `INVALID_LOGIN` | Wrong username/password/token combo | Check `SF_SECURITY_TOKEN` — it changes when you reset your password |
+| `INVALID_FIELD` | API name wrong in SOQL | Run `sf-describe.ts` to get the correct name |
+| `INVALID_TYPE` | Object API name wrong | Verify object name ends in `__c` |
+| `MALFORMED_QUERY` | SOQL syntax error | Check subquery parentheses and relationship name ends in `__r` |
+| Connection timeout | Sandbox may be sleeping | Sandbox orgs sleep after inactivity — first request wakes them, retry once |
+
+For sandbox environments, add a retry on the first connection attempt since sleeping
+sandboxes timeout on the first login request.
+
+---
+
+## Rules for Cursor
+
+1. **Never write SOQL inline in route files** — all queries go in `src/lib/salesforce-queries.ts`.
+2. **Always use the singleton** from `src/lib/salesforce.ts` — never create a new connection.
+3. **Always type query results** — use `conn.query<SfCallForResources>(soql)`, never `any`.
+4. **All custom Salesforce fields are nullable** — always handle `null` before using values.
+5. **Run `sf-describe.ts` first** when adding new fields — never guess API names.
+6. **Child records come from a subquery**, not a second query — use `FROM ChildRelationship__r`
+   inside parentheses in the parent SELECT.
+7. **Never write back to Salesforce** from this app — this integration is read-only.
+8. **Never log Salesforce credentials or raw error objects** to the console in production.
+9. **Use sandbox for dev** — set `SF_LOGIN_URL=https://test.salesforce.com` in `.env.local`.
+10. **Follow the same API route conventions** as all other routes — Zod, try/catch,
+    guard clauses, `{ error: string }` on failure, no raw Salesforce errors to the client.

@@ -1,0 +1,67 @@
+---
+description: Prisma 7 data access rules — singleton, queries, migrations
+globs: ["src/lib/**/*.ts", "src/app/api/**/*.ts", "prisma/**/*", "scripts/**/*.ts"]
+alwaysApply: false
+---
+
+# Prisma 7 — Data Access
+
+## Always Use the Singleton
+
+```ts
+import { prisma } from "@/lib/prisma";
+```
+
+**Never** instantiate `new PrismaClient()` anywhere else. The constructor requires the `PrismaPg`
+driver adapter — this is wired in `src/lib/prisma.ts` and must not be changed or duplicated.
+
+## Query Rules
+
+- Use Prisma's query builder for all standard CRUD operations.
+- Use `prisma.$queryRaw` / `prisma.$executeRaw` **only** when the query builder cannot express
+  the SQL (e.g., reading from `v_allocation_costs` or `v_eotp_costs`).
+- **Parameterise everything** — never concatenate user input into raw SQL strings.
+
+```ts
+// Correct
+const rows = await prisma.$queryRaw<CostRow[]>`
+  SELECT * FROM v_allocation_costs
+  WHERE initiative_year = ${year}
+`;
+
+// Wrong — never do this
+const rows = await prisma.$queryRaw(`SELECT * FROM ... WHERE year = ${year}`);
+```
+
+## Cost Is Never Stored
+
+All cost figures are computed by `v_allocation_costs`. **Never:**
+- Add a `computed_cost` column to any table
+- Calculate costs inside application code
+- Cache cost numbers in the database
+
+Always point cost queries at the view.
+
+## Prisma 7 Breaking Changes (Reference)
+
+| Area | Behaviour |
+|---|---|
+| `datasource url` | Removed from `schema.prisma` — lives only in `prisma.config.ts` and the runtime adapter |
+| `PrismaClient` | Requires `new PrismaClient({ adapter })` where `adapter = new PrismaPg(...)` |
+| Generator | `prisma-client` (not `prisma-client-js`) with explicit `output: src/generated/prisma` |
+| Seed runner | `tsx` (not `ts-node`) |
+| Generated client | Gitignored — rebuilt by `npm install` via `postinstall` hook |
+
+## Migrations
+
+- Run `npm run db:migrate` (alias for `prisma migrate deploy`) after pulling schema changes.
+- Use `npx prisma migrate dev` locally to apply + auto-regenerate the client.
+- When a migration alters columns referenced by `v_allocation_costs`, add
+  `DROP VIEW IF EXISTS v_allocation_costs` **before** the column change.
+  `createCostView()` already drops dependent EOTP views before recreating the cost view.
+
+## Schema Source of Truth
+
+`prisma/schema.prisma` is the single source of truth for the database schema.
+The physical table name for `AllocationEntity` is `allocation_entity` (snake_case).
+The FK columns `allocationEntityId` in Prisma map to `allocation_entity_id` in the DB.

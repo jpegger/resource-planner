@@ -1,0 +1,52 @@
+---
+description: UI styling — Tailwind CSS, shadcn/ui, brand colours, and table conventions
+globs: ["src/app/**/*.tsx", "src/components/**/*.tsx"]
+alwaysApply: false
+---
+
+# Styling — Tailwind CSS & shadcn/ui
+
+## Brand Colours (be.brussels)
+
+These are the only approved colours for the application shell. Define them as custom Tailwind
+tokens in `tailwind.config.ts` — **never hardcode hex values inline** in component files.
+
+| Role | Hex | Tailwind token (example) |
+|---|---|---|
+| Sidebar background | `#1a2f4e` | `bg-sidebar` |
+| Primary / interactive | `#185FA5` | `bg-primary` |
+| Page background | `#f4f6f8` | `bg-surface` |
+
+## Component Library
+
+- Use **shadcn/ui** for all form controls, dialogs, comboboxes (cmdk), and data tables.
+- Do **not** mix raw HTML `<input>`, `<select>`, or `<button>` elements with shadcn inputs
+  in the same form.
+- Use **semantic HTML elements** wherever possible (`<nav>`, `<main>`, `<section>`, `<article>`).
+- **No inline styles** (`style={{}}`).
+- **No global CSS imports** inside component files — Tailwind utility classes only.
+
+## Table Column Headers
+
+Budget, assignment, and EOTP tables must always use these exact column labels — no variations:
+
+```
+Internal | External | Direct | Total
+```
+
+## Monetary Display
+
+- All monetary values in tables use the **`€k` abbreviation** via the shared `formatK` helper.
+- Apply `formatK` consistently across initiative, assignment, and EOTP tables.
+- Do not format currency inline with `toLocaleString` or custom logic.
+
+## Images and Fonts
+
+- Use `next/image` for all images — automatic lazy loading and optimisation.
+- Use `next/font` to load fonts — prevents layout shift (CLS).
+
+## Performance
+
+- Use `React.memo` to prevent unnecessary re-renders of expensive table rows or cards.
+- Minimise state updates — only call `setState` when the value actually changes.
+- Clean up event listeners and timers in `useEffect` return functions.

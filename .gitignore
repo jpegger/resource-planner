@@ -21,7 +21,9 @@
 /build
 
 # misc
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 .DS_Store
 *.pem
 # JWT/cert files for Salesforce auth (local only)

@@ -1,0 +1,106 @@
+---
+description: API route structure, validation, error handling, and security
+globs: ["src/app/api/**/*.ts"]
+alwaysApply: false
+---
+
+# API Routes — Conventions
+
+## Standard Route Template
+
+Every API route follows this exact structure:
+
+```ts
+// src/app/api/allocations/route.ts
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+
+const createSchema = z.object({
+  initiativeId: z.string(),
+  resourceId: z.string(),
+  quantity: z.number().optional(),
+  manDays: z.number().optional(),
+});
+
+export async function POST(request: Request): Promise<Response> {
+  try {
+    const body = await request.json();
+    const parsed = createSchema.safeParse(body);
+
+    // Guard clauses first — fail fast
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+
+    // Business logic via src/lib/ — never inline here
+    const result = await createAllocation(parsed.data);
+
+    return NextResponse.json(result, { status: 201 });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+```
+
+## Rules
+
+- **One named export per HTTP method:** `GET`, `POST`, `PATCH`, `DELETE`.
+- **Always validate** request bodies with Zod before touching the database.
+- **Always wrap in `try/catch`** — return `{ error: string }` JSON on failure.
+- **HTTP status codes:**
+
+| Situation         | Status |
+|-------------------|--------|
+| Success (read)    | 200    |
+| Success (created) | 201    |
+| Invalid input     | 400    |
+| Not found         | 404    |
+| Server error      | 500    |
+
+## Guard Clause Pattern
+
+Place error returns first; the happy path is always last:
+
+```ts
+if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+if (!entity)         return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+// happy path
+return NextResponse.json(entity);
+```
+
+## Security
+
+- **Never expose secrets in client-side code** — env vars are server-only.
+- **Never commit `.env`** to version control.
+- Never concatenate user input into SQL strings — use Prisma or parameterised queries.
+- Validate all inputs with Zod on the server — never trust client-side validation alone.
+- Use HTTPS for all external calls (Jira API, etc.).
+
+## Jira Sync
+
+- Use `jira.js` (`Version3Client`) — not raw `fetch`.
+- Paginate at 100 results per page using `startAt`.
+- Match `AllocationEntity` by case-insensitive component name (first match wins).
+
+## Active Canonical Routes
+
+| Route | Methods |
+|---|---|
+| `/api/allocations` | GET, POST |
+| `/api/allocations/[id]` | PATCH, DELETE |
+| `/api/resources` | GET |
+| `/api/resources/[id]` | GET, PATCH, DELETE |
+| `/api/rates` | GET, POST |
+| `/api/rates/[id]` | PATCH, DELETE |
+| `/api/allocation-entities` | GET |
+| `/api/allocation-entities/[id]` | GET, PATCH, DELETE |
+| `/api/allocation-entities/with-budget` | GET |
+| `/api/allocation-entities/[id]/budget` | GET |
+| `/api/allocation-entities/[id]/eotp-routing` | GET, POST |
+| `/api/allocation-entities/[id]/eotp-routing/[routingId]` | PATCH, DELETE |
+| `/api/allocation-entities/[id]/eotp-main-from-view` | GET |
+| `/api/initiative-allocation-costs` | GET |
+| `/api/jira/sync` | GET |

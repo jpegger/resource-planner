@@ -1,0 +1,52 @@
+---
+description: Next.js 14 App Router structure, routing, and naming conventions
+globs: ["src/app/**/*.ts", "src/app/**/*.tsx"]
+alwaysApply: false
+---
+
+# Next.js App Router — Structure & Conventions
+
+## Directory Layout
+
+```
+src/
+  app/
+    layout.tsx                         ← Root layout only (nav sidebar, header)
+    page.tsx                           ← Redirect to /investments
+    investments/
+      page.tsx                         ← Server Component — fetches entity list
+      InvestmentsListClient.tsx        ← "use client" list (filters + table)
+      [id]/
+        page.tsx                       ← Server Component shell (loads entity + resources)
+        InvestmentDetailClient.tsx     ← "use client" detail view
+    resources/page.tsx                 ← In progress
+    api/
+      [resource]/route.ts              ← Collection: GET, POST
+      [resource]/[id]/route.ts         ← Instance: GET, PATCH, DELETE
+  lib/                                 ← Pure business logic — no Next.js imports here
+  generated/prisma/                    ← Auto-generated — NEVER edit manually
+```
+
+## Rules
+
+- Keep route handlers **thin** — move all business logic to `src/lib/`.
+- **Feature-based co-location:** keep related components, styles, and tests together.
+- Avoid deeply nested directories; keep structure flat.
+- Use **kebab-case** for directory names (e.g. `auth-form`).
+- Use **PascalCase** for component filenames (e.g. `ResourceCard.tsx`).
+- Use **absolute imports** via the `@/` alias from `tsconfig.json`.
+  Never use relative paths like `../../components/...`.
+- Use `loading.tsx` for route-level loading states.
+- Use `error.tsx` for route-level error boundaries.
+- **Canonical routes only.** No legacy paths (`/api/products`, `/api/test/*`, `/initiatives`)
+  are active — do not create redirects or references to them.
+
+## Naming Conventions
+
+| Artefact         | Convention                            |
+|------------------|---------------------------------------|
+| Components       | `PascalCase.tsx`                      |
+| Hooks            | `useHookName.ts`                      |
+| API routes       | `route.ts` (one file per directory)   |
+| Lib utilities    | `camelCase.ts`                        |
+| Types/interfaces | `types.ts` or co-located in module    |

@@ -1,0 +1,74 @@
+---
+description: PostgreSQL view SQL rules for Power BI / ODBC compatibility
+globs: ["scripts/**/*.ts", "prisma/**/*"]
+alwaysApply: false
+---
+
+# PostgreSQL / Power BI View Rules
+
+Power BI connects via an ODBC driver directly to `v_allocation_costs` and `v_eotp_costs`.
+The ODBC driver has strict compatibility requirements. Follow every rule below when writing
+or modifying any view exposed to Power BI.
+
+## SQL Compatibility Rules
+
+| Rule | Correct | Wrong |
+|---|---|---|
+| Type casting | `CAST(col AS FLOAT)` | `col::float` |
+| Inequality operator | `col <> 'x'` | `col != 'x'` |
+| Enum columns | `CAST(resource_type AS VARCHAR)` | raw PostgreSQL enum |
+| Nullable slicer fields | `COALESCE(col, 'Unassigned')` | NULL in slicer columns |
+| String with `&` | `REPLACE(col, '&', 'and')` | raw `&` in grouping strings |
+
+**Every enum column in every Power BI-facing view must be cast to `VARCHAR`.**
+PostgreSQL enum types are not foldable by the ODBC driver.
+
+## Null Safety
+
+NULL values in slicer or filter fields break Power BI's DirectQuery button slicers.
+Apply `COALESCE(..., 'Unassigned')` to:
+- `product_group`
+- `product_name`
+- `product_family`, `division`, `sub_division`, `team`
+- `sap_eotp_code`, `sap_eotp_name`
+
+## Cost Column Invariant
+
+Every row in `v_allocation_costs` must satisfy:
+
+```sql
+internal_cost + external_cost + direct_cost = computed_cost
+```
+
+Never break this. The three columns are non-overlapping by resource type.
+
+## FTE / Days Columns
+
+- `effective_days_per_year` comes from `rate.nbrDaysPerYear` on the joined individual rate row
+  only — **no fallback to `rate_standard`** for this column.
+- `fte_decimal` and `fte_percent` are 0 for `DIRECT_COST` rows.
+- Use `COALESCE(..., 0)` on FTE columns to avoid NULLs in DirectQuery.
+
+## Direct Cost Without a Rate Row
+
+If no `Rate` row exists for a `DIRECT_COST` resource in the initiative year:
+- `effective_days_per_year` defaults to **1** (unit multiplier), not 200.
+- This prevents treating a missing licence rate as 200 "man-days".
+
+## Dropping Views Before Migrations
+
+When a migration alters a column that `v_allocation_costs` depends on:
+
+```sql
+-- Add this at the top of the migration
+DROP VIEW IF EXISTS v_eotp_costs;
+DROP VIEW IF EXISTS v_allocation_costs;
+
+-- ... ALTER TABLE statements ...
+
+-- Views are recreated by running:
+-- SEED_VIEW_ONLY=1 npm run db:seed:prod
+```
+
+`createCostView()` in `seed-production.ts` already drops dependent EOTP views before
+recreating `v_allocation_costs`, so calling it is sufficient.

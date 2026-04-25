@@ -1,0 +1,61 @@
+---
+description: Server vs. Client Component boundaries for Next.js App Router
+globs: ["src/app/**/*.tsx", "src/components/**/*.tsx"]
+alwaysApply: false
+---
+
+# Server vs. Client Component Boundaries
+
+## The Rule
+
+**Default to Server Components.** Add `"use client"` only when the component needs:
+- Browser APIs (`window`, `document`, `localStorage`, …)
+- Event handlers (`onClick`, `onChange`, …)
+- React hooks (`useState`, `useEffect`, `useRef`, …)
+
+## Data Fetching
+
+- **Never fetch data inside Client Components.**
+  Pass data as props from Server Components, or fetch from an API route on the client.
+- **No `useEffect` for data fetching** — use Server Components or dedicated API routes.
+- Render as much as possible on the server to reduce the client-side JS bundle.
+
+## Dynamic Shell Pattern
+
+When a Client Component requires `dynamic(..., { ssr: false })`, wrap it in a Server Component
+shell. Follow the existing `investments-dynamic-shell.tsx` pattern:
+
+```tsx
+// app/investments/[id]/page.tsx  ← Server Component shell
+import { InvestmentDetailClient } from "@/app/investments/[id]/InvestmentDetailClient";
+import { getInvestmentEntityForDetail, getResourcesForPicker } from "@/lib/investment-server-data";
+
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const decodedId = decodeURIComponent(id.trim());
+  const [investment, resources] = await Promise.all([
+    getInvestmentEntityForDetail(decodedId),
+    getResourcesForPicker(),
+  ]);
+  return (
+    <InvestmentDetailClient
+      investmentId={id}
+      initialInvestment={investment}
+      initialResources={resources}
+    />
+  );
+}
+```
+
+When a Client Component **must** use `dynamic(..., { ssr: false })`, wrap it in a small client
+shell that imports the heavy module — same idea, optional `InvestmentDetailShell` pattern.
+
+## Dynamic Imports for Heavy Components
+
+```ts
+import dynamic from "next/dynamic";
+
+const HeavyComponent = dynamic(() => import("@/components/HeavyComponent"), {
+  ssr: false,
+});
+```

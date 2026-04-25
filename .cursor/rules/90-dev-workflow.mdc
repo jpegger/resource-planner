@@ -1,0 +1,78 @@
+---
+description: Development workflow — environment variables, seed order, schema changes
+alwaysApply: false
+---
+
+# Development Workflow
+
+## Environment Variables
+
+```env
+# .env (never commit this file)
+DATABASE_URL=postgresql://admin:admin@localhost:5432/resource_planner?schema=public
+
+JIRA_HOST=https://your-company.atlassian.net
+JIRA_EMAIL=your.email@company.be
+JIRA_TOKEN=your_api_token_from_jira_profile
+JIRA_FILTER_ID=12345
+```
+
+`src/generated/prisma/` is gitignored. It is rebuilt by `npm install` via the `postinstall`
+hook (`prisma generate`).
+
+## Daily Startup
+
+```bash
+docker start resource-planner-db   # skip if restart:always is set
+cd ~/projects/resource-planner
+nvm use                            # uses .nvmrc (Node >= 20.19 required by Prisma/tooling)
+npm run db:migrate                 # apply any pending migrations
+npm run dev                        # → http://localhost:3000
+```
+
+## After Schema Changes
+
+```bash
+npx prisma migrate dev   # local: apply migration + regenerate client
+npx prisma generate      # if only the client is stale (no new migration)
+rm -rf .next             # clear Turbopack cache
+npm run dev
+```
+
+If the dev server errors with a stale table name (e.g. `public.product` instead of
+`allocation_entity`), delete `.next/` and restart — Turbopack will pick up the regenerated
+Prisma client.
+
+## Full Production Seed — Correct Order
+
+```bash
+npm run db:migrate            # prisma migrate deploy
+npm run db:seed:eotp          # upsert eotp_definition from EOTP-Budget-Owner.csv (canonical EOTP catalog)
+npm run db:seed:products      # upsert allocation_entity from PRODUCTS.csv + link eotp_definition_id
+npm run db:seed:prod          # resources, rates, initiatives, allocations + recreate views
+npm run db:seed:routing       # optional: seed eotp_routing from EOTP_ROUTING.csv (sets eotp_definition_id)
+npm run db:backfill:eotp-routing-fks  # optional: re-link eotp_routing.eotp_definition_id if catalog was seeded late
+```
+
+## Production Seed Flags
+
+| Command | Effect |
+|---|---|
+| `npm run db:seed:prod` | Upsert only — existing rows not in CSV are left untouched |
+| `SEED_PROD_RESET=1 npm run db:seed:prod` | Clears planner tables (allocations, rates, initiatives, resources) — **preserves** `allocation_entity` |
+| `SEED_VIEW_ONLY=1 npm run db:seed:prod` | Recreates `v_allocation_costs` + `v_eotp_costs` only — no CSV import |
+| `npm run db:recreate:eotp-costs` | Recreates `v_eotp_costs` only (requires `v_allocation_costs` to exist) |
+
+## Make Postgres Survive Reboots
+
+```bash
+docker update --restart always resource-planner-db
+```
+
+Combined with Docker Desktop set to start on Windows login, no manual DB startup is ever needed.
+
+## Prisma Studio
+
+```bash
+npx prisma studio   # → http://localhost:5555
+```
