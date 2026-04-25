@@ -16,12 +16,12 @@ export function JiraHeaderSync() {
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const sync = async () => {
+  const syncJira = async () => {
     setSyncing(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/jira/sync");
-      const data = (await res.json().catch(() => ({}))) as {
+      const response = await fetch("/api/jira/sync");
+      const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
         upserted?: number;
         created?: number;
@@ -31,14 +31,14 @@ export function JiraHeaderSync() {
         skipped?: number;
         fetched?: number;
       };
-      if (!res.ok) {
-        throw new Error(data.error ?? res.statusText);
+      if (!response.ok) {
+        throw new Error(payload.error ?? response.statusText);
       }
-      const created = data.created ?? 0;
-      const changed = data.changed ?? data.updated ?? 0;
-      const unchanged = data.unchanged ?? 0;
-      const skipped = data.skipped ?? 0;
-      const fetched = data.fetched ?? 0;
+      const created = payload.created ?? 0;
+      const changed = payload.changed ?? payload.updated ?? 0;
+      const unchanged = payload.unchanged ?? 0;
+      const skipped = payload.skipped ?? 0;
+      const fetched = payload.fetched ?? 0;
       router.refresh();
       setStatus({
         kind: "ok",
@@ -54,17 +54,17 @@ export function JiraHeaderSync() {
     }
   };
 
-  const generate = async () => {
+  const generateProdDataAuto = async () => {
     setGenerating(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/admin/prod-data-auto/generate", { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; outDir?: string };
-      if (!res.ok) throw new Error(data.error ?? res.statusText);
+      const response = await fetch("/api/admin/prod-data-auto/generate", { method: "POST" });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; outDir?: string };
+      if (!response.ok) throw new Error(payload.error ?? response.statusText);
       router.refresh();
       setStatus({
         kind: "ok",
-        text: `Generated prod_data_auto CSVs → ${data.outDir ?? "scripts/data-prod-auto"}.`,
+        text: `Generated prod_data_auto CSVs → ${payload.outDir ?? "scripts/data-prod-auto"}.`,
       });
     } catch (e) {
       setStatus({
@@ -76,13 +76,13 @@ export function JiraHeaderSync() {
     }
   };
 
-  const seedProdReset = async () => {
+  const seedProdResetDb = async () => {
     setSeeding(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/admin/db/seed-prod-reset", { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? res.statusText);
+      const response = await fetch("/api/admin/db/seed-prod-reset", { method: "POST" });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? response.statusText);
       router.refresh();
       setStatus({ kind: "ok", text: "DB reset + re-seed complete." });
       setSeedDialogOpen(false);
@@ -114,7 +114,7 @@ export function JiraHeaderSync() {
         variant="secondary"
         className="h-8 shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20"
         disabled={syncing}
-        onClick={sync}
+        onClick={syncJira}
         title="Sync initiatives from Jira"
       >
         {syncing ? (
@@ -130,7 +130,7 @@ export function JiraHeaderSync() {
         variant="secondary"
         className="h-8 shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20"
         disabled={generating}
-        onClick={generate}
+        onClick={generateProdDataAuto}
         title="Generate scripts/data-prod-auto CSVs from Excel"
       >
         {generating ? (
@@ -181,7 +181,7 @@ export function JiraHeaderSync() {
               type="button"
               disabled={seeding}
               className="bg-red-600 text-white hover:bg-red-700"
-              onClick={seedProdReset}
+              onClick={seedProdResetDb}
             >
               {seeding ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               <span className={cn(seeding ? "ml-2" : "")}>Confirm reset + re-seed</span>

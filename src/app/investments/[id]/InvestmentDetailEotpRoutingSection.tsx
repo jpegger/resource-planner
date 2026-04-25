@@ -119,9 +119,10 @@ export function InvestmentDetailEotpRoutingSection({
   const defaultYear = filterYear;
 
   useEffect(() => {
+    const patchTimers = patchTimersRef.current;
     return () => {
-      for (const t of patchTimersRef.current.values()) clearTimeout(t);
-      patchTimersRef.current.clear();
+      for (const t of patchTimers.values()) clearTimeout(t);
+      patchTimers.clear();
     };
   }, []);
 

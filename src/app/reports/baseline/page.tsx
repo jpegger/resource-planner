@@ -64,16 +64,16 @@ export default function ReportsBaselinePage() {
     try {
       const sp = new URLSearchParams();
       if (baselineId !== "__NONE__") sp.set("baselineId", baselineId);
-      const res = await fetch(`/api/reports/baseline?${sp.toString()}`);
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
+      const response = await fetch(`/api/reports/baseline?${sp.toString()}`);
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errorBody.error ?? `HTTP ${response.status}`);
       }
-      const data = (await res.json()) as ApiResp;
-      setBaselines(data.baselines ?? []);
-      if ("byEotp" in data) {
-        setByEotp(data.byEotp ?? []);
-        setByCellule(data.byCellule ?? []);
+      const apiResponse = (await response.json()) as ApiResp;
+      setBaselines(apiResponse.baselines ?? []);
+      if ("byEotp" in apiResponse) {
+        setByEotp(apiResponse.byEotp ?? []);
+        setByCellule(apiResponse.byCellule ?? []);
       } else {
         setByEotp([]);
         setByCellule([]);

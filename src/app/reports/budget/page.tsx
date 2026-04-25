@@ -178,13 +178,13 @@ export default function BudgetRechartsPage() {
       if (productName) sp.set("productName", productName);
       if (initiativeType !== "__ALL__") sp.set("initiativeTypes", initiativeType);
 
-      const res = await fetch(`/api/reports/budget-rollup?${sp.toString()}`);
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
+      const response = await fetch(`/api/reports/budget-rollup?${sp.toString()}`);
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errorBody.error ?? `HTTP ${response.status}`);
       }
-      const data = (await res.json()) as ApiResponse;
-      setRows(Array.isArray(data.rows) ? data.rows : []);
+      const apiResponse = (await response.json()) as ApiResponse;
+      setRows(Array.isArray(apiResponse.rows) ? apiResponse.rows : []);
     } catch (e) {
       setRows([]);
       setError(e instanceof Error ? e.message : "Failed to load data");
@@ -198,24 +198,24 @@ export default function BudgetRechartsPage() {
   }, [fetchRollup]);
 
   function onClickRow(r: RollupRow) {
-    const n = nextLevel(level);
-    if (!n) return;
+    const next = nextLevel(level);
+    if (!next) return;
     if (level === "division") {
       setDivision(r.key);
-      setLevel(n);
+      setLevel(next);
       setTeam(null);
       setProductName(null);
       return;
     }
     if (level === "team") {
       setTeam(r.key);
-      setLevel(n);
+      setLevel(next);
       setProductName(null);
       return;
     }
     if (level === "product") {
       setProductName(r.key);
-      setLevel(n);
+      setLevel(next);
       return;
     }
   }
@@ -235,8 +235,8 @@ export default function BudgetRechartsPage() {
 
   const handleChartClick = useCallback(
     (e: unknown) => {
-      const obj = e as { activePayload?: { payload?: RollupRow }[] } | null;
-      const picked = obj?.activePayload?.[0]?.payload;
+      const chartEvent = e as { activePayload?: { payload?: RollupRow }[] } | null;
+      const picked = chartEvent?.activePayload?.[0]?.payload;
       if (picked) onClickRow(picked);
     },
     // onClickRow uses current drilldown state

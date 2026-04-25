@@ -102,13 +102,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (data.sapEotpCode !== undefined || data.sapEotpName !== undefined) {
     const mergedCode =
       data.sapEotpCode !== undefined ? data.sapEotpCode : current.sapEotpCode;
-    const mergedName =
-      data.sapEotpName !== undefined ? data.sapEotpName : current.sapEotpName;
-    data.eotpDefinitionId = await resolveEotpDefinitionId(
-      prisma,
-      mergedCode ?? "",
-      mergedName
-    );
+    data.eotpDefinitionId = await resolveEotpDefinitionId(prisma, mergedCode ?? "");
   }
 
   try {

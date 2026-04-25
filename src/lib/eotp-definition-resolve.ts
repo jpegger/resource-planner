@@ -3,8 +3,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 /** Resolve catalog row for a routing target SAP code. */
 export async function resolveEotpDefinitionId(
   prisma: PrismaClient,
-  eotp: string,
-  _eopLabel: string | null | undefined
+  eotp: string
 ): Promise<string | null> {
   const code = eotp.trim();
   if (!code) return null;
@@ -32,11 +31,7 @@ export async function linkAllocationEntitiesToEotpDefinitions(
     select: { id: true, sapEotpCode: true, sapEotpName: true },
   });
   for (const e of entities) {
-    const id = await resolveEotpDefinitionId(
-      prisma,
-      e.sapEotpCode ?? "",
-      e.sapEotpName ?? ""
-    );
+    const id = await resolveEotpDefinitionId(prisma, e.sapEotpCode ?? "");
     await prisma.allocationEntity.update({
       where: { id: e.id },
       data: { eotpDefinitionId: id },
@@ -57,11 +52,7 @@ export async function backfillEotpRoutingDefinitionIds(
 
   let linked = 0;
   for (const r of rows) {
-    const eotpDefinitionId = await resolveEotpDefinitionId(
-      prisma,
-      r.eotp,
-      r.eopLabel
-    );
+    const eotpDefinitionId = await resolveEotpDefinitionId(prisma, r.eotp);
     await prisma.eotpRouting.update({
       where: { id: r.id },
       data: { eotpDefinitionId },

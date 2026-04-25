@@ -97,13 +97,13 @@ export default function ComparisonClient({
         ...(owner && { owner }),
       });
 
-      const res = await fetch(`/api/reports/comparison?${params.toString()}`);
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
+      const response = await fetch(`/api/reports/comparison?${params.toString()}`);
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errorBody.error ?? `HTTP ${response.status}`);
       }
-      const data = (await res.json()) as ComparisonRow[];
-      setRows(data ?? []);
+      const apiRows = (await response.json()) as ComparisonRow[];
+      setRows(apiRows ?? []);
     } catch (e) {
       setRows([]);
       setError(e instanceof Error ? e.message : "Failed to load data");

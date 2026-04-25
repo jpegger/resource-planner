@@ -85,7 +85,7 @@ async function loginWithRetry(connection: Connection): Promise<void> {
 
   try {
     await connection.login(username, passwordAndToken);
-  } catch (err) {
+  } catch {
     // Sandbox orgs can sleep; first login may timeout. One retry is usually enough.
     await new Promise((r) => setTimeout(r, 1000));
     await connection.login(username, passwordAndToken);

@@ -91,7 +91,7 @@ export async function POST(
     body["eopLabel"] === null || typeof body["eopLabel"] === "string"
       ? (body["eopLabel"] as string | null)
       : null;
-  const eotpDefinitionId = await resolveEotpDefinitionId(prisma, eotp, eopLabelRaw);
+  const eotpDefinitionId = await resolveEotpDefinitionId(prisma, eotp);
 
   try {
     const routing = await prisma.eotpRouting.create({

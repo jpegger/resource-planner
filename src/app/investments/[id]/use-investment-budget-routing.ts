@@ -15,7 +15,7 @@ export function useInvestmentBudgetRouting(
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [yearSummaryLoading, setYearSummaryLoading] = useState(false);
   const [yearSummary, setYearSummary] = useState<{ totalCost: number; totalFte: number } | null>(null);
-  const [budgetYearOptions, setBudgetYearOptions] = useState(() =>
+  const [budgetYearOptions] = useState(() =>
     distinctSortedNumbers(initialInitiatives.map((i) => i.initiative_year), "desc")
   );
   const [routingYearOptions, setRoutingYearOptions] = useState(() =>

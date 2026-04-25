@@ -77,10 +77,8 @@ export async function PATCH(
     return Response.json({ error: EOTP_ROUTING_MAIN_TARGET_ERROR }, { status: 400 });
   }
 
-  const nextEopLabel =
-    data.eopLabel !== undefined ? data.eopLabel : existing.eopLabel;
   if (data.eotp !== undefined || data.eopLabel !== undefined) {
-    data.eotpDefinitionId = await resolveEotpDefinitionId(prisma, nextEotp, nextEopLabel);
+    data.eotpDefinitionId = await resolveEotpDefinitionId(prisma, nextEotp);
   }
 
   try {
