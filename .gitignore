@@ -24,6 +24,11 @@
 .cursor/
 .DS_Store
 *.pem
+# JWT/cert files for Salesforce auth (local only)
+sf-jwt.key
+sf-jwt.crt
+*.key
+*.crt
 # Windows/WSL NTFS alternate data stream sidecar files
 *Zone.Identifier
 *:sec.endpointdlp
@@ -49,4 +54,5 @@ next-env.d.ts
 # Seed and prod CSV exports (never push; .gitignore does not untrack already-committed files)
 scripts/data/**
 scripts/data-prod/**
+scripts/data-prod-auto/**
 

@@ -25,6 +25,8 @@ import * as path from "path";
 import Papa from "papaparse";
 
 import { createEotpCostsView } from "./eotp-views";
+import { createComparisonView } from "./comparison-view";
+import { createSnapshotBaselineViews } from "./snapshot-baseline-views";
 import {
   CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
   DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
@@ -363,7 +365,7 @@ async function createCostView() {
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_routing`);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_costs`);
   await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
-  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs`);
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs CASCADE`);
 
   // Column names match Prisma’s migration (camelCase quoted identifiers).
   await prisma.$executeRawUnsafe(`
@@ -534,6 +536,8 @@ async function main() {
     await createCostView();
     await createAllocationEntityCostTotalsView();
     await createEotpCostsView(prisma);
+    await createSnapshotBaselineViews(prisma);
+    await createComparisonView(prisma);
     console.log("✅ View updated.");
     return;
   }
@@ -549,6 +553,8 @@ async function main() {
   await createCostView();
   await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);
+  await createSnapshotBaselineViews(prisma);
+  await createComparisonView(prisma);
 
   console.log("✅ Seed complete.");
 }

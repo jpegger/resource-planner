@@ -275,6 +275,7 @@ One row per resource × initiative assignment. The `manDays` and `quantity` fiel
 ### 4.7 EotpDefinition (SAP EOTP catalog)
 
 PostgreSQL table **`eotp_definition`**. Canonical SAP EOTP lines used by the app for **labels**, **org metadata** (division, team, budget owner, …), and optional FK links from **`allocation_entity`** and **`eotp_routing`**. Seeded from **`scripts/data-prod/EOTP-Budget-Owner.csv`** via **`npm run db:seed:eotp`** (`scripts/seed-eotp-definitions.ts`). **Unique** on **`(sapEotpCode, label)`** — the same SAP code may appear more than once with different labels.
+PostgreSQL table **`eotp_definition`**. Canonical SAP EOTP lines used by the app for **labels**, **org metadata** (division, team, budget owner, …), and optional FK links from **`allocation_entity`** and **`eotp_routing`**. Seeded from **`scripts/data-prod/EOTP-Budget-Owner.csv`** via **`npm run db:seed:eotp`** (`scripts/seed-eotp-definitions.ts`). **Unique** on **`sapEotpCode`** (one row per SAP code).
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
@@ -284,7 +285,7 @@ PostgreSQL table **`eotp_definition`**. Canonical SAP EOTP lines used by the app
 | `division` / `subDivision` / `team` | String? | | Org metadata |
 | `budgetOwner` / `director` | String? | | Optional responsibility fields |
 
-**Resolve helpers:** **`src/lib/eotp-definition-resolve.ts`** — pick or resolve a definition from code ± label for API PATCH/POST and seeds.
+**Resolve helpers:** **`src/lib/eotp-definition-resolve.ts`** — resolve a definition from SAP code for API PATCH/POST and seeds.
 
 ### 4.8 EotpRouting (SAP EOTP exception routing)
 
@@ -530,15 +531,30 @@ JIRA_FILTER_ID=12345
 |---|---|---|---|
 | `seed.ts` | `npm run db:seed` | `scripts/data/*.csv` | Dev seed from PowerApps exports (MAT/RI/ASS IDs intact) |
 | `seed-products.ts` | `npm run db:seed:products` | `scripts/data-prod/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `allocation_entity`; SAP fields, scores, **`entity_type`**) |
-| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, seed **`dim_year`** |
+| `seed-production.ts` | `npm run db:seed:prod` | `scripts/data-prod/*.csv` + `scripts/data-prod-auto/*.csv` (auto overrides) | Prod migration: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`**, **`v_comparison`**, **`v_revenues`**, **`dim_eotp`**, seed **`dim_year`** |
 | `seed-eotp-definitions.ts` | `npm run db:seed:eotp` | `scripts/data-prod/EOTP-Budget-Owner.csv` | Upsert **`eotp_definition`** (SAP code, label, org metadata) |
 | `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/data-prod/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR); links **`eotp_definition_id`** when definitions exist |
 | `seed-revenues.ts` | `npm run db:seed:revenues` | `scripts/data-prod/REVENU.csv` | Insert **`InitiativeRevenue`** (type = **`Mission`**) one row per CSV line; matched by Jira key in **Colonne1**; **delete-then-insert** per affected initiative |
+| `xlsx-to-prod-data-auto.ts` | `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/data-prod-auto` | Excel workbook | Generate `Assignement.csv`, `RESSOURCES.csv`, `RATES.csv`, `REVENU.csv` into **`scripts/data-prod-auto/`** (used as auto-overrides by `seed-production.ts`) |
 | `backfill-eotp-routing-eotp-definition-ids.ts` | `npm run db:backfill:eotp-routing-fks` | — | One-off: set **`eotp_definition_id`** on existing **`eotp_routing`** / **`allocation_entity`** rows from code ± label |
 | `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
 | `rebuild-eotp-routing-csv.ts` | `npm run db:rebuild:routing-csv` | `EOTP_ROUTING_SOURCE.csv` | Rebuild **`EOTP_ROUTING.csv`** from wide export (outputs merged EUR columns) |
 
 **Order for a full prod load:** run **`npm run db:migrate`** (same as **`npx prisma migrate deploy`**) or **`npx prisma migrate dev`** locally, then **`db:seed:products`** (or ensure `PRODUCTS.csv` is present so the prod seed can upsert allocation entities), then **`db:seed:prod`**. The prod script upserts catalog rows from `PRODUCTS.csv` when that file exists. **EOTP routing CSV** is optional: run **`db:seed:routing`** when `EOTP_ROUTING.csv` is ready.
+
+### 9.0 Auto-generated prod CSVs (`scripts/data-prod-auto`)
+
+To keep the “golden” `scripts/data-prod/` exports stable while still supporting frequent re-exports from Excel, the repo supports an **auto-generated override folder**:
+
+- **Location**: `scripts/data-prod-auto/`
+- **Generated by**: `scripts/xlsx-to-prod-data-auto.ts`
+- **Used by**: `scripts/seed-production.ts` (without any special flags)
+
+Resolution order for CSV lookups in `seed-production.ts`:
+
+1. `SEED_OVERRIDE_DIR` (if provided)
+2. `scripts/data-prod-auto/` (auto-generated overrides)
+3. `scripts/data-prod/` (baseline production exports)
 
 ### 9.1 Production Seed — Run Modes
 
@@ -559,6 +575,8 @@ npm run db:recreate:eotp-costs
 ### 9.2 Production Seed Notes
 
 - **Files** — `JIRA.csv`, `RESSOURCES.csv`, `RateStandard.csv`, `RATES.csv`, `Assignement.csv`; optional **`PRODUCTS.csv`** for allocation-entity master data (table `allocation_entity`). `RateStandard.csv` can be omitted if a standard file is bundled next to the script (`resolveRateStandardPath` fallback).
+- **Drop order / idempotency** — some views depend on others. Seed scripts use `DROP VIEW ... CASCADE` when necessary (e.g. `v_allocation_costs`, snapshot/baseline views) so repeated runs work even if reporting views were already created.
+- **`v_comparison`** — created as part of the views pipeline; used by `/reports/comparison` (snapshot vs baseline gap drilldown).
 - **ID-based linking** — `InitiativeId` (RI-xxx), `RessourceId` (MAT-xxx), etc.
 - **Duplicate assignment rows** — CSV can list the same resource×initiative twice (e.g. % line + man-days line). The seed **merges** into one DB row: **percent values are summed**; **man-days** — **first line with a positive man-days value wins** (CSV order), not the sum. This matches business rules for split Excel exports.
 - **Allocation IDs** — Deterministic `ASS-{hash(resourceId|initiativeId)}` after merge (one row per pair).
@@ -571,6 +589,18 @@ npm run db:recreate:eotp-costs
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
 **Manual truncate (rare)** — If you need a clean slate including the allocation-entity catalog, truncate `allocation_entity` explicitly or use SQL; default reset keeps those rows.
+
+### 9.3 In-app “Admin” buttons (generate + seed)
+
+The header includes operational buttons used during the Excel → CSV → DB refresh workflow:
+
+- **Generate CSVs**: calls `POST /api/admin/prod-data-auto/generate`
+  - Runs `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/data-prod-auto`
+  - Intended for local/WIP workflows (paths are currently hardcoded to the workbook location in WSL).
+- **Re-seed DB** (danger): calls `POST /api/admin/db/seed-prod-reset`
+  - Runs `SEED_PROD_RESET=1 tsx scripts/seed-production.ts`
+  - Guarded by env var: **`ALLOW_ADMIN_SEED=1`** (returns 403 otherwise)
+  - UI shows a confirmation dialog warning that planner data will be deleted before re-import.
 
 ---
 

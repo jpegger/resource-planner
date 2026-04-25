@@ -23,6 +23,8 @@ import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
 import { createEotpCostsView } from "./eotp-views";
+import { createComparisonView } from "./comparison-view";
+import { createSnapshotBaselineViews } from "./snapshot-baseline-views";
 import { resourceFullNameFromParts } from "../src/lib/resource-display-name";
 import {
   CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
@@ -34,7 +36,11 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 const DATA_DIR = path.join(__dirname, "data-prod");
+const AUTO_DATA_DIR = path.join(__dirname, "data-prod-auto");
 const DEV_DATA_DIR = path.join(__dirname, "data");
+const OVERRIDE_DIR = process.env["SEED_OVERRIDE_DIR"]
+  ? path.resolve(process.cwd(), process.env["SEED_OVERRIDE_DIR"])
+  : null;
 
 function resolveRateStandardPath(): string | null {
   const prod = path.join(DATA_DIR, "RateStandard.csv");
@@ -45,19 +51,33 @@ function resolveRateStandardPath(): string | null {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function resolveCsvPath(filename: string): string {
+  if (OVERRIDE_DIR) {
+    const overridePath = path.join(OVERRIDE_DIR, filename);
+    if (fs.existsSync(overridePath)) return overridePath;
+  }
+  const autoPath = path.join(AUTO_DATA_DIR, filename);
+  if (fs.existsSync(autoPath)) return autoPath;
+  return path.join(DATA_DIR, filename);
+}
+
 function readCsv(filename: string, encoding: "latin1" | "utf8"): Record<string, string>[] {
-  const content = fs.readFileSync(path.join(DATA_DIR, filename), { encoding });
+  const content = fs.readFileSync(resolveCsvPath(filename), { encoding });
   // Strip BOM if present
   const cleaned = content.replace(/^\uFEFF/, "");
   const result = Papa.parse(cleaned, { header: true, skipEmptyLines: true });
   return result.data as Record<string, string>[];
 }
 
-/** Strip Swiss apostrophe thousands separator and trailing % or spaces, then parse float */
+/**
+ * Strip Swiss apostrophe and English-comma thousands separators, then parse float.
+ * (`parseFloat("1,089")` is `1` in JS — breaks auto-exported RATES with "1,089.00" daily costs.)
+ */
 function parseNum(value: string | undefined): number | null {
   if (!value || value.trim() === "" || value.trim() === "-") return null;
   const cleaned = value
     .replace(/'/g, "")   // 1'100 → 1100
+    .replace(/,/g, "")   // 1,089.00 → 1089.00 (US-style thousands in prod_data_auto / Excel CSV)
     .replace(/%/g, "")   // trailing % on both columns
     .replace(/\s/g, "")
     .trim();
@@ -357,7 +377,7 @@ if (!rateId || !resourceId || resourceId === "RessourceId" || resourceId === "0"
 
 async function seedAllocations(): Promise<void> {
   console.log(
-    "Seeding allocations from Assignement.csv (merged by pair: % summed; first man-days line wins)..."
+    "Seeding allocations from Assignement.csv (merged by pair: % summed; man-days summed)..."
   );
   const rows = readCsv("Assignement.csv", "utf8");
 
@@ -371,7 +391,7 @@ async function seedAllocations(): Promise<void> {
   let unknownResource = 0;
   const missingInit = new Set<string>();
 
-  type MergeAcc = { sumQuantity: number; manDaysFirst: number | null };
+  type MergeAcc = { sumQuantity: number; sumManDays: number };
   const mergeMap = new Map<string, MergeAcc>();
   let validCsvLines = 0;
 
@@ -410,18 +430,16 @@ async function seedAllocations(): Promise<void> {
     const dq =
       percentRaw !== null && percentRaw > 0 ? percentRaw / 100 : 0;
     const dm =
-      manDaysRaw !== null && manDaysRaw > 0 ? manDaysRaw : null;
+      manDaysRaw !== null && manDaysRaw > 0 ? manDaysRaw : 0;
 
     const pairKey = `${resourceId}\t${initiativeId}`;
     let acc = mergeMap.get(pairKey);
     if (!acc) {
-      acc = { sumQuantity: 0, manDaysFirst: null };
+      acc = { sumQuantity: 0, sumManDays: 0 };
       mergeMap.set(pairKey, acc);
     }
     acc.sumQuantity += dq;
-    if (dm !== null && acc.manDaysFirst === null) {
-      acc.manDaysFirst = dm;
-    }
+    acc.sumManDays += dm;
   }
 
   const mergedRows: {
@@ -434,7 +452,7 @@ async function seedAllocations(): Promise<void> {
   for (const [pairKey, acc] of mergeMap) {
     const [resourceId, initiativeId] = pairKey.split("\t");
     const quantity = acc.sumQuantity > 0 ? acc.sumQuantity : null;
-    const manDays = acc.manDaysFirst;
+    const manDays = acc.sumManDays > 0 ? acc.sumManDays : null;
     if (quantity == null && manDays == null) continue;
     mergedRows.push({ resourceId, initiativeId, quantity, manDays });
   }
@@ -573,7 +591,7 @@ async function createCostView(): Promise<void> {
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_routing`);
   await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_eotp_costs`);
   await prisma.$executeRawUnsafe(DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW);
-  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs`);
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_allocation_costs CASCADE`);
 
   await prisma.$executeRawUnsafe(`
     CREATE VIEW v_allocation_costs AS
@@ -749,49 +767,6 @@ async function seedDimYear(): Promise<void> {
   `);
 }
 
-/** Power BI: frozen snapshot rows vs baseline import (depends on allocation_snapshot / budget_baseline tables). */
-async function createSnapshotBaselineViews(): Promise<void> {
-  console.log("Creating v_snapshot_detail, v_baseline_detail…");
-  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_snapshot_detail`);
-  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS v_baseline_detail`);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE OR REPLACE VIEW v_snapshot_detail AS
-    SELECT
-      s.id AS snapshot_id,
-      s.name AS snapshot_name,
-      s."takenAt" AS snapshot_date,
-      s.year AS year,
-      r.eotp AS eotp,
-      r."eopLabel" AS eop_label,
-      r."productId" AS product_id,
-      r."productName" AS product_name,
-      r.internal AS internal,
-      r.external AS external,
-      r.direct AS direct,
-      CAST(r.external AS double precision) + CAST(r.direct AS double precision) AS catchout
-    FROM allocation_snapshot s
-    JOIN allocation_snapshot_row r ON r."snapshotId" = s.id
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE OR REPLACE VIEW v_baseline_detail AS
-    SELECT
-      b.id AS baseline_id,
-      b.name AS baseline_name,
-      b.version AS baseline_version,
-      b."importedAt" AS imported_at,
-      b.year AS year,
-      bl.eotp AS eotp,
-      bl."eopLabel" AS eop_label,
-      bl.cellule AS cellule,
-      bl.amount AS baseline_amount
-    FROM budget_baseline b
-    JOIN budget_baseline_row bl ON bl."baselineId" = b.id
-  `);
-
-  console.log("  ✓ v_snapshot_detail, v_baseline_detail created\n");
-}
 
 /** Power BI: one row per EOTP (label from first non-null when duplicates exist). */
 async function createDimEotpView(): Promise<void> {
@@ -811,6 +786,21 @@ async function createDimEotpView(): Promise<void> {
     ORDER BY u.eotp, u.eop_label NULLS LAST
   `);
   console.log("  ✓ dim_eotp created\n");
+}
+
+/** Power BI: one row per Team (org slicer dimension). */
+async function createDimTeamView(): Promise<void> {
+  console.log("Creating dim_team…");
+  await prisma.$executeRawUnsafe(`DROP VIEW IF EXISTS dim_team`);
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE VIEW dim_team AS
+    SELECT DISTINCT
+      TRIM(team) AS team
+    FROM allocation_entity
+    WHERE team IS NOT NULL AND TRIM(team) <> ''
+    ORDER BY TRIM(team)
+  `);
+  console.log("  ✓ dim_team created\n");
 }
 
 async function createAllocationEntityCostTotalsView(): Promise<void> {
@@ -834,8 +824,10 @@ async function main(): Promise<void> {
     await createEotpCostsView(prisma);
     await createRevenueView();
     await seedDimYear();
-    await createSnapshotBaselineViews();
+    await createSnapshotBaselineViews(prisma);
+    await createComparisonView(prisma);
     await createDimEotpView();
+    await createDimTeamView();
     console.log("Done.");
     return;
   }
@@ -845,8 +837,8 @@ async function main(): Promise<void> {
 
   const required = ["JIRA.csv", "RESSOURCES.csv", "RATES.csv", "Assignement.csv"];
   for (const f of required) {
-    if (!fs.existsSync(path.join(DATA_DIR, f))) {
-      console.error(`Missing: ${path.join("scripts/data-prod", f)}`);
+    if (!fs.existsSync(resolveCsvPath(f))) {
+      console.error(`Missing: ${f} (looked in scripts/data-prod${OVERRIDE_DIR ? ` and ${OVERRIDE_DIR}` : ""})`);
       process.exit(1);
     }
   }
@@ -877,8 +869,10 @@ async function main(): Promise<void> {
   await createEotpCostsView(prisma);
   await createRevenueView();
   await seedDimYear();
-  await createSnapshotBaselineViews();
+  await createSnapshotBaselineViews(prisma);
+  await createComparisonView(prisma);
   await createDimEotpView();
+  await createDimTeamView();
 
   console.log("Done.");
 }

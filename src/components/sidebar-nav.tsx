@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Scale, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, Scale, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,16 @@ export function SidebarNav() {
         )}
       >
         <Scale className="size-5" aria-hidden />
+      </Link>
+      <Link
+        href="/reports"
+        title="Reports"
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-md text-white transition-colors hover:bg-white/10",
+          pathname.startsWith("/reports") && "bg-white/15"
+        )}
+      >
+        <BarChart3 className="size-5" aria-hidden />
       </Link>
     </aside>
   );
