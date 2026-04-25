@@ -16,6 +16,17 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 const DATA_DIR = path.join(__dirname, "data-prod");
+const OVERRIDE_DIR = process.env["SEED_OVERRIDE_DIR"]
+  ? path.resolve(process.cwd(), process.env["SEED_OVERRIDE_DIR"])
+  : null;
+
+function resolveCsvPath(filename: string): string {
+  if (OVERRIDE_DIR) {
+    const overridePath = path.join(OVERRIDE_DIR, filename);
+    if (fs.existsSync(overridePath)) return overridePath;
+  }
+  return path.join(DATA_DIR, filename);
+}
 
 function parseRevenue(raw: string): number {
   if (!raw || raw.trim() === "" || raw.trim() === "-") return 0;
@@ -27,7 +38,7 @@ function parseRevenue(raw: string): number {
 type ValidRow = { initiativeId: string; amount: number };
 
 async function main(): Promise<void> {
-  const filePath = path.join(DATA_DIR, "REVENU.csv");
+  const filePath = resolveCsvPath("REVENU.csv");
   if (!fs.existsSync(filePath)) {
     console.error(`Missing: ${path.join("scripts/data-prod", "REVENU.csv")}`);
     process.exit(1);

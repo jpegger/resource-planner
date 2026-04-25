@@ -12,11 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
 
-import {
-  backfillEotpRoutingDefinitionIds,
-  eotpDefinitionsByCode,
-  pickEotpDefinitionId,
-} from "../src/lib/eotp-definition-resolve";
+import { backfillEotpRoutingDefinitionIds } from "../src/lib/eotp-definition-resolve";
 
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
@@ -72,11 +68,6 @@ async function main(): Promise<void> {
   const entities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
   const entityMap = new Map(entities.map((p) => [p.name.trim().toLowerCase(), p.id]));
 
-  const eotpDefs = await prisma.eotpDefinition.findMany({
-    select: { id: true, sapEotpCode: true, label: true },
-  });
-  const defsByCode = eotpDefinitionsByCode(eotpDefs);
-
   let upserted = 0;
   let skipped = 0;
 
@@ -113,9 +104,11 @@ async function main(): Promise<void> {
 
     const eopLabel = normalizeEopLabel(row.eopLabel ?? "");
     const comment = (row.comment ?? "").trim();
-
-    const candidates = defsByCode.get(eotp.toLowerCase()) ?? [];
-    const eotpDefinitionId = pickEotpDefinitionId(candidates, eopLabel);
+    const def = await prisma.eotpDefinition.findFirst({
+      where: { sapEotpCode: { equals: eotp, mode: "insensitive" } },
+      select: { id: true },
+    });
+    const eotpDefinitionId = def?.id ?? null;
 
     await prisma.eotpRouting.upsert({
       where: {

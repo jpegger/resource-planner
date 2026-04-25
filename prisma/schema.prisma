@@ -132,7 +132,7 @@ model RateStandard {
 
 model EotpDefinition {
   id                 String              @id @default(cuid())
-  sapEotpCode        String              @map("sap_eotp_code")
+  sapEotpCode        String              @unique @map("sap_eotp_code")
   label              String
   division           String?
   budgetOwner        String?             @map("budget_owner")
@@ -144,7 +144,6 @@ model EotpDefinition {
   createdOn          DateTime            @default(now()) @map("created_on")
   modifiedOn         DateTime            @updatedAt @map("modified_on")
 
-  @@unique([sapEotpCode, label])
   @@map("eotp_definition")
 }
 

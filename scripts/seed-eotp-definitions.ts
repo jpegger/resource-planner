@@ -5,6 +5,10 @@
  *
  * Usage: `npm run db:seed:eotp`
  *
+ * Optional reset:
+ * - `SEED_PROD_RESET=1 npm run db:seed:eotp`
+ *   Clears the `eotp_definition` table first (and nulls optional FKs) before re-importing from CSV.
+ *
  * Run after `npm run db:migrate` and before `npm run db:seed:products` so allocation entities
  * can resolve `eotp_definition_id` (or run `npm run db:seed:products` which re-links FKs).
  */
@@ -40,6 +44,22 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (process.env["SEED_PROD_RESET"] === "1") {
+    console.log(
+      "SEED_PROD_RESET=1 — clearing eotp_definition (and nulling optional FKs) before seeding…",
+    );
+
+    await prisma.$transaction(async (tx) => {
+      await tx.allocationEntity.updateMany({
+        data: { eotpDefinitionId: null },
+      });
+      await tx.eotpRouting.updateMany({
+        data: { eotpDefinitionId: null },
+      });
+      await tx.eotpDefinition.deleteMany({});
+    });
+  }
+
   const raw = fs.readFileSync(filePath, "utf-8");
   const cleaned = raw.replace(/^\uFEFF/, "");
   const parsed = Papa.parse<Record<string, string>>(cleaned, {
@@ -50,7 +70,7 @@ async function main(): Promise<void> {
 
   const rows = (parsed.data ?? []).filter((r) => r && typeof r === "object");
   let upserted = 0;
-  const seen = new Set<string>();
+  const seen = new Map<string, string>(); // code → label (for warnings only)
 
   for (const row of rows) {
     const division = nullable(trimStr(row["Division"]));
@@ -64,27 +84,41 @@ async function main(): Promise<void> {
     if (!code) continue;
     if (!label) label = code;
 
-    const dedupeKey = `${code.toLowerCase()}\0${label.toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
+    const codeKey = code.toLowerCase();
+    const prev = seen.get(codeKey);
+    if (prev && prev !== label) {
+      console.warn(
+        `Warning: multiple labels for SAP code ${code}. Using last value: "${label}" (previous: "${prev}")`,
+      );
+    }
+    seen.set(codeKey, label);
 
-    await prisma.eotpDefinition.upsert({
-      where: {
-        sapEotpCode_label: {
+    const existing = await prisma.eotpDefinition.findFirst({
+      where: { sapEotpCode: { equals: code, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      await prisma.eotpDefinition.create({
+        data: {
           sapEotpCode: code,
           label,
+          division,
+          budgetOwner,
+          director,
+          subDivision,
+          team,
         },
-      },
-      create: {
+      });
+      upserted++;
+      continue;
+    }
+
+    await prisma.eotpDefinition.update({
+      where: { id: existing.id },
+      data: {
         sapEotpCode: code,
         label,
-        division,
-        budgetOwner,
-        director,
-        subDivision,
-        team,
-      },
-      update: {
         division,
         budgetOwner,
         director,
