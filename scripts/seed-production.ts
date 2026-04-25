@@ -34,6 +34,7 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 const PROD_IMPORT_DIR = path.join(__dirname, "datasets", "prod-import");
+const DEV_DATASET_DIR = path.join(__dirname, "datasets", "dev");
 const SEED_DATASET_DIR = process.env["SEED_DATASET_DIR"]
   ? path.resolve(process.cwd(), process.env["SEED_DATASET_DIR"])
   : null;
@@ -45,7 +46,9 @@ function resolveCsvPath(filename: string): string {
     const overridePath = path.join(SEED_DATASET_DIR, filename);
     if (fs.existsSync(overridePath)) return overridePath;
   }
-  return path.join(PROD_IMPORT_DIR, filename);
+  const prodImportPath = path.join(PROD_IMPORT_DIR, filename);
+  if (fs.existsSync(prodImportPath)) return prodImportPath;
+  return path.join(DEV_DATASET_DIR, filename);
 }
 
 function readCsv(filename: string, encoding: "latin1" | "utf8"): Record<string, string>[] {
