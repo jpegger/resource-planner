@@ -30,6 +30,24 @@ npm run db:migrate                 # apply any pending migrations
 npm run dev                        # → http://localhost:3000
 ```
 
+## Command-line defaults (Cursor)
+
+When running commands from Cursor/agents, prefer a login shell and NVM so the correct Node version
+from `.nvmrc` is used (instead of any bundled Node runtime):
+
+```bash
+# Template
+bash -lc 'cd ~/projects/resource-planner && nvm use && <command>'
+```
+
+DB scripts require Postgres to be reachable at `127.0.0.1:5432`.
+
+Canonical production seed (reset + import):
+
+```bash
+bash -lc 'cd ~/projects/resource-planner && nvm use && npm run db:migrate && SEED_PROD_RESET=1 npm run db:seed:prod'
+```
+
 ## After Schema Changes
 
 ```bash
