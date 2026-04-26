@@ -650,7 +650,8 @@ npm run db:recreate:eotp-costs
 - **Percent & ManDays** — Trailing `%`; values divided by 100 for storage (`34%` → `0.34` FTE decimal; large “%” man-days columns → man-days).
 - **Rate row IDs** — Deterministic `RATE-{resourceId}-{year}` (CSV `RateId` not trusted as unique).
 - **RESSOURCES blank rows** — Rows without an ID are skipped.
-- **RESSOURCES encoding** — File is **UTF-8 with BOM**. **`seed-production.ts`** reads **`RESSOURCES.csv`** as **`utf8`** (not `latin1`) so headers **`Nom` / `Prénom`** parse correctly; **`JIRA.csv`** remains **`latin1`**.
+- **RESSOURCES encoding** — File is **UTF-8 with BOM**. **`seed-production.ts`** reads **`RESSOURCES.csv`** as **`utf8`** (not `latin1`) so headers **`Nom` / `Prénom`** parse correctly.
+- **JIRA encoding** — Generated `scripts/datasets/prod-import/JIRA.csv` is **UTF-8**, and `seed-production.ts` reads it as **`utf8`** to preserve accents (é, à, …).
 - **`SEED_PROD_RESET`** — Truncates allocation/rate/initiative/resource (and related) and clears **`eotp_routing`**, but **does not** delete rows in **`allocation_entity`** — allocation-entity catalog survives full reloads.
 - **Views** — `createCostView()` defines `v_allocation_costs`; **`createEotpCostsView()`** (shared with `scripts/eotp-views.ts`) defines **`v_eotp_costs`**. **`v_eotp_routing` is not used** (removed). Migrations that alter columns depended on by views may need **`DROP VIEW IF EXISTS …`** before column changes — `createCostView()` already drops dependent EOTP views before recreating `v_allocation_costs`.
 
@@ -661,10 +662,11 @@ npm run db:recreate:eotp-costs
 The header includes operational buttons used during the Excel → CSV → DB refresh workflow:
 
 - **Generate CSVs**: calls `POST /api/admin/prod-data-auto/generate`
-  - Runs `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/datasets/prod-import`
-  - Intended for local/WIP workflows (paths are currently hardcoded to the workbook location in WSL).
-- **Re-seed DB** (danger): calls `POST /api/admin/db/seed-prod-reset`
-  - Runs `SEED_PROD_RESET=1 tsx scripts/seed-production.ts`
+  - Requires `PROD_IMPORT_XLSX_PATH` (no hardcoded fallback)
+  - Runs `tsx scripts/xlsx-to-prod-data-auto.ts --input "$PROD_IMPORT_XLSX_PATH" --outDir scripts/datasets/prod-import`
+- **Generate + re-seed** (danger): calls `POST /api/admin/db/seed-prod-reset`
+  - Requires `PROD_IMPORT_XLSX_PATH`
+  - Runs CSV generation first, then `SEED_PROD_RESET=1 tsx scripts/seed-production.ts` with `SEED_STRICT_DATASET=1`
   - Guarded by env var: **`ALLOW_ADMIN_SEED=1`** (returns 403 otherwise)
   - UI shows a confirmation dialog warning that planner data will be deleted before re-import.
 

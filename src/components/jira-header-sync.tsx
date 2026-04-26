@@ -159,14 +159,15 @@ export function JiraHeaderSync() {
           ) : (
             <RefreshCw className="size-4" aria-hidden />
           )}
-          <span className="ml-1.5">Re-seed DB</span>
+          <span className="ml-1.5">Generate + re-seed</span>
         </DialogTrigger>
 
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Reset and re-seed database?</DialogTitle>
+            <DialogTitle>Generate CSVs + reset and re-seed database?</DialogTitle>
             <div className="text-muted-foreground text-sm">
-              This will run <span className="font-mono">SEED_PROD_RESET=1</span> and re-import data.
+              This will regenerate <span className="font-mono">scripts/datasets/prod-import</span>, then run{" "}
+              <span className="font-mono">SEED_PROD_RESET=1</span> and re-import data.
               <span className="block mt-2 font-medium text-red-600">
                 Warning: this deletes planner data before re-import.
               </span>
@@ -184,7 +185,7 @@ export function JiraHeaderSync() {
               onClick={seedProdResetDb}
             >
               {seeding ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              <span className={cn(seeding ? "ml-2" : "")}>Confirm reset + re-seed</span>
+              <span className={cn(seeding ? "ml-2" : "")}>Confirm generate + reset + re-seed</span>
             </Button>
           </DialogFooter>
         </DialogContent>

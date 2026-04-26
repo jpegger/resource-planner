@@ -42,17 +42,25 @@ const DEV_DATASET_DIR = path.join(__dirname, "datasets", "dev");
 const SEED_DATASET_DIR = process.env["SEED_DATASET_DIR"]
   ? path.resolve(process.cwd(), process.env["SEED_DATASET_DIR"])
   : null;
+const STRICT_DATASET =
+  process.env["SEED_STRICT_DATASET"] === "1" ||
+  process.env["SEED_STRICT_DATASET"] === "true";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function resolveCsvPath(filename: string): string {
+function resolveCsvSource(filename: string): { source: "override" | "prod-import" | "dev"; path: string } {
   if (SEED_DATASET_DIR) {
     const overridePath = path.join(SEED_DATASET_DIR, filename);
-    if (fs.existsSync(overridePath)) return overridePath;
+    if (fs.existsSync(overridePath)) return { source: "override", path: overridePath };
   }
   const prodImportPath = path.join(PROD_IMPORT_DIR, filename);
-  if (fs.existsSync(prodImportPath)) return prodImportPath;
-  return path.join(DEV_DATASET_DIR, filename);
+  if (fs.existsSync(prodImportPath)) return { source: "prod-import", path: prodImportPath };
+  if (STRICT_DATASET) return { source: "prod-import", path: prodImportPath };
+  return { source: "dev", path: path.join(DEV_DATASET_DIR, filename) };
+}
+
+function resolveCsvPath(filename: string): string {
+  return resolveCsvSource(filename).path;
 }
 
 function readCsv(filename: string, encoding: "latin1" | "utf8"): Record<string, string>[] {
@@ -104,7 +112,8 @@ function allocationIdFromPair(resourceId: string, initiativeId: string): string 
 
 async function seedInitiatives(): Promise<void> {
   console.log("Seeding initiatives from JIRA.csv...");
-  const rows = readCsv("JIRA.csv", "latin1");
+  // Our generated prod-import CSVs are UTF-8; latin1 here corrupts accents (é, à, …).
+  const rows = readCsv("JIRA.csv", "utf8");
 
   const allocationEntityMap = new Map<string, string>();
   const allEntities = await prisma.allocationEntity.findMany({ select: { id: true, name: true } });
@@ -916,7 +925,19 @@ async function main(): Promise<void> {
   console.log("🌱 Production seed\n");
   console.log(`   ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)}\n`);
 
-  const required = ["JIRA.csv", "RESSOURCES.csv", "RATES.csv", "Assignement.csv"];
+  const required = ["RESSOURCES.csv", "RATES.csv", "Assignement.csv"];
+  for (const f of [...required, "RateStandard.csv"]) {
+    const r = resolveCsvSource(f);
+    if (r.source === "dev") {
+      console.warn(
+        `⚠ Using DEV dataset fallback for ${f} → ${path.relative(process.cwd(), r.path)} (prod-import missing)`
+      );
+    }
+    if (r.source === "override") {
+      console.log(`• Using override dataset for ${f} → ${path.relative(process.cwd(), r.path)}`);
+    }
+  }
+  if (!STRICT_DATASET) console.log("");
   for (const f of required) {
     if (!fs.existsSync(resolveCsvPath(f))) {
       console.error(
@@ -944,7 +965,15 @@ async function main(): Promise<void> {
     );
   }
 
-  await seedInitiatives();
+  const jiraCsvPath = resolveCsvPath("JIRA.csv");
+  if (fs.existsSync(jiraCsvPath)) {
+    await seedInitiatives();
+  } else {
+    console.log(
+      `Skipping initiatives: missing JIRA.csv (looked in ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)}).\n` +
+        "Run Jira sync (or provide JIRA.csv via SEED_DATASET_DIR) if initiatives are missing."
+    );
+  }
   await seedResources();
   await seedRateStandard();
   await seedRates();

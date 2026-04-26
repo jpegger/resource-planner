@@ -34,20 +34,65 @@ export async function POST(): Promise<Response> {
 
     const repoRoot = process.cwd();
     const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
-    const scriptPath = path.join(repoRoot, "scripts", "seed-production.ts");
+    const seedScriptPath = path.join(repoRoot, "scripts", "seed-production.ts");
+    const generateScriptPath = path.join(repoRoot, "scripts", "xlsx-to-prod-data-auto.ts");
 
     const env = {
       ...process.env,
       SEED_PROD_RESET: "1",
+      SEED_STRICT_DATASET: "1",
     };
 
-    const { stdout, stderr, code } = await run(tsxBin, [scriptPath], repoRoot, env);
-
-    if (code !== 0) {
-      return NextResponse.json({ error: "Seed failed", code, stdout, stderr }, { status: 500 });
+    const input = process.env["PROD_IMPORT_XLSX_PATH"];
+    if (!input) {
+      return NextResponse.json(
+        {
+          error:
+            'Missing PROD_IMPORT_XLSX_PATH. Set it to the Excel workbook path on the server (e.g. "/data/budget.xlsx").',
+        },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ ok: true, stdout, stderr }, { status: 200 });
+    const outDir = "scripts/datasets/prod-import";
+
+    const generate = await run(
+      tsxBin,
+      [generateScriptPath, "--input", input, "--outDir", outDir],
+      repoRoot,
+      env
+    );
+    if (generate.code !== 0) {
+      return NextResponse.json(
+        { error: "CSV generation failed", code: generate.code, stdout: generate.stdout, stderr: generate.stderr },
+        { status: 500 }
+      );
+    }
+
+    const seed = await run(tsxBin, [seedScriptPath], repoRoot, env);
+
+    if (seed.code !== 0) {
+      return NextResponse.json(
+        {
+          error: "Seed failed",
+          code: seed.code,
+          stdout: `--- generate ---\n${generate.stdout}\n\n--- seed ---\n${seed.stdout}`,
+          stderr: `--- generate ---\n${generate.stderr}\n\n--- seed ---\n${seed.stderr}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        outDir,
+        input,
+        stdout: `--- generate ---\n${generate.stdout}\n\n--- seed ---\n${seed.stdout}`,
+        stderr: `--- generate ---\n${generate.stderr}\n\n--- seed ---\n${seed.stderr}`,
+      },
+      { status: 200 }
+    );
   } catch (err) {
     console.error("[POST /api/admin/db/seed-prod-reset]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

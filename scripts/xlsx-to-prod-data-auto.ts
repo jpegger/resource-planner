@@ -29,7 +29,9 @@ function parseArgs(argv: string[]) {
     else if (a.startsWith("--")) {
       const key = a.slice(2);
       const val = argv[i + 1];
-      if (!val || val.startsWith("--")) {
+      // NOTE: `val` may legally be an empty string when passed as `--key ""` from npm scripts.
+      // Only treat it as missing when it is truly absent or the next arg is another flag.
+      if (val === undefined || val.startsWith("--")) {
         out[key] = "true";
       } else {
         out[key] = val;
@@ -201,6 +203,32 @@ function sheetToObjects(
   return out;
 }
 
+function findHeaderRow0ByCellValue(
+  wb: xlsx.WorkBook,
+  sheetName: string,
+  wantedHeader: string,
+  opts?: { maxScanRows?: number }
+): number {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) throw new Error(`Missing sheet: ${sheetName}`);
+  const range = xlsx.utils.decode_range(ws["!ref"] as string);
+  const maxScan = opts?.maxScanRows ?? 15;
+  const endRow = Math.min(range.e.r, range.s.r + maxScan);
+  const wanted = wantedHeader.trim();
+
+  for (let r = range.s.r; r <= endRow; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = xlsx.utils.encode_cell({ r, c });
+      const cell = ws[addr];
+      if (!cell) continue;
+      const s = excelCellToString(cell);
+      if (stripBom(s).trim() === wanted) return r;
+    }
+  }
+
+  throw new Error(`Could not find header "${wantedHeader}" in sheet: ${sheetName}`);
+}
+
 function readReferenceHeaderLine(csvPath: string): string {
   const content = fs.readFileSync(csvPath, { encoding: "utf8" });
   // Keep raw header line exactly as stored in repo.
@@ -218,27 +246,73 @@ function stripBom(s: string): string {
 
 /** Header on `(B) Assignements` for allocation % — may include a trailing space in CSV ref. */
 function isPercentAssignmentSheetColumn(header: string): boolean {
-  return stripBom(header).trim().startsWith("Percent assignement");
+  const h = stripBom(header).trim().toLowerCase();
+  return h.startsWith("percent assignement") || h.startsWith("percent assignment");
 }
 
 function headerKey(headers: string[], wanted: string): string {
-  const found = headers.find((h) => stripBom(h) === wanted);
+  const clean = (s: string) =>
+    stripBom(s)
+      .replace(/\u00A0/g, " ")
+      .replace(/^"+/, "")
+      .replace(/"+$/, "")
+      .trim();
+  const w = clean(wanted);
+  const found =
+    headers.find((h) => stripBom(h) === wanted) ??
+    headers.find((h) => clean(h) === w);
   return found ?? wanted;
 }
 
 function buildRow(headers: string[], values: Record<string, string>): Record<string, string> {
+  const clean = (s: string) =>
+    stripBom(s)
+      .replace(/\u00A0/g, " ")
+      .replace(/^"+/, "")
+      .replace(/"+$/, "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const valueByClean = new Map<string, string>();
+  for (const [k, v] of Object.entries(values)) {
+    valueByClean.set(clean(k), v);
+  }
+
   const out: Record<string, string> = {};
-  for (const h of headers) out[h] = values[h] ?? "";
+  for (const h of headers) {
+    out[h] = values[h] ?? valueByClean.get(clean(h)) ?? "";
+  }
   return out;
 }
 
 function pick(row: Record<string, unknown>, keys: string[]): string {
+  const normalize = (s: string): string =>
+    stripBom(s)
+      .replace(/\u00A0/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
   for (const k of keys) {
     if (Object.prototype.hasOwnProperty.call(row, k)) {
       const v = row[k];
       const s = trimToString(v);
       if (s !== "") return s;
     }
+  }
+
+  const keyByNorm = new Map<string, string>();
+  for (const actual of Object.keys(row)) {
+    const n = normalize(actual);
+    if (!keyByNorm.has(n)) keyByNorm.set(n, actual);
+  }
+  for (const wanted of keys) {
+    const actual = keyByNorm.get(normalize(wanted));
+    if (!actual) continue;
+    const v = row[actual];
+    const s = trimToString(v);
+    if (s !== "") return s;
   }
   return "";
 }
@@ -261,9 +335,12 @@ function normalizeResourceNameParts(row: Record<string, unknown>): {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const input =
-    (args["input"] as string) ??
-    "/mnt/c/Users/jegger/Paradigm/CRPS_Customer Relation Product & Strategy-Budget - Documents/Budget/Paradigm_Financials_Budget_v2.2_16.11.20241.xlsx";
+  const input = (args["input"] as string) ?? "";
+  if (!input) {
+    throw new Error(
+      "Missing --input. Pass the Excel workbook path explicitly, or set PROD_IMPORT_XLSX_PATH and run `npm run db:prod:generate-csv`."
+    );
+  }
   const outDir = (args["outDir"] as string) ?? "scripts/datasets/prod-import";
   const dryRun = Boolean(args["dryRun"]);
 
@@ -274,32 +351,107 @@ async function main(): Promise<void> {
   const refResHeaderLine = readReferenceHeaderLine(path.join(refDir, "RESSOURCES.csv"));
   const refRatesHeaderLine = readReferenceHeaderLine(path.join(refDir, "RATES.csv"));
   const refRevHeaderLine = readReferenceHeaderLine(path.join(refDir, "REVENU.csv"));
+  const refRateStandardHeaderLine = readReferenceHeaderLine(path.join(refDir, "RateStandard.csv"));
+  const refJiraHeaderLine = readReferenceHeaderLine(path.join(refDir, "JIRA.csv"));
 
   const refAssignHeaders = splitHeaderLine(refAssignHeaderLine);
   const refResHeaders = splitHeaderLine(refResHeaderLine);
   const refRatesHeaders = splitHeaderLine(refRatesHeaderLine);
   const refRevHeaders = splitHeaderLine(refRevHeaderLine);
+  const refRateStandardHeaders = splitHeaderLine(refRateStandardHeaderLine);
+  const refJiraHeaders = splitHeaderLine(refJiraHeaderLine);
 
   // Minimal sanity checks: non-empty header lists.
   if (refAssignHeaders.length < 5) throw new Error("Bad reference header: Assignement.csv");
   if (refResHeaders.length < 5) throw new Error("Bad reference header: RESSOURCES.csv");
   if (refRatesHeaders.length < 5) throw new Error("Bad reference header: RATES.csv");
   if (refRevHeaders.length < 5) throw new Error("Bad reference header: REVENU.csv");
+  if (refRateStandardHeaders.length < 5) throw new Error("Bad reference header: RateStandard.csv");
+  if (refJiraHeaders.length < 5) throw new Error("Bad reference header: JIRA.csv");
 
   const wb = xlsx.readFile(input, { raw: true, cellDates: false });
+  const jiraHeaderRow0 = findHeaderRow0ByCellValue(wb, "(J) Initiative Export", "Key");
+  const assignHeaderRow0 = findHeaderRow0ByCellValue(wb, "(B) Assignements", "RessourceId");
 
   const specs: SheetSpec[] = [
     {
+      sheetName: "(J) Initiative Export",
+      headerRow0: jiraHeaderRow0,
+      outFilename: "JIRA.csv",
+      outHeaders: refJiraHeaders,
+      keepRow: (row) => {
+        const key = pick(row, ["Key", "KEY", "Issue key", "Issue Key"]);
+        return key !== "";
+      },
+      mapRow: (row) => {
+        const H_Key = headerKey(refJiraHeaders, "Key");
+        const H_Year = headerKey(refJiraHeaders, "(RI) Year");
+        const H_ProductGroup = headerKey(refJiraHeaders, "(RI) Product Group");
+        const H_Components = headerKey(refJiraHeaders, "Components");
+        const H_Summary = headerKey(refJiraHeaders, "Summary");
+        const H_Status = headerKey(refJiraHeaders, "Status");
+        const H_Type = headerKey(refJiraHeaders, "(RI) Type");
+        const H_Moscow = headerKey(refJiraHeaders, "(RI) MoSCoW");
+        const H_Assignee = headerKey(refJiraHeaders, "Assignee");
+        const H_Updated = headerKey(refJiraHeaders, "Updated");
+        const H_Sap = headerKey(refJiraHeaders, "(RI) SAP PROGR. FIN.");
+        const H_Total = headerKey(refJiraHeaders, "(RI) Total Cost EUR");
+        const H_InternalEur = headerKey(refJiraHeaders, "(RI) Internal EUR");
+        const H_InternalMd = headerKey(refJiraHeaders, "(RI) Internal Md");
+        const H_ExternalEur = headerKey(refJiraHeaders, "(RI) External EUR");
+        const H_ExternalMd = headerKey(refJiraHeaders, "(RI) External Md");
+        const H_Other = headerKey(refJiraHeaders, "(RI) Other Costs EUR");
+        const H_PreEur = headerKey(refJiraHeaders, "(RI) Pre-Analysis EUR");
+        const H_PreMd = headerKey(refJiraHeaders, "(RI) Pre-Analysis Md");
+        const H_Material = headerKey(refJiraHeaders, "(RI) Material Costs EUR");
+        const H_EstInv = headerKey(refJiraHeaders, "(RI) Estimated Customer Invoice EUR");
+
+        return buildRow(refJiraHeaders, {
+          [H_Key]: pick(row, ["Key", "KEY", "Issue key", "Issue Key"]),
+          [H_Year]: pick(row, ["(RI) Year", "RI Year", "Year", "(RI)Year"]),
+          [H_ProductGroup]: pick(row, ["(RI) Product Group", "Product Group", "(RI)Product Group"]),
+          [H_Components]: pick(row, ["Components", "Component", "Product (Component)"]),
+          [H_Summary]: pick(row, ["Summary", "Issue summary", "Issue Summary"]),
+          [H_Status]: pick(row, ["Status"]),
+          [H_Type]: pick(row, ["(RI) Type", "Type", "RI Type"]),
+          [H_Moscow]: pick(row, ["(RI) MoSCoW", "MoSCoW", "MOSCOW"]),
+          [H_EstInv]: pick(row, ["(RI) Estimated Customer Invoice EUR", "Estimated Customer Invoice EUR"]),
+          [H_ExternalEur]: pick(row, ["(RI) External EUR", "External EUR"]),
+          [H_ExternalMd]: pick(row, ["(RI) External Md", "External Md", "External MD"]),
+          [H_InternalEur]: pick(row, ["(RI) Internal EUR", "Internal EUR"]),
+          [H_InternalMd]: pick(row, ["(RI) Internal Md", "Internal Md", "Internal MD"]),
+          [H_Other]: pick(row, ["(RI) Other Costs EUR", "Other Costs EUR"]),
+          [H_PreEur]: pick(row, ["(RI) Pre-Analysis EUR", "Pre-Analysis EUR", "Pre Analysis EUR"]),
+          [H_PreMd]: pick(row, ["(RI) Pre-Analysis Md", "Pre-Analysis Md", "Pre Analysis Md"]),
+          [H_Sap]: pick(row, ["(RI) SAP PROGR. FIN.", "SAP PROGR. FIN.", "SAP"]),
+          [H_Total]: pick(row, ["(RI) Total Cost EUR", "Total Cost EUR"]),
+          [H_Assignee]: pick(row, ["Assignee", "Owner", "Assignee Name"]),
+          [H_Updated]: pick(row, ["Updated", "Last Updated"]),
+          [H_Material]: pick(row, ["(RI) Material Costs EUR", "Material Costs EUR"]),
+        });
+      },
+    },
+    {
       sheetName: "(B) Assignements",
-      headerRow0: 3,
+      headerRow0: assignHeaderRow0,
       outFilename: "Assignement.csv",
       outHeaders: refAssignHeaders,
       keepRow: (row) => {
-        const resourceId = pick(row, ["RessourceId"]);
-        const initiativeId = pick(row, ["InitiativeId"]);
+        const resourceId = pick(row, ["RessourceId", "ResourceId", "Ressource ID", "Resource ID"]);
+        const initiativeId = pick(row, ["InitiativeId", "Initiative ID", "Jira Key", "Key"]);
         return resourceId !== "" && initiativeId !== "";
       },
       mapRows: (rows) => {
+        const H_Resource = headerKey(refAssignHeaders, "Resource");
+        const H_Initiative = headerKey(refAssignHeaders, "Initiative");
+        const H_Percent = headerKey(refAssignHeaders, "Percent assignement ");
+        const H_ManDays = headerKey(refAssignHeaders, "Man Days Assignement");
+        const H_RessourceId = headerKey(refAssignHeaders, "RessourceId");
+        const H_InitiativeId = headerKey(refAssignHeaders, "InitiativeId");
+        const H_ProductGroup = headerKey(refAssignHeaders, "Product Group");
+        const H_ProductComponent = headerKey(refAssignHeaders, "Product (Component)");
+        const H_Year = headerKey(refAssignHeaders, "Year");
+
         type Acc = {
           resourceId: string;
           initiativeId: string;
@@ -321,14 +473,27 @@ async function main(): Promise<void> {
 
         const accByPair = new Map<string, Acc>();
         for (const row of rows) {
-          const resourceId = pick(row, ["RessourceId"]);
-          const initiativeId = pick(row, ["InitiativeId"]);
+          const resourceId = pick(row, ["RessourceId", "ResourceId", "Ressource ID", "Resource ID"]);
+          const initiativeId = pick(row, ["InitiativeId", "Initiative ID", "Jira Key", "Key"]);
           const key = `${resourceId}\t${initiativeId}`;
 
-          const percentRaw = pick(row, ["Percent assignement", "Percent assignement "]);
+          const percentRaw = pick(row, [
+            "Percent assignement",
+            "Percent assignement ",
+            "Percent assignment",
+            "Percent assignment ",
+            "% assignement",
+            "% assignment",
+          ]);
           const percent0to100 = percentStringTo0to100(trimToString(percentRaw));
 
-          const manDaysRaw = pick(row, ["Man Days Assignement"]);
+          const manDaysRaw = pick(row, [
+            "Man Days Assignement",
+            "Man Days Assignment",
+            "Man Days",
+            "Man-days",
+            "Mandays",
+          ]);
           const manDaysNum = parseLooseNumber(manDaysRaw);
 
           let acc = accByPair.get(key);
@@ -358,15 +523,15 @@ async function main(): Promise<void> {
           const pct = acc.percentSum0to100;
           out.push(
             buildRow(refAssignHeaders, {
-              "Resource": acc.resource,
-              "Initiative": acc.initiative,
-              "Percent assignement ": formatPercent0to100(pct),
-              "Man Days Assignement": formatManDaysForCsv(acc.manDaysSum),
-              "RessourceId": trimToString(acc.resourceId),
-              "InitiativeId": acc.initiativeId,
-              "Product Group": acc.productGroup,
-              "Product (Component)": acc.productComponent,
-              "Year": acc.year,
+              [H_Resource]: acc.resource,
+              [H_Initiative]: acc.initiative,
+              [H_Percent]: formatPercent0to100(pct),
+              [H_ManDays]: formatManDaysForCsv(acc.manDaysSum),
+              [H_RessourceId]: trimToString(acc.resourceId),
+              [H_InitiativeId]: acc.initiativeId,
+              [H_ProductGroup]: acc.productGroup,
+              [H_ProductComponent]: acc.productComponent,
+              [H_Year]: acc.year,
             })
           );
         }
@@ -374,17 +539,30 @@ async function main(): Promise<void> {
       },
       mapRow: (row) =>
         buildRow(refAssignHeaders, {
-          "Resource": pick(row, ["Resource"]),
-          "Initiative": pick(row, ["Initiative"]),
-          "Percent assignement ": formatPercentForSeed(
-            pick(row, ["Percent assignement", "Percent assignement "])
+          [headerKey(refAssignHeaders, "Resource")]: pick(row, ["Resource"]),
+          [headerKey(refAssignHeaders, "Initiative")]: pick(row, ["Initiative"]),
+          [headerKey(refAssignHeaders, "Percent assignement ")]: formatPercentForSeed(
+            pick(row, [
+              "Percent assignement",
+              "Percent assignement ",
+              "Percent assignment",
+              "Percent assignment ",
+              "% assignement",
+              "% assignment",
+            ])
           ),
-          "Man Days Assignement": pick(row, ["Man Days Assignement"]),
-          "RessourceId": pick(row, ["RessourceId"]),
-          "InitiativeId": pick(row, ["InitiativeId"]),
-          "Product Group": pick(row, ["Product Group"]),
-          "Product (Component)": pick(row, ["Product (Component)"]),
-          "Year": pick(row, ["Year"]),
+          [headerKey(refAssignHeaders, "Man Days Assignement")]: pick(row, [
+            "Man Days Assignement",
+            "Man Days Assignment",
+            "Man Days",
+            "Man-days",
+            "Mandays",
+          ]),
+          [headerKey(refAssignHeaders, "RessourceId")]: pick(row, ["RessourceId", "ResourceId", "Ressource ID", "Resource ID"]),
+          [headerKey(refAssignHeaders, "InitiativeId")]: pick(row, ["InitiativeId", "Initiative ID", "Jira Key", "Key"]),
+          [headerKey(refAssignHeaders, "Product Group")]: pick(row, ["Product Group"]),
+          [headerKey(refAssignHeaders, "Product (Component)")]: pick(row, ["Product (Component)"]),
+          [headerKey(refAssignHeaders, "Year")]: pick(row, ["Year"]),
         }),
     },
     {
@@ -442,6 +620,31 @@ async function main(): Promise<void> {
         }),
     },
     {
+      sheetName: "(R) Rates",
+      headerRow0: 3,
+      outFilename: "RateStandard.csv",
+      outHeaders: refRateStandardHeaders,
+      keepRow: (row) => {
+        const name = pick(row, ["Name", "Name "]).toLowerCase();
+        return name.includes("standard rate");
+      },
+      mapRow: (row) => {
+        const name = pick(row, ["Name", "Name "]).toLowerCase();
+        const isExternal = name.includes("external");
+        const isInternal = name.includes("internal");
+        const type = isExternal ? "External" : isInternal ? "Internal" : "Internal";
+        return buildRow(refRateStandardHeaders, {
+          "RateStandardPrimaryId": pick(row, ["RateId"]),
+          "DailyRate": pick(row, ["Daily Cost", "Daily Cost "]),
+          "IsInternalOrExternal": type,
+          "NbrOfDaysPerYear": pick(row, ["Nbr of Days per Year", "Nbr of Days per Year "]),
+          "Year": pick(row, ["Year"]),
+          "Created On": "",
+          "Modified On": "",
+        });
+      },
+    },
+    {
       sheetName: "(B) Revenues Assignments",
       headerRow0: 5,
       outFilename: "REVENU.csv",
@@ -494,13 +697,17 @@ async function main(): Promise<void> {
 
     if (!dryRun) {
       const headerLine =
-        spec.outFilename === "Assignement.csv"
+        spec.outFilename === "JIRA.csv"
+          ? refJiraHeaderLine
+          : spec.outFilename === "Assignement.csv"
           ? refAssignHeaderLine
           : spec.outFilename === "RESSOURCES.csv"
-            ? refResHeaderLine
-            : spec.outFilename === "RATES.csv"
-              ? refRatesHeaderLine
-              : refRevHeaderLine;
+          ? refResHeaderLine
+          : spec.outFilename === "RATES.csv"
+          ? refRatesHeaderLine
+          : spec.outFilename === "RateStandard.csv"
+          ? refRateStandardHeaderLine
+          : refRevHeaderLine;
       csvWriteWithExactHeaderLine({
         outPath,
         headerLine,

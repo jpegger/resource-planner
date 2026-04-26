@@ -22,9 +22,16 @@ export async function POST(): Promise<Response> {
   try {
     const repoRoot = process.cwd();
 
-    const input =
-      process.env["PROD_IMPORT_XLSX_PATH"] ??
-      "/mnt/c/Users/jegger/Paradigm/CRPS_Customer Relation Product & Strategy-Budget - Documents/Budget/Paradigm_Financials_Budget_v2.2_16.11.20241.xlsx";
+    const input = process.env["PROD_IMPORT_XLSX_PATH"];
+    if (!input) {
+      return NextResponse.json(
+        {
+          error:
+            'Missing PROD_IMPORT_XLSX_PATH. Set it to the Excel workbook path on the machine running Next.js (e.g. "/data/budget.xlsx").',
+        },
+        { status: 400 }
+      );
+    }
     const outDir = "scripts/datasets/prod-import";
 
     const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");

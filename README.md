@@ -81,6 +81,15 @@ Create `.env` (never commit it):
 ```env
 DATABASE_URL=postgresql://admin:admin@localhost:5432/resource_planner?schema=public
 
+# Allow in-app admin endpoints that run local scripts (dangerous).
+ALLOW_ADMIN_SEED=1
+
+# Excel workbook path used to generate scripts/datasets/prod-import/*.csv
+# Required for:
+# - POST /api/admin/prod-data-auto/generate
+# - POST /api/admin/db/seed-prod-reset
+PROD_IMPORT_XLSX_PATH=/absolute/path/to/Paradigm_Financials_Budget.xlsx
+
 # Optional (only needed for Jira sync)
 JIRA_HOST=https://your-company.atlassian.net
 JIRA_EMAIL=your.email@company.be
@@ -140,6 +149,12 @@ The production seed (`npm run db:seed:prod`) reads from `scripts/datasets/prod-i
 
 If you need to import from a different directory, set `SEED_DATASET_DIR=/absolute/or/relative/path`.
 
+Generate the prod-import CSVs from Excel:
+
+```bash
+npm run db:prod:generate-csv
+```
+
 ### Seed flags (production seed)
 
 ```bash
@@ -148,6 +163,9 @@ npm run db:seed:prod
 
 # Full reload (clears planner tables; preserves allocation_entity)
 SEED_PROD_RESET=1 npm run db:seed:prod
+
+# Force the seed to NOT fall back to scripts/datasets/dev (fails if prod-import is incomplete)
+SEED_STRICT_DATASET=1 npm run db:seed:prod
 
 # Views only (no CSV import): v_allocation_costs, v_eotp_costs, v_revenues, snapshot/baseline views, dim_* tables
 SEED_VIEW_ONLY=1 npm run db:seed:prod
