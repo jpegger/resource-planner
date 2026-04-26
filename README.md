@@ -225,6 +225,38 @@ npm run test:ui
 
 ---
 
+## Jira updater script (create Products + link Initiatives)
+
+This repository also includes a **review-first** CLI that helps you update Jira safely:
+
+- Create missing Jira **Product** issues from `scripts/datasets/dev/PRODUCTS.csv`
+- Add **Enables** links from Jira **Initiatives** (scoped by `JIRA_JQL` / `JIRA_FILTER_ID`) to their Product
+- Defaults to **dry-run** and produces a timestamped `plan.json` you can review before re-running with `--apply`
+
+### Usage
+
+Dry-run (review 3 → 10 → all):
+
+```bash
+npx tsx scripts/jira/update-jira-products-and-links.ts --step products --sample 3
+npx tsx scripts/jira/update-jira-products-and-links.ts --step products --sample 10
+
+npx tsx scripts/jira/update-jira-products-and-links.ts --step links --sample 3
+npx tsx scripts/jira/update-jira-products-and-links.ts --step links --sample 10
+```
+
+Apply (only after review):
+
+```bash
+npx tsx scripts/jira/update-jira-products-and-links.ts --step all --sample all --apply
+```
+
+### Matching rules
+
+- **Product exists check**: Jira Product `summary.trim()` exact match to CSV `name.trim()`
+- **Initiative → Product mapping**: first Initiative component name (exact trim) matches Product `summary`
+- **Already-linked detection**: skips initiatives that already have an **Enables** link to a Jira issue of issuetype `Product`
+
 ## Power BI notes (planning vs baseline)
 
 After creating at least one snapshot and one baseline in the UI (`/budget-comparison`) and ensuring the views exist (run `SEED_VIEW_ONLY=1 npm run db:seed:prod` if needed):

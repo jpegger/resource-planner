@@ -1,9 +1,18 @@
 ---
-description: Development workflow — environment variables, seed order, schema changes
+description: Development workflow — WSL, environment variables, seed order, schema changes
 alwaysApply: false
 ---
 
 # Development Workflow
+
+## WSL and terminal
+
+- Develop and run this project in **WSL2 (Ubuntu)**. Use **WSL bash** for shell commands, not PowerShell or CMD.
+- **Node** is managed with **nvm**. Run `nvm use` (honours `.nvmrc`) before any `node` or `npm` command when the shell might not be a project login shell.
+- **Secrets and config** live in **`.env`** at the repo root. Never hardcode database credentials or other secrets in source, scripts, or assistant output.
+- **PostgreSQL** runs in WSL (commonly via Docker). **`DATABASE_URL`** in `.env` is the single source of truth for the connection string. Prefer **`127.0.0.1`** over `localhost` there when using Docker Desktop from WSL, to avoid IPv6 resolution issues.
+- **`npm` scripts** load `.env` through **dotenv-cli** (`dotenv -e .env -- …`). Prefer **`npm run <script>`** over raw `tsx` / `node` invocations unless there is a specific reason not to.
+- Paths are **Unix-only** (e.g. `/home/.../resource-planner`). Do not use Windows-style paths (`C:\...`).
 
 ## Environment Variables
 
@@ -32,15 +41,13 @@ npm run dev                        # → http://localhost:3000
 
 ## Command-line defaults (Cursor)
 
-When running commands from Cursor/agents, prefer a login shell and NVM so the correct Node version
-from `.nvmrc` is used (instead of any bundled Node runtime):
+From Cursor or agents, use **WSL bash** with **nvm** so `.nvmrc` is applied (see **WSL and terminal** above). Template:
 
 ```bash
-# Template
 bash -lc 'cd ~/projects/resource-planner && nvm use && <command>'
 ```
 
-DB scripts require Postgres to be reachable at `127.0.0.1:5432`.
+Use **`npm run …`** where a script exists so **dotenv-cli** loads `.env`. DB scripts need Postgres reachable at **`127.0.0.1:5432`** (or whatever `DATABASE_URL` specifies).
 
 Canonical production seed (reset + import):
 

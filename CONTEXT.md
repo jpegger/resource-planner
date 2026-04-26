@@ -551,6 +551,46 @@ Jira custom fields:
 
 ---
 
+## 8.1 Jira updater script (create Products + link Initiatives)
+
+Purpose:
+
+- Create missing Jira **Product** issues from `scripts/datasets/dev/PRODUCTS.csv`
+- Add **Enables** issue links from Jira **Initiatives** (scoped by `JIRA_JQL` / `JIRA_FILTER_ID`) to their Product
+- **Safety**: defaults to dry-run and writes a timestamped plan under `scripts/jira/out/`
+
+Script:
+
+- `scripts/jira/update-jira-products-and-links.ts`
+
+Environment variables:
+
+- Auth: `JIRA_HOST`, `JIRA_EMAIL`, `JIRA_TOKEN`
+- Initiatives scope: `JIRA_JQL` (preferred) or `JIRA_FILTER_ID`
+- Products scope (optional): `JIRA_PRODUCT_JQL` (default `issuetype = Product`)
+- Custom-field overrides (optional): `JIRA_FIELD_PRODUCT_FAMILY`, `JIRA_FIELD_DIVISION`, `JIRA_FIELD_SUB_DIVISION`, `JIRA_FIELD_TEAM`, `JIRA_FIELD_SAP_PROG_FIN`, `JIRA_FIELD_ATTRACTIVENESS`, `JIRA_FIELD_COMPETITIVENESS`, `JIRA_FIELD_TYPE_PRODUCT`
+
+Matching rules:
+
+- **Products**: Jira Product `summary.trim()` exact match to CSV `name.trim()` to decide “already exists”
+- **Initiative → Product mapping**: Initiative first component name (exact trim) → Product summary
+- **Already-linked detection**: skips Initiatives that already have an **Enables** link to a Jira issue of issuetype `Product`
+
+Progressive review workflow (3 → 10 → apply):
+
+```bash
+# Dry-run: plan product creates
+npx tsx scripts/jira/update-jira-products-and-links.ts --step products --sample 3
+npx tsx scripts/jira/update-jira-products-and-links.ts --step products --sample 10
+
+# Dry-run: plan enables links
+npx tsx scripts/jira/update-jira-products-and-links.ts --step links --sample 3
+npx tsx scripts/jira/update-jira-products-and-links.ts --step links --sample 10
+
+# Apply (only after review)
+npx tsx scripts/jira/update-jira-products-and-links.ts --step all --sample all --apply
+```
+
 ## 9. Seed Scripts
 
 | Script | Command | Source Files | Purpose |

@@ -16,7 +16,7 @@ Drop the `.cursor/` folder at the root of the repository alongside `package.json
 | `60-business-logic.mdc` | `src/lib/**`, `src/app/api/**`, `scripts/**` | No |
 | `70-powerbi-sql.mdc` | `scripts/**`, `prisma/**` | No |
 | `80-styling.mdc` | `src/app/**/*.tsx`, `src/components/**/*.tsx` | No |
-| `90-dev-workflow.mdc` | (reference — no glob) | No |
+| `90-dev-workflow.mdc` | WSL, env, seeds, migrations (reference — no glob) | No |
 
 ## Design Principles
 
