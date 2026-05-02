@@ -323,7 +323,7 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 | **`dim_year`** | Small table (years 2023–2028 seeded) for Power BI relationships to snapshot/baseline detail views. |
 | **`dim_eotp`** | **View**: distinct **`eotp`** (and label) from **`allocation_snapshot_row`** ∪ **`budget_baseline_row`**; **`DISTINCT ON (eotp)`** so one row per code for dimension relationships. |
 
-**Comparison vs baseline:** done in **Power BI**, not in-app. Gap concept: baseline tracks external + direct “catchout” scope; **`v_snapshot_detail`** exposes **`catchout`** = `external + direct`. See **§5.3**.
+**Comparison vs baseline:** done in **Power BI**, not in-app. Gap concept: baseline tracks external + direct “cash out” scope; **`v_snapshot_detail`** exposes **`cash_out`** = `external + direct`. See **§5.3**.
 
 **APIs:** **`GET` / `POST /api/snapshots`**, **`DELETE /api/snapshots/[id]`**; **`GET` / `POST /api/baselines`** (multipart Excel), **`DELETE /api/baselines/[id]`**. UI: **`/budget-comparison`**.
 
@@ -405,9 +405,9 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 
 Created by the same production seed path as **`v_allocation_costs`** (after snapshot/baseline tables exist). Import into Power BI: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_year`**, **`dim_eotp`**.
 
-- **`v_snapshot_detail`** — joins **`allocation_snapshot`** and **`allocation_snapshot_row`**; includes **`catchout`** (= `external + direct`).
+- **`v_snapshot_detail`** — joins **`allocation_snapshot`** and **`allocation_snapshot_row`**; includes **`cash_out`** (= `external + direct`).
 - **`v_baseline_detail`** — joins **`budget_baseline`** and **`budget_baseline_row`**; **`baseline_amount`**.
-- Relationships: **`dim_year[year]`** → both detail views; **`dim_eotp[eotp]`** → **`v_snapshot_detail[eotp]`** and **`v_baseline_detail[eotp]`** (many-to-one from facts to **`dim_eotp`**). Use **`dim_eotp`** on matrix rows so measures from both facts filter per EOTP. **Measures (example):** `Planned Catchout = SUM(v_snapshot_detail[catchout])`, `Baseline Amount = SUM(v_baseline_detail[baseline_amount])`, `Gap = [Baseline Amount] - [Planned Catchout]`.
+- Relationships: **`dim_year[year]`** → both detail views; **`dim_eotp[eotp]`** → **`v_snapshot_detail[eotp]`** and **`v_baseline_detail[eotp]`** (many-to-one from facts to **`dim_eotp`**). Use **`dim_eotp`** on matrix rows so measures from both facts filter per EOTP. **Measures (example):** `Planned Cash Out = SUM(v_snapshot_detail[cash_out])`, `Baseline Amount = SUM(v_baseline_detail[baseline_amount])`, `Gap = [Baseline Amount] - [Planned Cash Out]`.
 
 See `README.md` (Power BI notes) for step-by-step import notes.
 

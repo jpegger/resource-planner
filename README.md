@@ -289,7 +289,7 @@ After creating at least one snapshot and one baseline in the UI (`/budget-compar
 Example measures:
 
 ```dax
-Planned Catchout = SUM(v_snapshot_detail[catchout])
+Planned Cash Out = SUM(v_snapshot_detail[cash_out])
 Baseline Amount = SUM(v_baseline_detail[baseline_amount])
-Gap = [Baseline Amount] - [Planned Catchout]
+Gap = [Baseline Amount] - [Planned Cash Out]
 ```

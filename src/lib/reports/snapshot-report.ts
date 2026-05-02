@@ -16,7 +16,7 @@ export type SnapshotRollupRow = {
   external: number;
   direct: number;
   total: number;
-  catchout: number;
+  cashOut: number;
 };
 
 export type SnapshotLevel = "division" | "team" | "product" | "eotp";
@@ -58,7 +58,7 @@ export async function querySnapshotRollup(params: {
         internal: unknown;
         external: unknown;
         direct: unknown;
-        catchout: unknown;
+        cash_out: unknown;
         total: unknown;
       }[]
     >(Prisma.sql`
@@ -68,7 +68,7 @@ export async function querySnapshotRollup(params: {
         COALESCE(SUM(d.internal), 0)::double precision AS internal,
         COALESCE(SUM(d.external), 0)::double precision AS external,
         COALESCE(SUM(d.direct), 0)::double precision AS direct,
-        COALESCE(SUM(d.catchout), 0)::double precision AS catchout,
+        COALESCE(SUM(d.cash_out), 0)::double precision AS cash_out,
         COALESCE(SUM(d.internal + d.external + d.direct), 0)::double precision AS total
       FROM v_snapshot_detail d
       ${where}
@@ -81,7 +81,7 @@ export async function querySnapshotRollup(params: {
       internal: Number(r.internal ?? 0),
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
-      catchout: Number(r.catchout ?? 0),
+      cashOut: Number(r.cash_out ?? 0),
       total: Number(r.total ?? 0),
     }));
   }
@@ -94,7 +94,7 @@ export async function querySnapshotRollup(params: {
         internal: unknown;
         external: unknown;
         direct: unknown;
-        catchout: unknown;
+        cash_out: unknown;
         total: unknown;
       }[]
     >(Prisma.sql`
@@ -104,7 +104,7 @@ export async function querySnapshotRollup(params: {
         COALESCE(SUM(d.internal), 0)::double precision AS internal,
         COALESCE(SUM(d.external), 0)::double precision AS external,
         COALESCE(SUM(d.direct), 0)::double precision AS direct,
-        COALESCE(SUM(d.catchout), 0)::double precision AS catchout,
+        COALESCE(SUM(d.cash_out), 0)::double precision AS cash_out,
         COALESCE(SUM(d.internal + d.external + d.direct), 0)::double precision AS total
       FROM v_snapshot_detail d
       ${where}
@@ -117,7 +117,7 @@ export async function querySnapshotRollup(params: {
       internal: Number(r.internal ?? 0),
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
-      catchout: Number(r.catchout ?? 0),
+      cashOut: Number(r.cash_out ?? 0),
       total: Number(r.total ?? 0),
     }));
   }
@@ -130,7 +130,7 @@ export async function querySnapshotRollup(params: {
         internal: unknown;
         external: unknown;
         direct: unknown;
-        catchout: unknown;
+        cash_out: unknown;
         total: unknown;
       }[]
     >(Prisma.sql`
@@ -140,7 +140,7 @@ export async function querySnapshotRollup(params: {
         COALESCE(SUM(d.internal), 0)::double precision AS internal,
         COALESCE(SUM(d.external), 0)::double precision AS external,
         COALESCE(SUM(d.direct), 0)::double precision AS direct,
-        COALESCE(SUM(d.catchout), 0)::double precision AS catchout,
+        COALESCE(SUM(d.cash_out), 0)::double precision AS cash_out,
         COALESCE(SUM(d.internal + d.external + d.direct), 0)::double precision AS total
       FROM v_snapshot_detail d
       ${where}
@@ -153,7 +153,7 @@ export async function querySnapshotRollup(params: {
       internal: Number(r.internal ?? 0),
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
-      catchout: Number(r.catchout ?? 0),
+      cashOut: Number(r.cash_out ?? 0),
       total: Number(r.total ?? 0),
     }));
   }
@@ -166,7 +166,7 @@ export async function querySnapshotRollup(params: {
       internal: unknown;
       external: unknown;
       direct: unknown;
-      catchout: unknown;
+      cash_out: unknown;
       total: unknown;
     }[]
   >(Prisma.sql`
@@ -176,7 +176,7 @@ export async function querySnapshotRollup(params: {
       COALESCE(SUM(d.internal), 0)::double precision AS internal,
       COALESCE(SUM(d.external), 0)::double precision AS external,
       COALESCE(SUM(d.direct), 0)::double precision AS direct,
-      COALESCE(SUM(d.catchout), 0)::double precision AS catchout,
+      COALESCE(SUM(d.cash_out), 0)::double precision AS cash_out,
       COALESCE(SUM(d.internal + d.external + d.direct), 0)::double precision AS total
     FROM v_snapshot_detail d
     ${where}
@@ -190,7 +190,7 @@ export async function querySnapshotRollup(params: {
     internal: Number(r.internal ?? 0),
     external: Number(r.external ?? 0),
     direct: Number(r.direct ?? 0),
-    catchout: Number(r.catchout ?? 0),
+    cashOut: Number(r.cash_out ?? 0),
     total: Number(r.total ?? 0),
   }));
 }

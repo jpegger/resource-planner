@@ -30,7 +30,7 @@ export async function createSnapshotBaselineViews(prisma: PrismaClient): Promise
       r.internal AS internal,
       r.external AS external,
       r.direct AS direct,
-      CAST(r.external AS double precision) + CAST(r.direct AS double precision) AS catchout
+      CAST(r.external AS double precision) + CAST(r.direct AS double precision) AS cash_out
     FROM allocation_snapshot s
     JOIN allocation_snapshot_row r ON r."snapshotId" = s.id
     LEFT JOIN allocation_entity ae ON ae.id = r."productId"
@@ -73,7 +73,7 @@ export async function createSnapshotBaselineViews(prisma: PrismaClient): Promise
       SUM(r.internal) AS internal,
       SUM(r.external) AS external,
       SUM(r.direct) AS direct,
-      SUM(CAST(r.external AS double precision) + CAST(r.direct AS double precision)) AS catchout
+      SUM(CAST(r.external AS double precision) + CAST(r.direct AS double precision)) AS cash_out
     FROM allocation_snapshot s
     JOIN allocation_snapshot_row r ON r."snapshotId" = s.id
     GROUP BY s.id, s.name, s."takenAt", s.year, r.eotp

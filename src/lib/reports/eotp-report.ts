@@ -140,7 +140,7 @@ export async function queryEotpTotals(
     SELECT
       v.eotp,
       MAX(v.eop_label) AS eop_label,
-      COALESCE(SUM(v.total_cost), 0)::double precision AS total
+      COALESCE(SUM(v.cash_out), 0)::double precision AS total
     FROM v_eotp_costs v
     JOIN allocation_entity p ON p.id = v.product_id
     WHERE ${whereSql}
@@ -171,7 +171,7 @@ export async function queryProductsForEotp(
     SELECT
       v.product_id,
       v.product_name,
-      COALESCE(SUM(v.total_cost), 0)::double precision AS total
+      COALESCE(SUM(v.cash_out), 0)::double precision AS total
     FROM v_eotp_costs v
     JOIN allocation_entity p ON p.id = v.product_id
     WHERE ${whereSql}

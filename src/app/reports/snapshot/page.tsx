@@ -26,7 +26,7 @@ type Row = {
   internal: number;
   external: number;
   direct: number;
-  catchout: number;
+  cashOut: number;
   total: number;
 };
 
@@ -276,7 +276,7 @@ export default function ReportsSnapshotPage() {
                         <th className="px-3 py-2">External</th>
                         <th className="px-3 py-2">Direct</th>
                         <th className="px-3 py-2">Total</th>
-                        <th className="px-3 py-2">Catchout</th>
+                        <th className="px-3 py-2">Cash Out</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -298,7 +298,7 @@ export default function ReportsSnapshotPage() {
                             <td className="px-3 py-2">{formatEuro(r.external)}</td>
                             <td className="px-3 py-2">{formatEuro(r.direct)}</td>
                             <td className="px-3 py-2 font-medium">{formatEuro(r.total)}</td>
-                            <td className="px-3 py-2">{formatEuro(r.catchout)}</td>
+                            <td className="px-3 py-2">{formatEuro(r.cashOut)}</td>
                           </tr>
                         ))
                       ) : (
