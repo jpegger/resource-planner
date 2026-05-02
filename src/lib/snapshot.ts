@@ -2,15 +2,20 @@ import { prisma } from "@/lib/prisma";
 import { computeEotpBreakdown } from "@/lib/eotp";
 import type { EotpRoutingRow } from "@/lib/eotp";
 
+export type AllocationBreakdownRow = {
+  eotp: string;
+  eopLabel: string | null;
+  productId: string;
+  productName: string;
+  internal: number;
+  external: number;
+  direct: number;
+};
+
 /**
- * Compute and persist an allocation snapshot for a given year.
- * Aggregates `v_allocation_costs` per product name, applies `computeEotpBreakdown`, writes frozen rows.
+ * Same cost attribution as a snapshot, from current `v_allocation_costs` and routing — not persisted.
  */
-export async function takeSnapshot(
-  name: string,
-  year: number,
-  takenBy: string
-): Promise<{ snapshotId: string; rowCount: number }> {
+export async function computeAllocationBreakdownForYear(year: number): Promise<AllocationBreakdownRow[]> {
   const entities = await prisma.allocationEntity.findMany({
     include: {
       eotpRoutings: { where: { year } },
@@ -48,15 +53,7 @@ export async function takeSnapshot(
     ])
   );
 
-  const rowPayloads: Array<{
-    eotp: string;
-    eopLabel: string | null;
-    productId: string;
-    productName: string;
-    internal: number;
-    external: number;
-    direct: number;
-  }> = [];
+  const rowPayloads: AllocationBreakdownRow[] = [];
 
   for (const entity of entities) {
     if (!entity.sapEotpCode?.trim()) continue;
@@ -94,6 +91,20 @@ export async function takeSnapshot(
       });
     }
   }
+
+  return rowPayloads;
+}
+
+/**
+ * Compute and persist an allocation snapshot for a given year.
+ * Aggregates `v_allocation_costs` per product name, applies `computeEotpBreakdown`, writes frozen rows.
+ */
+export async function takeSnapshot(
+  name: string,
+  year: number,
+  takenBy: string
+): Promise<{ snapshotId: string; rowCount: number }> {
+  const rowPayloads = await computeAllocationBreakdownForYear(year);
 
   return prisma.$transaction(async (tx) => {
     const snapshot = await tx.allocationSnapshot.create({
