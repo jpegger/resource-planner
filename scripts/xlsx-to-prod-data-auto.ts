@@ -353,6 +353,7 @@ async function main(): Promise<void> {
   const refRevHeaderLine = readReferenceHeaderLine(path.join(refDir, "REVENU.csv"));
   const refRateStandardHeaderLine = readReferenceHeaderLine(path.join(refDir, "RateStandard.csv"));
   const refJiraHeaderLine = readReferenceHeaderLine(path.join(refDir, "JIRA.csv"));
+  const refEotpRoutingPath = path.join(refDir, "EOTP_ROUTING.csv");
 
   const refAssignHeaders = splitHeaderLine(refAssignHeaderLine);
   const refResHeaders = splitHeaderLine(refResHeaderLine);
@@ -721,6 +722,24 @@ async function main(): Promise<void> {
     console.log(
       `${s.sheet} -> ${path.join(outDir, s.outFile)} (${s.inRows} rows -> ${s.outRows} rows)`
     );
+  }
+
+  // EOTP exception routing is not extracted from the workbook; prod seed loads it from
+  // EOTP_ROUTING.csv (same layout as db:seed:routing). Copy the repo canonical file so
+  // SEED_PROD_RESET runs repopulate eotp_routing instead of leaving it empty.
+  if (!dryRun) {
+    const routingOut = path.join(outDir, "EOTP_ROUTING.csv");
+    if (fs.existsSync(refEotpRoutingPath)) {
+      fs.copyFileSync(refEotpRoutingPath, routingOut);
+      console.log(
+        `EOTP routing -> ${path.join(outDir, "EOTP_ROUTING.csv")} (from ${path.relative(repoRoot, refEotpRoutingPath)})`
+      );
+    } else {
+      console.warn(
+        `⚠ No ${path.relative(repoRoot, refEotpRoutingPath)} — prod-import will have no EOTP_ROUTING.csv; ` +
+          `db:seed:prod reset will skip eotp_routing unless you add that file.`
+      );
+    }
   }
 
   if (dryRun) {
