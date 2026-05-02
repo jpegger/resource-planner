@@ -6,6 +6,8 @@ export type BudgetInitiative = {
   jira_key: string;
   summary: string;
   status: string;
+  /** Jira "(RI) Type" / initiative type; null when unset. */
+  initiative_type: string | null;
   initiative_year: number;
   internal_cost: number;
   external_cost: number;

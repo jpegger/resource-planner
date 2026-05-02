@@ -55,6 +55,7 @@ export async function GET(
       jira_key: r.jira_key,
       summary: r.summary,
       status: r.status,
+      initiative_type: r.initiative_type?.trim() ? r.initiative_type.trim() : null,
       initiative_year: initiativeYear,
       internal_cost: internal,
       external_cost: external,

@@ -7,6 +7,7 @@ export type BudgetRawRow = {
   jira_key: string;
   summary: string;
   status: string;
+  initiative_type: string | null;
   initiative_year: unknown;
   internal_cost: unknown;
   external_cost: unknown;
@@ -29,6 +30,7 @@ export async function queryBudgetRawRows(
         i.id AS jira_key,
         i.summary,
         i.status,
+        i."initiativeType" AS initiative_type,
         i.year AS initiative_year,
         COALESCE(SUM(v.internal_cost), 0) AS internal_cost,
         COALESCE(SUM(v.external_cost), 0) AS external_cost,
@@ -53,7 +55,7 @@ export async function queryBudgetRawRows(
       LEFT JOIN v_allocation_costs v ON v.jira_key = i.id
       WHERE i."allocation_entity_id" = ${id}
       ${yearFilter === null ? Prisma.empty : Prisma.sql`AND i.year = ${yearFilter}`}
-      GROUP BY i.id, i.summary, i.status, i.year
+      GROUP BY i.id, i.summary, i.status, i.year, i."initiativeType"
       ORDER BY i.year DESC, i.summary ASC
     `
   );
@@ -66,6 +68,7 @@ export function mapBudgetRawRowsToInitiatives(rows: BudgetRawRow[]): BudgetIniti
       jira_key: r.jira_key,
       summary: r.summary,
       status: r.status,
+      initiative_type: r.initiative_type?.trim() ? r.initiative_type.trim() : null,
       initiative_year: initiativeYear,
       internal_cost: Number(r.internal_cost),
       external_cost: Number(r.external_cost),

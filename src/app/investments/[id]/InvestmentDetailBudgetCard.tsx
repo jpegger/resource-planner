@@ -1,3 +1,4 @@
+import { Fragment, useMemo } from "react";
 import { Layers, Loader2 } from "lucide-react";
 
 import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
@@ -13,6 +14,32 @@ import type { BudgetInitiative } from "@/app/investments/[id]/investment-detail-
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PANEL_CARD_CLASS } from "@/lib/panel-card";
 import { cn } from "@/lib/utils";
+
+function groupBudgetInitiativesByType(initiatives: BudgetInitiative[]) {
+  const byKey = new Map<string, BudgetInitiative[]>();
+  for (const ini of initiatives) {
+    const key = ini.initiative_type?.trim() ?? "";
+    const bucket = byKey.get(key);
+    if (bucket) bucket.push(ini);
+    else byKey.set(key, [ini]);
+  }
+  for (const arr of byKey.values()) {
+    arr.sort((a, b) => {
+      if (b.initiative_year !== a.initiative_year) return b.initiative_year - a.initiative_year;
+      return a.summary.localeCompare(b.summary, undefined, { sensitivity: "base" });
+    });
+  }
+  const keys = [...byKey.keys()].sort((a, b) => {
+    if (a === "" && b !== "") return 1;
+    if (b === "" && a !== "") return -1;
+    return a.localeCompare(b, undefined, { sensitivity: "base" });
+  });
+  return keys.map((key) => ({
+    key: key || "__unspecified__",
+    label: key || "Unspecified",
+    items: byKey.get(key)!,
+  }));
+}
 
 export function InvestmentDetailBudgetCard({
   budgetLoading,
@@ -33,6 +60,8 @@ export function InvestmentDetailBudgetCard({
   selectedInitiative: BudgetInitiative | null;
   onSelectInitiative: (ini: BudgetInitiative) => void | Promise<void>;
 }) {
+  const initiativeGroups = useMemo(() => groupBudgetInitiativesByType(initiatives), [initiatives]);
+
   return (
     <Card className={cn(PANEL_CARD_CLASS, "flex min-h-0 flex-1 flex-col")}>
       <CardHeader className="pb-2">
@@ -81,66 +110,73 @@ export function InvestmentDetailBudgetCard({
               </div>
             </div>
             <ul className="space-y-0 divide-y divide-border">
-              {initiatives.map((ini) => (
-                <li key={`${ini.jira_key}-${ini.initiative_year}`}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => void onSelectInitiative(ini)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        void onSelectInitiative(ini);
-                      }
-                    }}
-                    className={cn(
-                      "hover:bg-muted/50 w-full rounded-md px-3 py-2.5 text-left transition-colors",
-                      selectedInitiative?.jira_key === ini.jira_key &&
-                        selectedInitiative?.initiative_year === ini.initiative_year
-                        ? "bg-[color:var(--primary-blue)]/10"
-                        : ""
-                    )}
-                  >
-                    <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-baseline gap-2">
-                          <span className="shrink-0 font-mono text-sm font-medium">
-                            {ini.jira_key}
-                          </span>
-                          <span
-                            className="text-foreground min-w-0 flex-1 truncate text-sm"
-                            title={ini.summary}
-                          >
-                            {ini.summary}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="text-muted-foreground text-xs tabular-nums">
-                            {ini.initiative_year}
-                          </span>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
-                              statusClass(ini.status)
-                            )}
-                          >
-                            {ini.status}
-                          </span>
+              {initiativeGroups.map((group) => (
+                <Fragment key={group.key}>
+                  <li className="bg-muted/5 list-none px-3 py-1.5">
+                    <span className="text-muted-foreground text-xs font-medium">{group.label}</span>
+                  </li>
+                  {group.items.map((ini) => (
+                    <li key={`${ini.jira_key}-${ini.initiative_year}`}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => void onSelectInitiative(ini)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            void onSelectInitiative(ini);
+                          }
+                        }}
+                        className={cn(
+                          "hover:bg-muted/50 w-full rounded-md px-3 py-2.5 text-left transition-colors",
+                          selectedInitiative?.jira_key === ini.jira_key &&
+                            selectedInitiative?.initiative_year === ini.initiative_year
+                            ? "bg-[color:var(--primary-blue)]/10"
+                            : ""
+                        )}
+                      >
+                        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-baseline gap-2">
+                              <span className="shrink-0 font-mono text-sm font-medium">
+                                {ini.jira_key}
+                              </span>
+                              <span
+                                className="text-foreground min-w-0 flex-1 truncate text-sm"
+                                title={ini.summary}
+                              >
+                                {ini.summary}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className="text-muted-foreground text-xs tabular-nums">
+                                {ini.initiative_year}
+                              </span>
+                              <span
+                                className={cn(
+                                  "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
+                                  statusClass(ini.status)
+                                )}
+                              >
+                                {ini.status}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-foreground min-w-0 shrink-0 overflow-x-auto sm:w-auto">
+                            <div className={FINANCIALS_4COL}>
+                              <span className="block text-right">{formatK(ini.internal_cost)}</span>
+                              <span className="block text-right">{formatK(ini.external_cost)}</span>
+                              <span className="block text-right">{formatK(ini.direct_cost)}</span>
+                              <span className="block text-right font-medium text-[color:var(--primary-blue)]">
+                                {formatK(ini.total_cost)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-foreground min-w-0 shrink-0 overflow-x-auto sm:w-auto">
-                        <div className={FINANCIALS_4COL}>
-                          <span className="block text-right">{formatK(ini.internal_cost)}</span>
-                          <span className="block text-right">{formatK(ini.external_cost)}</span>
-                          <span className="block text-right">{formatK(ini.direct_cost)}</span>
-                          <span className="block text-right font-medium text-[color:var(--primary-blue)]">
-                            {formatK(ini.total_cost)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </li>
+                    </li>
+                  ))}
+                </Fragment>
               ))}
             </ul>
           </div>
