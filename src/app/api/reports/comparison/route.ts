@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
+import { fetchLivePlanningVsBaselineComparison } from "@/lib/comparison-live";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 const querySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
-  snapshotId: z.string().trim().min(1),
+  snapshotId: z
+    .string()
+    .optional()
+    .transform((s) => (s != null && s.trim() !== "" ? s.trim() : undefined)),
   baselineId: z.string().trim().min(1),
   division: z.string().trim().min(1).optional(),
   subdivision: z.string().trim().min(1).optional(),
@@ -21,7 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     const { searchParams } = new URL(request.url);
     const parsed = querySchema.safeParse({
       year: searchParams.get("year"),
-      snapshotId: searchParams.get("snapshotId"),
+      snapshotId: searchParams.get("snapshotId") ?? undefined,
       baselineId: searchParams.get("baselineId"),
       division: searchParams.get("division") ?? undefined,
       subdivision: searchParams.get("subdivision") ?? undefined,
@@ -33,6 +37,19 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const { year, snapshotId, baselineId, division, subdivision, team, owner } = parsed.data;
+
+    if (!snapshotId) {
+      const live = await fetchLivePlanningVsBaselineComparison(year, baselineId, {
+        division,
+        subdivision,
+        team,
+        owner,
+      });
+      if (!live.ok) {
+        return NextResponse.json({ error: live.error }, { status: 400 });
+      }
+      return NextResponse.json(live.rows, { status: 200 });
+    }
 
     const divFilter = division ? Prisma.sql`AND division = ${division}` : Prisma.empty;
     const subFilter = subdivision
@@ -55,7 +72,7 @@ export async function GET(request: Request): Promise<Response> {
         snap_internal: unknown;
         snap_external: unknown;
         snap_direct: unknown;
-        snap_catchout: unknown;
+        snap_cash_out: unknown;
         baseline_amount: unknown;
         gap: unknown;
       }[]
@@ -86,7 +103,7 @@ export async function GET(request: Request): Promise<Response> {
         snapInternal: Number(r.snap_internal ?? 0),
         snapExternal: Number(r.snap_external ?? 0),
         snapDirect: Number(r.snap_direct ?? 0),
-        snapCatchout: Number(r.snap_catchout ?? 0),
+        snapCashOut: Number(r.snap_cash_out ?? 0),
         baselineAmount: Number(r.baseline_amount ?? 0),
         gap: Number(r.gap ?? 0),
       })),

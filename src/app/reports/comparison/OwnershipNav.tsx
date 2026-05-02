@@ -41,12 +41,14 @@ export function OwnershipNav({
       <div className="md:col-span-3">
         <Label>Division</Label>
         <Select value={division} onValueChange={(v) => onChangeDivision(v ?? "")}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {divisions.map((d) => (
+        <SelectTrigger className="mt-1 w-full min-w-0">
+          <SelectValue placeholder="All">
+            {(v) => (v == null || v === "" ? "All" : String(v))}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          {divisions.map((d) => (
               <SelectItem key={d} value={d}>
                 {d}
               </SelectItem>
@@ -58,12 +60,14 @@ export function OwnershipNav({
       <div className="md:col-span-3">
         <Label>Sub-division</Label>
         <Select value={subdivision} onValueChange={(v) => onChangeSubdivision(v ?? "")}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {subDivisions.map((sd) => (
+        <SelectTrigger className="mt-1 w-full min-w-0">
+          <SelectValue placeholder="All">
+            {(v) => (v == null || v === "" ? "All" : String(v))}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          {subDivisions.map((sd) => (
               <SelectItem key={sd} value={sd}>
                 {sd}
               </SelectItem>
@@ -75,12 +79,14 @@ export function OwnershipNav({
       <div className="md:col-span-3">
         <Label>Team</Label>
         <Select value={team} onValueChange={(v) => onChangeTeam(v ?? "")}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {teams.map((t) => (
+        <SelectTrigger className="mt-1 w-full min-w-0">
+          <SelectValue placeholder="All">
+            {(v) => (v == null || v === "" ? "All" : String(v))}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          {teams.map((t) => (
               <SelectItem key={t} value={t}>
                 {t}
               </SelectItem>
@@ -92,12 +98,14 @@ export function OwnershipNav({
       <div className="md:col-span-3">
         <Label>Owner</Label>
         <Select value={owner} onValueChange={(v) => onChangeOwner(v ?? "")}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {owners.map((o) => (
+        <SelectTrigger className="mt-1 w-full min-w-0">
+          <SelectValue placeholder="All">
+            {(v) => (v == null || v === "" ? "All" : String(v))}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          {owners.map((o) => (
               <SelectItem key={o} value={o}>
                 {o}
               </SelectItem>

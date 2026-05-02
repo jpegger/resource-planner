@@ -8,12 +8,12 @@ import { formatK } from "@/lib/format";
 
 export function ComparisonKpis({
   baselineTotal,
-  catchoutTotal,
+  cashOutTotal,
   gap,
   coveragePct,
 }: {
   baselineTotal: number;
-  catchoutTotal: number;
+  cashOutTotal: number;
   gap: number;
   coveragePct: number | null;
 }) {
@@ -31,9 +31,9 @@ export function ComparisonKpis({
 
       <Card className={cn(PANEL_CARD_CLASS, "min-w-0")}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Catchout</CardTitle>
+          <CardTitle className="text-sm">Cash Out</CardTitle>
         </CardHeader>
-        <CardContent className="text-lg font-semibold">{formatK(catchoutTotal)}</CardContent>
+        <CardContent className="text-lg font-semibold">{formatK(cashOutTotal)}</CardContent>
       </Card>
 
       <Card className={cn(PANEL_CARD_CLASS, "min-w-0")}>
