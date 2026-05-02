@@ -15,6 +15,7 @@ type ProductCreatePlanItem = {
   csvId: string;
   csvName: string;
   fields: Record<string, unknown>;
+  fieldValues: Record<string, unknown>;
   reason: "missing_in_jira";
 };
 
@@ -150,11 +151,17 @@ function buildProductCreateFields(args: {
   projectKey: string;
   summary: string;
   fieldIds: Record<string, string | undefined>;
+  fieldAllowedValueIndex: Map<string, Array<{ id: string; label: string }>>;
   csv: CsvProductRow;
-}): Record<string, unknown> {
+}): { fields: Record<string, unknown>; fieldValues: Record<string, unknown> } {
   const f: Record<string, unknown> = {
     project: { key: args.projectKey },
     issuetype: { name: "Product" },
+    summary: args.summary,
+  };
+  const v: Record<string, unknown> = {
+    projectKey: args.projectKey,
+    issuetype: "Product",
     summary: args.summary,
   };
 
@@ -165,25 +172,124 @@ function buildProductCreateFields(args: {
     f[fieldId] = value;
   };
 
+  const setHuman = (label: string, value: unknown) => {
+    if (value == null) return;
+    if (typeof value === "string" && !value.trim()) return;
+    v[label] = value;
+  };
+
   // Keep these aligned with the DB sync mapping intent.
-  setIf(args.fieldIds.productFamily, args.csv.productFamily);
-  setIf(args.fieldIds.division, args.csv.division);
-  setIf(args.fieldIds.subDivision, args.csv.subDivision);
-  setIf(args.fieldIds.team, args.csv.team);
+  const normalize = (s: string) => s.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+  const optionIdFor = (fieldId: string | undefined, desired: string | null): string | null => {
+    if (!fieldId) return null;
+    const d = desired?.trim();
+    if (!d) return null;
+    const list = args.fieldAllowedValueIndex.get(fieldId);
+    if (!list || list.length === 0) return null;
+    const nd = normalize(d);
+    const exact = list.find((x) => normalize(x.label) === nd);
+    if (exact) return exact.id;
+    // fallback: substring match for things like "CRPS" vs "CRPS - ..."
+    const partial = list.find((x) => normalize(x.label).includes(nd) || nd.includes(normalize(x.label)));
+    return partial?.id ?? null;
+  };
+
+  const labelForOptionId = (fieldId: string | undefined, id: string): string | null => {
+    if (!fieldId) return null;
+    const list = args.fieldAllowedValueIndex.get(fieldId);
+    if (!list) return null;
+    const hit = list.find((x) => x.id === id);
+    return hit?.label ?? null;
+  };
+
+  const multiSelect = (
+    fieldId: string | undefined,
+    raw: string | null
+  ):
+    | { payload: Array<{ id: string }> | Array<{ value: string }>; value: string }
+    | null => {
+    const t = raw?.trim();
+    if (!t) return null;
+    const id = optionIdFor(fieldId, t);
+    if (id) {
+      return { payload: [{ id }], value: labelForOptionId(fieldId, id) ?? t };
+    }
+    return { payload: [{ value: t }], value: t };
+  };
+
+  // These Jira fields are configured as multi-select on this instance.
+  const pf = multiSelect(args.fieldIds.productFamily, args.csv.productFamily);
+  if (pf) {
+    setIf(args.fieldIds.productFamily, pf.payload);
+    setHuman("productFamily", pf.value);
+  }
+  const div = multiSelect(args.fieldIds.division, args.csv.division);
+  if (div) {
+    setIf(args.fieldIds.division, div.payload);
+    setHuman("division", div.value);
+  }
+  const sub = multiSelect(args.fieldIds.subDivision, args.csv.subDivision);
+  if (sub) {
+    setIf(args.fieldIds.subDivision, sub.payload);
+    setHuman("subDivision", sub.value);
+  }
+  const team = multiSelect(args.fieldIds.team, args.csv.team);
+  if (team) {
+    setIf(args.fieldIds.team, team.payload);
+    setHuman("team", team.value);
+  }
 
   // The Jira custom field is a single field; the DB sync splits into code/name.
   // For Jira write-back we set a best-effort display string.
   const sapProgFin = [args.csv.sapEotpCode, args.csv.sapEotpName].filter(Boolean).join(" - ").trim();
-  setIf(args.fieldIds.sapProgFin, sapProgFin || null);
+  if (sapProgFin) {
+    const sapId = optionIdFor(args.fieldIds.sapProgFin, sapProgFin);
+    setIf(args.fieldIds.sapProgFin, sapId ? { id: sapId } : { name: sapProgFin });
+    setHuman("sapProgFin", sapProgFin);
+  }
 
   setIf(args.fieldIds.attractiveness, args.csv.attractiveness);
   setIf(args.fieldIds.competitiveness, args.csv.competitiveness);
+  if (args.csv.attractiveness != null) setHuman("attractiveness", args.csv.attractiveness);
+  if (args.csv.competitiveness != null) setHuman("competitiveness", args.csv.competitiveness);
 
   // If the field is a select list, Jira expects `{ value }`. If it's plain text, it accepts a string.
   // We keep it conservative and allow the instance to decide.
-  setIf(args.fieldIds.typeProduct, "Product");
+  // Try to map against allowed values; if unknown, omit (better than hard-failing issue creation).
+  {
+    const fieldId = args.fieldIds.typeProduct;
+    const optId = optionIdFor(fieldId, "Product");
+    if (fieldId && optId) setIf(fieldId, [{ id: optId }]);
+    if (fieldId && optId) setHuman("typeProduct", labelForOptionId(fieldId, optId) ?? "Product");
+  }
 
-  return f;
+  return { fields: f, fieldValues: v };
+}
+
+function extractAllowedValuesIndex(fieldsMeta: unknown): Map<string, Array<{ id: string; label: string }>> {
+  const index = new Map<string, Array<{ id: string; label: string }>>();
+  if (!fieldsMeta || typeof fieldsMeta !== "object") return index;
+
+  for (const [fieldId, meta] of Object.entries(fieldsMeta as Record<string, unknown>)) {
+    if (!meta || typeof meta !== "object") continue;
+    const allowed = (meta as { allowedValues?: unknown }).allowedValues;
+    if (!Array.isArray(allowed) || allowed.length === 0) continue;
+
+    const list: Array<{ id: string; label: string }> = [];
+    for (const v of allowed) {
+      if (!v || typeof v !== "object") continue;
+      const id = "id" in v ? String((v as any).id ?? "").trim() : "";
+      const labelRaw =
+        "value" in v ? (v as any).value :
+        "name" in v ? (v as any).name :
+        null;
+      const label = labelRaw == null ? "" : String(labelRaw).trim();
+      if (id && label) list.push({ id, label });
+    }
+    if (list.length > 0) index.set(fieldId, list);
+  }
+
+  return index;
 }
 
 async function runProductsStep(opts: {
@@ -194,6 +300,7 @@ async function runProductsStep(opts: {
   productJql: string;
 }): Promise<PlanOutput["products"]> {
   const client = createJiraClient();
+  const targetStatus = (process.env.JIRA_PRODUCT_TARGET_STATUS?.trim() || "In Progress").trim();
 
   const { products, invalidRows } = readCsvProducts(opts.csvPath);
   const jiraFields = await loadJiraFieldCatalog(client);
@@ -226,6 +333,24 @@ async function runProductsStep(opts: {
     null;
   if (!projectKey) throw new Error("Missing JIRA_PRODUCT_PROJECT_KEY (or JIRA_PROJECT_KEY), and could not infer from JIRA_JQL");
 
+  // Best-effort: load create-metadata so we can map custom field options by id (required for multi-select fields).
+  let fieldAllowedValueIndex = new Map<string, Array<{ id: string; label: string }>>();
+  try {
+    const meta = await client.issues.getCreateIssueMeta({
+      projectKeys: projectKey.toUpperCase(),
+      issuetypeNames: "Product",
+      expand: "projects.issuetypes.fields",
+    } as any);
+    const projects = (meta as any)?.projects;
+    const firstProject = Array.isArray(projects) ? projects[0] : null;
+    const issueTypes = firstProject && Array.isArray(firstProject.issuetypes) ? firstProject.issuetypes : [];
+    const product = issueTypes.find((x: any) => x && typeof x === "object" && String(x.name ?? "") === "Product");
+    const fieldsMeta = product?.fields;
+    fieldAllowedValueIndex = extractAllowedValuesIndex(fieldsMeta);
+  } catch {
+    // If user lacks permission for createmeta endpoints, we still proceed with best-effort raw values (may fail on apply).
+  }
+
   const rows = opts.sample === "all" ? products : products.slice(0, opts.sample);
 
   const toCreate: ProductCreatePlanItem[] = [];
@@ -241,12 +366,16 @@ async function runProductsStep(opts: {
     toCreate.push({
       csvId: p.id,
       csvName: p.name,
-      fields: buildProductCreateFields({
+      ...(() => {
+        const built = buildProductCreateFields({
         projectKey: projectKey.toUpperCase(),
         summary: p.name,
         fieldIds,
+        fieldAllowedValueIndex,
         csv: p,
-      }),
+        });
+        return { fields: built.fields, fieldValues: built.fieldValues };
+      })(),
       reason: "missing_in_jira",
     });
   }
@@ -264,10 +393,65 @@ async function runProductsStep(opts: {
         try {
           const res = await client.issues.createIssue({ fields: item.fields as any });
           const jiraKey = String((res as { key?: unknown }).key ?? "").trim();
-          if (jiraKey) created.push({ csvId: item.csvId, csvName: item.csvName, jiraKey });
+          if (jiraKey) {
+            // Transition created product to requested status (default: "In Progress").
+            // This is safer than trying to set `status` directly on create (not supported).
+            try {
+              const tx = await client.issues.getTransitions({ issueIdOrKey: jiraKey, expand: "transitions" });
+              const transitions = (tx as any)?.transitions;
+              const wanted = targetStatus.toLowerCase();
+              const match =
+                Array.isArray(transitions)
+                  ? transitions.find((t: any) => String(t?.to?.name ?? "").trim().toLowerCase() === wanted)
+                  : null;
+              const transitionId = match?.id ? String(match.id).trim() : "";
+              if (transitionId) {
+                await client.issues.doTransition({ issueIdOrKey: jiraKey, transition: { id: transitionId } as any });
+              } else {
+                // If no matching transition exists (permissions/workflow), keep created issue in default status.
+                // eslint-disable-next-line no-console
+                console.warn(
+                  JSON.stringify(
+                    {
+                      jiraKey,
+                      warning: "No transition found to target status",
+                      targetStatus,
+                      availableTo: Array.isArray(transitions)
+                        ? transitions.map((t: any) => String(t?.to?.name ?? "").trim()).filter(Boolean)
+                        : [],
+                    },
+                    null,
+                    2
+                  )
+                );
+              }
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn(`Failed to transition ${jiraKey} to '${targetStatus}': ${e instanceof Error ? e.message : String(e)}`);
+            }
+
+            created.push({ csvId: item.csvId, csvName: item.csvName, jiraKey });
+          }
           else failed.push({ csvId: item.csvId, csvName: item.csvName, error: "createIssue returned no key" });
         } catch (e) {
-          failed.push({ csvId: item.csvId, csvName: item.csvName, error: e instanceof Error ? e.message : String(e) });
+          const anyE = e as any;
+          const status = anyE?.response?.status;
+          const statusText = anyE?.response?.statusText;
+          const data = anyE?.response?.data;
+          const body =
+            typeof data === "string"
+              ? data.slice(0, 1200)
+              : data && typeof data === "object"
+                ? JSON.stringify(data).slice(0, 1200)
+                : null;
+          const extra = [status ? `status=${status}` : null, statusText ? `statusText=${statusText}` : null, body ? `body=${body}` : null]
+            .filter(Boolean)
+            .join(" ");
+          failed.push({
+            csvId: item.csvId,
+            csvName: item.csvName,
+            error: extra || (e instanceof Error ? e.message : String(e)),
+          });
         }
       }
     }
@@ -285,8 +469,23 @@ async function runLinksStep(opts: {
   productJql: string;
   initiativeJql: string;
   enablesLinkType: string;
+  csvPath: string;
 }): Promise<PlanOutput["links"]> {
   const client = createJiraClient();
+
+  // Resolve link type name (Jira is case-sensitive here; e.g. `enables` not `Enables`).
+  let enablesTypeName = opts.enablesLinkType;
+  try {
+    const types = await client.issueLinkTypes.getIssueLinkTypes();
+    const list = (types as any)?.issueLinkTypes;
+    if (Array.isArray(list)) {
+      const wanted = opts.enablesLinkType.trim().toLowerCase();
+      const match = list.find((t: any) => String(t?.name ?? "").trim().toLowerCase() === wanted);
+      if (match?.name) enablesTypeName = String(match.name);
+    }
+  } catch {
+    // ignore (we'll try with provided name)
+  }
 
   const products = await jiraSearchAll(client, opts.productJql, ["summary", "issuetype"]);
   const productBySummary = new Map<string, { key: string; summary: string }>();
@@ -296,9 +495,28 @@ async function runLinksStep(opts: {
     if (k && !productBySummary.has(k)) productBySummary.set(k, { key: p.key, summary });
   }
 
+  // When sampling (3/10), constrain initiatives to those that map to the sampled Product set.
+  // This makes `--step links --sample 3` align with `--step products --sample 3` (same CSV window).
+  const restrictToComponentKeys =
+    opts.sample === "all"
+      ? null
+      : (() => {
+          const { products: csvProducts } = readCsvProducts(opts.csvPath);
+          const rows = csvProducts.slice(0, opts.sample);
+          return new Set(rows.map((p) => normalizeSummaryKey(p.name)));
+        })();
+
   const initiatives = await jiraSearchAll(client, opts.initiativeJql, ["key", "issuetype", "components", "issuelinks"]);
   const filtered = initiatives.filter((x) => issueTypeName(x.fields) === "Initiative");
-  const rows = opts.sample === "all" ? filtered : filtered.slice(0, opts.sample);
+  const scoped =
+    restrictToComponentKeys == null
+      ? filtered
+      : filtered.filter((it) => {
+          const c = firstComponentName(it.fields);
+          if (!c) return false;
+          return restrictToComponentKeys.has(normalizeSummaryKey(c));
+        });
+  const rows = opts.sample === "all" ? scoped : scoped.slice(0, opts.sample);
 
   const toLink: LinkPlanItem[] = [];
   const noComponent: Array<{ initiativeKey: string }> = [];
@@ -312,7 +530,7 @@ async function runLinksStep(opts: {
       continue;
     }
 
-    if (hasEnablesLinkToAnyProduct(it.fields, opts.enablesLinkType)) {
+    if (hasEnablesLinkToAnyProduct(it.fields, enablesTypeName)) {
       alreadyLinked.push({ initiativeKey: it.key, reason: `already has ${opts.enablesLinkType} link to a Product` });
       continue;
     }
@@ -339,17 +557,27 @@ async function runLinksStep(opts: {
     for (const item of toLink) {
       try {
         await client.issueLinks.linkIssues({
-          type: { name: opts.enablesLinkType } as any,
-          outwardIssue: { key: item.initiativeKey } as any,
-          inwardIssue: { key: item.productKey } as any,
+          type: { name: enablesTypeName } as any,
+          // Direction matters: we want Product "enables" Initiative (outward description).
+          outwardIssue: { key: item.productKey } as any,
+          inwardIssue: { key: item.initiativeKey } as any,
         });
         linked.push({ initiativeKey: item.initiativeKey, productKey: item.productKey });
       } catch (e) {
-        failed.push({
-          initiativeKey: item.initiativeKey,
-          productKey: item.productKey,
-          error: e instanceof Error ? e.message : String(e),
-        });
+        const anyE = e as any;
+        const status = anyE?.response?.status;
+        const statusText = anyE?.response?.statusText;
+        const data = anyE?.response?.data;
+        const body =
+          typeof data === "string"
+            ? data.slice(0, 1200)
+            : data && typeof data === "object"
+              ? JSON.stringify(data).slice(0, 1200)
+              : null;
+        const extra = [status ? `status=${status}` : null, statusText ? `statusText=${statusText}` : null, body ? `body=${body}` : null]
+          .filter(Boolean)
+          .join(" ");
+        failed.push({ initiativeKey: item.initiativeKey, productKey: item.productKey, error: extra || (e instanceof Error ? e.message : String(e)) });
       }
     }
 
@@ -405,7 +633,7 @@ async function main(): Promise<void> {
   }
 
   if (step === "links" || step === "all") {
-    plan.links = await runLinksStep({ sample, apply, outDir: stampDir, productJql, initiativeJql, enablesLinkType });
+    plan.links = await runLinksStep({ sample, apply, outDir: stampDir, productJql, initiativeJql, enablesLinkType, csvPath });
   }
 
   writeJson(path.join(stampDir, "plan.json"), plan);
