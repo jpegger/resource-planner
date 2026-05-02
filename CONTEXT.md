@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.9 · April 2026**
+**Paradigm · Brussels Capital Region · v1.10 · May 2026**
 
 ---
 
@@ -143,6 +143,7 @@ Financial initiative costs (INT / EXT / DIR) for a product can be **split across
 | ORM | Prisma 7 with @prisma/adapter-pg (PostgreSQL adapter) |
 | Database | PostgreSQL — company-hosted cluster (dev: Docker local) |
 | Reporting | Power BI Desktop connected directly to PostgreSQL view |
+| Spreadsheet export (in-app) | exceljs — Excel workbook download with real **Excel Table** metadata (comparison report) |
 | Jira Sync | jira.js (Version3Client) — official TypeScript Jira client |
 | Salesforce (optional) | jsforce — used for describing / integrating custom objects |
 | IDE | Cursor (AI-assisted) running against WSL2 on Windows |
@@ -318,14 +319,14 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 
 | Piece | Role |
 |---|---|
-| **`allocation_snapshot` / `allocation_snapshot_row`** | Named, immutable **allocation snapshot**: at capture time the app aggregates **`v_allocation_costs`** by `product_name` × `initiative_year`, runs **`computeEotpBreakdown`** (same logic as budget API) per **AllocationEntity** with **`sapEotpCode`** and year-scoped **`eotp_routing`**, and persists per–EOTP INT/EXT/DIR. **User identity** for `takenBy` / `importedBy`: header **`X-Auth-Request-Email`** via **`getUserFromRequest`** (`src/lib/auth.ts`); dev fallback when unset. |
+| **`allocation_snapshot` / `allocation_snapshot_row`** | Named, immutable **allocation snapshot**: at capture time **`takeSnapshot`** calls **`computeAllocationBreakdownForYear(year)`** (shared with live comparison — same INT/EXT/DIR roll-up as budget API), persists per–EOTP rows. **User identity** for `takenBy` / `importedBy`: header **`X-Auth-Request-Email`** via **`getUserFromRequest`** (`src/lib/auth.ts`); dev fallback when unset. |
 | **`budget_baseline` / `budget_baseline_row`** | SAP budget team Excel import (**xlsx**): columns **Prog Fin**, **Prog Fin lib**, **Cellule**, **Budget actuel YYYY**; amounts stored **positive EUR** (SAP negatives negated on import). |
 | **`dim_year`** | Small table (years 2023–2028 seeded) for Power BI relationships to snapshot/baseline detail views. |
 | **`dim_eotp`** | **View**: distinct **`eotp`** (and label) from **`allocation_snapshot_row`** ∪ **`budget_baseline_row`**; **`DISTINCT ON (eotp)`** so one row per code for dimension relationships. |
 
-**Comparison vs baseline:** done in **Power BI**, not in-app. Gap concept: baseline tracks external + direct “cash out” scope; **`v_snapshot_detail`** exposes **`cash_out`** = `external + direct`. See **§5.3**.
+**Comparison vs baseline:** **Power BI** remains the primary analytics surface (§5.3). The app also ships **`/reports/comparison`**: baseline vs **live planning** (current **`v_allocation_costs`** breakdown) or vs a **saved snapshot**, with ownership filters and an **Excel export** (see §7.6). Gap concept: baseline tracks external + direct “cash out” scope; **`v_snapshot_detail`** exposes **`cash_out`** = `external + direct`.
 
-**APIs:** **`GET` / `POST /api/snapshots`**, **`DELETE /api/snapshots/[id]`**; **`GET` / `POST /api/baselines`** (multipart Excel), **`DELETE /api/baselines/[id]`**. UI: **`/budget-comparison`**.
+**APIs:** **`GET` / `POST /api/snapshots`**, **`DELETE /api/snapshots/[id]`**; **`GET` / `POST /api/baselines`** (multipart Excel), **`DELETE /api/baselines/[id]`**; **`GET /api/reports/comparison`** — query **`year`**, **`baselineId`**, optional **`snapshotId`** (omit for live), optional **`division`**, **`subdivision`**, **`team`**, **`owner`**. UI: **`/budget-comparison`** (capture/import), **`/reports/comparison`** (interactive gap table).
 
 ### 4.10 Entity Relationship Summary
 
@@ -455,6 +456,7 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_cos
 | `/api/snapshots/[id]` | DELETE | Delete snapshot (cascade rows). |
 | `/api/baselines` | GET, POST | List budget baselines; POST multipart **`name`**, **`version`**, **`year`**, **`file`** (Excel). |
 | `/api/baselines/[id]` | DELETE | Delete baseline (cascade rows). |
+| `/api/reports/comparison` | GET | **Planning vs baseline** rows for **`/reports/comparison`**. Query: **`year`**, **`baselineId`**, optional **`snapshotId`** (absent ⇒ **live** current allocations via **`fetchLivePlanningVsBaselineComparison`** / **`computeAllocationBreakdownForYear`**), optional org filters. Uses view **`v_comparison`** when a snapshot is selected. |
 
 **Legacy URLs:** No Next.js redirects are configured for old paths — use the canonical routes in the table above only.
 
@@ -474,7 +476,7 @@ Portfolio table of allocation entities with optional budget columns (€k INT/EX
 
 **EOTP routing card (`InvestmentDetailEotpRoutingSection`):** Card header = **EOTP routing** + main SAP EOTP **pill** (from the entity). **Main** bucket: read-only rows from **`GET /api/allocation-entities/[id]/eotp-main-from-view`** ( **`v_eotp_costs`**, `is_main_eotp`), table styling aligned with exception rows; expand shows INT/EXT/DIR detail. **Exception routing:** heading **Exception Routing** on the **same row** as **Edit routing** / **Cancel** (`justify-between`). Exception targets are chosen from **`eotp_definition`** only (**`/api/eotp-routing-target-options`**). Persisted via **`/api/allocation-entities/[id]/eotp-routing`**. Delete routing uses a **dialog** (not `window.confirm`). **Horizontal separator**, then **bottom row:** **Budget by initiative** | **Allocations** editor ( **`/api/allocations`**, **`/api/initiative-allocation-costs`** ) when an initiative is selected.
 
-**Budget by initiative (`InvestmentDetailBudgetCard`):** Per-initiative cost columns (€k) **only** — revenue is edited in the separate **`InvestmentDetailRevenuePanel`**.
+**Budget by initiative (`InvestmentDetailBudgetCard`):** Per-initiative cost columns (€k) **only** — revenue is edited in the separate **`InvestmentDetailRevenuePanel`**. Initiatives are **grouped by Jira initiative type** (`(RI) Type` / **`initiativeType`** on the initiative, exposed as **`initiative_type`** on budget rows from **`GET …/budget`**).
 
 **Revenue (`InvestmentDetailRevenuePanel`):** Appears when an initiative is selected (below **Allocations**). **`GET /api/revenues`** lists rows; grouped by **Mission** / **Subscription** with badges and subtotals; **Edit revenues** — type **`Select`**, comment, amount (EUR), **Delete** with **Dialog**; draft rows at top with **Save** / **Discard**. Key‑figure strip **Revenues** / **Margin** uses **`total_revenue`** from **`GET …/budget`**.
 
@@ -487,17 +489,21 @@ Master-detail: **left** searchable/filterable table (ID, name from Prénom+Nom, 
 - **Details** — Edit/Save/Cancel; **`PATCH /api/resources/[id]`**; display name derived from first/last name (**`resourceFullNameFromParts`**). **Direction** is restricted to **CRPS** or **PDS** (or empty); legacy CSV values must be replaced in the UI before save.
 - **Rates** — Edit rates mode: existing rows **auto-save** (debounced PATCH **`/api/rates/[id]`**); **Add rate** opens a draft row at the top (**Save** posts **`/api/resources/[id]/rates`**); **Delete** uses a **modal** (not `window.confirm`). Numbers are **right-aligned** in the table.
 
-### 7.3 Report — Planned
+### 7.3 Reports hub (`/reports`)
 
-To be defined. Likely a link to Power BI Service or an embedded report. No in-app charts planned — Power BI handles all analytics.
+Sidebar entry **Reports** links to sub-routes (budget rollups, EOTP lines, snapshot rollups, **comparison**, etc.). In-app charts use **Recharts** where implemented; **Power BI** remains the canonical enterprise reporting path for **`v_allocation_costs`** and baseline views.
 
-### 7.4 Planning vs budget baseline (`/budget-comparison`)
+### 7.4 Planning vs budget baseline — capture (`/budget-comparison`)
 
-Management screen (sidebar): **take snapshots** (name, year), **import baselines** (Excel), list/delete with **Dialog** confirmations. Comparison **vs** baseline is **not** rendered in the app — use Power BI on **`v_snapshot_detail`** / **`v_baseline_detail`** / **`dim_year`** / **`dim_eotp`** (§5.3).
+Management screen: **take snapshots** (name, year), **import baselines** (Excel), list/delete with **Dialog** confirmations. This screen **prepares** snapshot and baseline data; **interactive comparison** is on **`/reports/comparison`** (§7.5). For dashboards, use Power BI on **`v_snapshot_detail`** / **`v_baseline_detail`** / **`dim_year`** / **`dim_eotp`** (§5.3).
 
-### 7.5 Legacy routes
+### 7.5 Baseline vs planning comparison (`/reports/comparison`)
 
-Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`**, **`/budget-comparison`**, and **`/api/allocation-entities`** (see §6.2).
+**Planning vs baseline** table: select **year**, **baseline**, and **planning source** — **current allocations (live)** or a saved **snapshot**. Optional filters: division, subdivision, team, owner (narrowed from loaded rows). KPIs and sortable columns include internal / external / direct / **cash out**, baseline amount, coverage, gap. **`GET /api/reports/comparison`**: without **`snapshotId`**, the API builds rows from **`computeAllocationBreakdownForYear`** + baseline join (**`comparison-live.ts`**); with **`snapshotId`**, it reads **`v_comparison`**. **Export Excel** writes an **Excel table** (exceljs): formatted EUR (`#,##0`), coverage **`0%`**, metadata rows for filters, totals row; download name **`Baseline-Planning_Comparison_{year}_{dd.MM.yyyy}.xlsx`**.
+
+### 7.6 Legacy routes
+
+Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`**, **`/budget-comparison`**, **`/reports/*`**, and **`/api/allocation-entities`** (see §6.2).
 
 ---
 
@@ -576,6 +582,8 @@ Matching rules:
 - **Initiative → Product mapping**: Initiative first component name (exact trim) → Product summary
 - **Already-linked detection**: skips Initiatives that already have an **Enables** link to a Jira issue of issuetype `Product`
 
+**Product create payloads:** for Jira fields configured as **select / multi-select**, the script loads allowed values from the Jira field metadata and maps CSV text to **option IDs** (normalized label match, with substring fallback); **`sapProgFin`** and similar fields send **`{ id }`** when a match exists. The dry-run plan includes human-readable **`fieldValues`** alongside API field payloads.
+
 Progressive review workflow (3 → 10 → apply):
 
 ```bash
@@ -601,7 +609,7 @@ npx tsx scripts/jira/update-jira-products-and-links.ts --step all --sample all -
 | `seed-eotp-definitions.ts` | `npm run db:seed:eotp` | `scripts/datasets/dev/EOTP-Budget-Owner.csv` | Upsert **`eotp_definition`** (SAP code, label, org metadata) |
 | `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/datasets/dev/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR); links **`eotp_definition_id`** when definitions exist |
 | `seed-revenues.ts` | `npm run db:seed:revenues` | `scripts/datasets/dev/REVENU.csv` | Insert **`InitiativeRevenue`** (type = **`Mission`**) one row per CSV line; matched by Jira key in **Colonne1**; **delete-then-insert** per affected initiative |
-| `xlsx-to-prod-data-auto.ts` | `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/datasets/prod-import` | Excel workbook | Generate `Assignement.csv`, `RESSOURCES.csv`, `RATES.csv`, `REVENU.csv` into **`scripts/datasets/prod-import/`** |
+| `xlsx-to-prod-data-auto.ts` | `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/datasets/prod-import` | Excel workbook | Generate `Assignement.csv`, `RESSOURCES.csv`, `RATES.csv`, `REVENU.csv` into **`scripts/datasets/prod-import/`**; also copies **`EOTP_ROUTING.csv`** from the script’s reference dataset directory when present so prod reset can seed routing |
 | `backfill-eotp-routing-eotp-definition-ids.ts` | `npm run db:backfill:eotp-routing-fks` | — | One-off: set **`eotp_definition_id`** on existing **`eotp_routing`** / **`allocation_entity`** rows from code ± label |
 | `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
 | `rebuild-eotp-routing-csv.ts` | `npm run db:rebuild:routing-csv` | `EOTP_ROUTING_SOURCE.csv` | Rebuild **`EOTP_ROUTING.csv`** from wide export (outputs merged EUR columns) |
@@ -784,6 +792,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **Baseline vs planning in-app + export (v1.10)** — **`/reports/comparison`**: live planning or snapshot vs imported baseline; **`GET /api/reports/comparison`** with optional **`snapshotId`**; **`src/lib/comparison-live.ts`**, **`src/lib/export-comparison-xlsx.ts`** (exceljs, real Excel Table, **`Baseline-Planning_Comparison_{year}_{date}.xlsx`**). **`computeAllocationBreakdownForYear`** extracted in **`src/lib/snapshot.ts`** for reuse. SQL: **`catchout`** renamed to **`cash_out`** in **`v_snapshot_detail`**, **`v_comparison`**, snapshot rollups; docs and DAX examples updated. **Prod CSV gen:** **`xlsx-to-prod-data-auto.ts`** copies **`EOTP_ROUTING.csv`** into prod-import when available. **Investments:** budget initiatives grouped by **initiative type** (`GET …/budget` returns **`initiative_type`**). **Jira CLI:** product create maps select-list fields to Jira option IDs. **Budget report:** drill-down sets level once per click. See §4.9, §5.3, §7.3–§7.5, §8.1, §9.
 - **Docker / OpenShift prep** — Multi-stage **`Dockerfile`** (Next **standalone**, non-root, **`PORT=8080`**), **`compose.yaml`** (Postgres + optional **`app`** profile), **`GET /api/health`**, **`deploy/README.md`** and **`deploy/kubernetes/`** samples. Prisma reads **`process.env["DATABASE_URL"]`**; build uses a dummy URL only for **`prisma generate`** / **`next build`**; runtime **`DATABASE_URL`** from container env. **`/investments`** is **`force-dynamic`** to avoid DB access during image build. Rebuild image after code changes.
 - **Revenue assignment (v1.9)** — **`RevenueType`** enum (**`Mission`** \| **`Subscription`**); **`InitiativeRevenue`** (table **`initiative_revenue`**) — **multiple** rows per initiative (`type`, `comment`, EUR **`amount`**). Seeded from **`REVENU.csv`** (**`npm run db:seed:revenues`**, all lines **`Mission`**; delete-then-insert). API: **`GET` / `POST /api/revenues`**, **`PATCH` / `DELETE /api/revenues/[id]`**; budget API returns **`total_revenue`** + per-type sums. UI: **`InvestmentDetailRevenuePanel`** (grouped table, drafts, auto-save, delete **Dialog**); **Budget Key Figures**: **Revenues** + **Margin**. Power BI: **`v_revenues`** one row per revenue line (varchar casts); use **independently** of **`v_allocation_costs`** (different grain).
 - **Investment allocation drafts + API (v1.8)** — **`POST /api/allocations`** requires **`resourceId`** (no default first resource). **Resource allocations** panel: client-side **draft** rows at the **top** of the table until a resource is chosen; then **`POST`** persists. **`InvestmentDetailAllocationsPanel`**, **`InvestmentDetailAllocationEditor`**, **`InvestmentDetailAllocationPendingRow`**, **`use-investment-initiative-allocations`**. Delete row control: **`Trash2`** + outline styling (same as **Daily rates** on **`/resources`**). See §7.1.
@@ -819,6 +828,7 @@ src/
     layout.tsx                  ← Root layout (nav sidebar, header)
     page.tsx                    ← Redirect to /investments
     budget-comparison/page.tsx  ← Snapshots + baseline import (Power BI data prep)
+    reports/comparison/page.tsx ← Baseline vs planning (live or snapshot), Excel export
     investments/page.tsx        ← Investment list + budget columns
     investments/[id]/page.tsx   ← Investment detail shell
     investments/[id]/InvestmentDetailClient.tsx ← Layout: Details | Budget Summary, separator, initiatives | allocations
@@ -851,11 +861,14 @@ src/
       snapshots/[id]/route.ts   ← DELETE snapshot
       baselines/route.ts        ← GET, POST baseline (multipart Excel)
       baselines/[id]/route.ts   ← DELETE baseline
+      reports/comparison/route.ts ← GET — planning vs baseline (omit snapshotId = live)
       health/route.ts           ← GET — liveness/readiness (no DB)
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
   lib/auth.ts                   ← getUserFromRequest (X-Auth-Request-Email)
-  lib/snapshot.ts               ← takeSnapshot (frozen EOTP breakdown)
+  lib/snapshot.ts               ← computeAllocationBreakdownForYear, takeSnapshot (frozen EOTP breakdown)
+  lib/comparison-live.ts        ← Live planning vs baseline rows (no snapshot)
+  lib/export-comparison-xlsx.ts ← Excel table export for comparison report (exceljs)
   lib/baseline-parser.ts        ← SAP baseline Excel parse
   lib/eotp.ts                   ← computeEotpBreakdown (budget / reporting)
   lib/eotp-routing-validation.ts ← reject routing target = main SAP EOTP
@@ -891,4 +904,4 @@ scripts/
 
 ---
 
-*Last updated: April 2026 — Resource Planner v1.9 (see §11.3 changelog)*
+*Last updated: May 2026 — Resource Planner v1.10 (see §11.3 changelog)*

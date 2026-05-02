@@ -2,7 +2,7 @@
 
 Internal resource-planning tool for Brussels Capital Region (Paradigm).
 
-- **Primary UI routes**: `/investments`, `/investments/[id]`
+- **Primary UI routes**: `/investments`, `/investments/[id]`; **reports** under `/reports/*` (e.g. **`/reports/comparison`** — baseline vs planning, live or snapshot; **`/reports/budget`**, **`/reports/snapshot`**, …)
 - **ORM**: Prisma 7 (generated client in `src/generated/prisma`) + **`@prisma/adapter-pg`** (PrismaPg)
 - **Reporting**: Power BI connects to **PostgreSQL views** (never raw tables): `v_allocation_costs`, `v_eotp_costs`, `v_revenues`, `v_snapshot_detail`, `v_baseline_detail`, `dim_year`, `dim_eotp`
 
@@ -155,6 +155,8 @@ Generate the prod-import CSVs from Excel:
 npm run db:prod:generate-csv
 ```
 
+The generator writes the usual workbook-derived CSVs and also copies **`EOTP_ROUTING.csv`** from the repo reference dataset (`scripts/datasets/prod-import/` source layout used by the script) when present, so a full prod reset can repopulate **`eotp_routing`** instead of leaving it empty.
+
 ### Seed flags (production seed)
 
 ```bash
@@ -275,6 +277,8 @@ npx tsx scripts/jira/update-jira-products-and-links.ts --step all --sample all -
 - **Initiative → Product mapping**: first Initiative component name (exact trim) matches Product `summary`
 - **Already-linked detection**: skips initiatives that already have an **Enables** link to a Jira issue of issuetype `Product`
 
+When **creating** Products in Jira (`--step products --apply`), the script resolves **select-list** custom fields (division, team, product family, SAP Prog Fin, etc.) to **allowed option IDs** on your instance (with normalization and fallbacks), and records human-readable values in the plan output for review.
+
 ## Power BI notes (planning vs baseline)
 
 After creating at least one snapshot and one baseline in the UI (`/budget-comparison`) and ensuring the views exist (run `SEED_VIEW_ONLY=1 npm run db:seed:prod` if needed):
@@ -293,3 +297,7 @@ Planned Cash Out = SUM(v_snapshot_detail[cash_out])
 Baseline Amount = SUM(v_baseline_detail[baseline_amount])
 Gap = [Baseline Amount] - [Planned Cash Out]
 ```
+
+### In-app comparison report (`/reports/comparison`)
+
+The app also exposes **baseline vs planning** in the UI: pick year, **baseline**, and either **current allocations (live)** or a saved **snapshot**, then drill by division / subdivision / team / owner. **`GET /api/reports/comparison`** accepts optional **`snapshotId`**; omit it for live planning (same EOTP breakdown logic as snapshots, from **`computeAllocationBreakdownForYear`** in `src/lib/snapshot.ts`). **Export Excel** downloads a real **Excel table** (filters, totals, number formats) via **exceljs**; filename pattern **`Baseline-Planning_Comparison_{year}_{dd.MM.yyyy}.xlsx`**. Power BI remains the source of truth for enterprise dashboards; the report is for interactive gap analysis in the tool.
