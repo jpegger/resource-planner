@@ -200,24 +200,19 @@ export default function BudgetRechartsPage() {
   function onClickRow(r: RollupRow) {
     const next = nextLevel(level);
     if (!next) return;
+
     if (level === "division") {
       setDivision(r.key);
-      setLevel(next);
       setTeam(null);
       setProductName(null);
-      return;
-    }
-    if (level === "team") {
+    } else if (level === "team") {
       setTeam(r.key);
-      setLevel(next);
       setProductName(null);
-      return;
-    }
-    if (level === "product") {
+    } else if (level === "product") {
       setProductName(r.key);
-      setLevel(next);
-      return;
     }
+
+    setLevel(next);
   }
 
   const stackedRows = useMemo(() => {
