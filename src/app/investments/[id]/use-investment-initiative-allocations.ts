@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { groupAllocationsByResourceType } from "@/app/investments/[id]/investment-detail-helpers";
+import {
+  groupAllocationsByResourceType,
+  patchAllocation,
+  quantityFromAssignmentFieldString,
+} from "@/app/investments/[id]/investment-detail-helpers";
 import type {
   AllocationCostBreakdown,
   AllocationDTO,
   BudgetInitiative,
+  PendingAllocationDraft,
   ResourceGroupKey,
 } from "@/app/investments/[id]/investment-detail-types";
 
@@ -17,8 +22,8 @@ export function useInitiativeAllocations(selectedYear: number) {
   const [allocations, setAllocations] = useState<AllocationDTO[]>([]);
   const [allocLoading, setAllocLoading] = useState(false);
   const [costByAllocId, setCostByAllocId] = useState<Record<string, AllocationCostBreakdown>>({});
-  /** Client-only rows shown at the top until a resource is chosen and the allocation is persisted. */
-  const [pendingAllocationDraftIds, setPendingAllocationDraftIds] = useState<string[]>([]);
+  /** Client-only rows at the top until the user saves (POST + PATCH). */
+  const [pendingAllocationDrafts, setPendingAllocationDrafts] = useState<PendingAllocationDraft[]>([]);
   const [confirmingPendingDraftId, setConfirmingPendingDraftId] = useState<string | null>(null);
   const confirmInFlightRef = useRef(false);
 
@@ -26,7 +31,7 @@ export function useInitiativeAllocations(selectedYear: number) {
     setSelectedInitiative(null);
     setAllocations([]);
     setCostByAllocId({});
-    setPendingAllocationDraftIds([]);
+    setPendingAllocationDrafts([]);
     setConfirmingPendingDraftId(null);
     confirmInFlightRef.current = false;
   }, [selectedYear]);
@@ -61,7 +66,7 @@ export function useInitiativeAllocations(selectedYear: number) {
   const handleSelectInitiative = useCallback(
     async (ini: BudgetInitiative) => {
       setSelectedInitiative(ini);
-      setPendingAllocationDraftIds([]);
+      setPendingAllocationDrafts([]);
       setConfirmingPendingDraftId(null);
       confirmInFlightRef.current = false;
       setAllocLoading(true);
@@ -129,22 +134,34 @@ export function useInitiativeAllocations(selectedYear: number) {
     return sums;
   }, [allocations, costByAllocId]);
 
-  const addAllocation = useCallback(() => {
+  const addAllocationDraft = useCallback((resourceGroupKey: ResourceGroupKey) => {
     if (!selectedInitiative) return;
-    setPendingAllocationDraftIds((prev) => [newPendingDraftId(), ...prev]);
+    setPendingAllocationDrafts((prev) => [
+      { clientId: newPendingDraftId(), resourceGroupKey },
+      ...prev,
+    ]);
   }, [selectedInitiative]);
 
   const removePendingAllocationDraft = useCallback((clientId: string) => {
-    setPendingAllocationDraftIds((prev) => prev.filter((id) => id !== clientId));
+    setPendingAllocationDrafts((prev) => prev.filter((d) => d.clientId !== clientId));
   }, []);
 
   const discardPendingAllocationDrafts = useCallback(() => {
-    setPendingAllocationDraftIds([]);
+    setPendingAllocationDrafts([]);
   }, []);
 
   const confirmPendingAllocationDraft = useCallback(
-    async (clientId: string, resourceId: string) => {
+    async (
+      clientId: string,
+      resourceGroupKey: ResourceGroupKey,
+      payload: { resourceId: string; qtyInput: string; daysInput: string }
+    ) => {
       if (!selectedInitiative || confirmInFlightRef.current) return;
+      const { resourceId, qtyInput, daysInput } = payload;
+      if (!resourceId.trim()) {
+        alert("Choose a resource.");
+        return;
+      }
       confirmInFlightRef.current = true;
       setConfirmingPendingDraftId(clientId);
       try {
@@ -153,7 +170,7 @@ export function useInitiativeAllocations(selectedYear: number) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             initiativeId: selectedInitiative.jira_key,
-            resourceId,
+            resourceId: resourceId.trim(),
           }),
         });
         if (!res.ok) {
@@ -162,9 +179,41 @@ export function useInitiativeAllocations(selectedYear: number) {
           return;
         }
         const created = (await res.json()) as AllocationDTO;
-        setPendingAllocationDraftIds((prev) => prev.filter((id) => id !== clientId));
-        setAllocations((prev) => [...prev, created]);
+        const rt = created.resource.type;
+        const key: ResourceGroupKey =
+          rt === "EXTERNAL" || rt === "DIRECT_COST" ? rt : "INTERNAL";
+        if (key !== resourceGroupKey) {
+          alert("Resource type does not match the selected category.");
+          return;
+        }
+        const n = qtyInput.trim() === "" ? null : parseFloat(qtyInput);
+        if (n !== null && Number.isNaN(n)) {
+          alert("Invalid FTE % / units.");
+          return;
+        }
+        const quantity = quantityFromAssignmentFieldString(rt, n);
+        const manDaysParsed = daysInput.trim() === "" ? null : parseFloat(daysInput);
+        if (manDaysParsed !== null && Number.isNaN(manDaysParsed)) {
+          alert("Invalid man days.");
+          return;
+        }
+        let updated: AllocationDTO;
+        try {
+          updated = await patchAllocation(created.id, {
+            quantity,
+            manDays: manDaysParsed,
+          });
+        } catch (patchErr) {
+          await fetch(`/api/allocations/${encodeURIComponent(created.id)}`, { method: "DELETE" }).catch(
+            () => undefined
+          );
+          throw patchErr;
+        }
+        setPendingAllocationDrafts((prev) => prev.filter((d) => d.clientId !== clientId));
+        setAllocations((prev) => [...prev, updated]);
         void loadCostsForInitiative(selectedInitiative.jira_key);
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Could not save allocation");
       } finally {
         confirmInFlightRef.current = false;
         setConfirmingPendingDraftId(null);
@@ -188,8 +237,8 @@ export function useInitiativeAllocations(selectedYear: number) {
     costByAllocId,
     handleSelectInitiative,
     refreshCosts,
-    addAllocation,
-    pendingAllocationDraftIds,
+    addAllocationDraft,
+    pendingAllocationDrafts,
     removePendingAllocationDraft,
     discardPendingAllocationDrafts,
     confirmPendingAllocationDraft,

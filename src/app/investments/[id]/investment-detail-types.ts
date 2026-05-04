@@ -54,6 +54,12 @@ export const RESOURCE_GROUP_LABEL: Record<ResourceGroupKey, string> = {
   DIRECT_COST: "Direct",
 };
 
+/** Client-only draft row while adding an allocation (before POST). */
+export type PendingAllocationDraft = {
+  clientId: string;
+  resourceGroupKey: ResourceGroupKey;
+};
+
 export type EotpRoutingRow = {
   id: string;
   allocationEntityId?: string;

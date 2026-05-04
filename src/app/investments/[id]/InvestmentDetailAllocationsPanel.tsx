@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, UsersRound } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import {
   ALLOCATION_COST_CELL_INSET,
@@ -12,6 +12,7 @@ import {
 import { InvestmentDetailAllocationPendingRow } from "@/app/investments/[id]/InvestmentDetailAllocationPendingRow";
 import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
 import {
+  ALLOCATION_ASSIGNMENT_COL,
   FINANCIALS_4COL,
   TABLE_HEAD_CLASS,
   TABLE_HEAD_ROW_BG,
@@ -22,10 +23,13 @@ import type {
   AllocationCostBreakdown,
   AllocationDTO,
   BudgetInitiative,
+  PendingAllocationDraft,
   ResourceGroupKey,
 } from "@/app/investments/[id]/investment-detail-types";
+import { RESOURCE_GROUP_LABEL, RESOURCE_GROUP_ORDER } from "@/app/investments/[id]/investment-detail-types";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -49,8 +53,8 @@ export function InvestmentDetailAllocationsPanel({
   allocationTotals,
   allocationGroupsWithRows,
   allocationTotalsByGroup,
-  onAddAllocation,
-  pendingAllocationDraftIds,
+  onAddAllocationDraft,
+  pendingAllocationDrafts,
   onRemovePendingAllocationDraft,
   onDiscardPendingAllocationDrafts,
   onConfirmPendingAllocationDraft,
@@ -67,17 +71,34 @@ export function InvestmentDetailAllocationsPanel({
   allocationTotals: { internal: number; external: number; direct: number; total: number };
   allocationGroupsWithRows: AllocationGroup[];
   allocationTotalsByGroup: Record<ResourceGroupKey, number>;
-  onAddAllocation: () => void | Promise<void>;
-  pendingAllocationDraftIds: string[];
+  onAddAllocationDraft: (resourceGroupKey: ResourceGroupKey) => void | Promise<void>;
+  pendingAllocationDrafts: PendingAllocationDraft[];
   onRemovePendingAllocationDraft: (clientId: string) => void;
   onDiscardPendingAllocationDrafts: () => void;
-  onConfirmPendingAllocationDraft: (clientId: string, resourceId: string) => void | Promise<void>;
+  onConfirmPendingAllocationDraft: (
+    clientId: string,
+    resourceGroupKey: ResourceGroupKey,
+    payload: { resourceId: string; qtyInput: string; daysInput: string }
+  ) => void | Promise<void>;
   confirmingPendingDraftId: string | null;
   onPatchedAllocation: (u: AllocationDTO) => void;
   onDeletedAllocation: (id: string) => void;
   onCostsStale: () => void;
 }) {
   const [editingAllocations, setEditingAllocations] = useState(false);
+  const [addTypePopoverOpen, setAddTypePopoverOpen] = useState(false);
+
+  const resourceCountByGroup = useMemo(() => {
+    const counts: Record<ResourceGroupKey, number> = {
+      INTERNAL: 0,
+      EXTERNAL: 0,
+      DIRECT_COST: 0,
+    };
+    for (const r of resources) {
+      counts[r.type] += 1;
+    }
+    return counts;
+  }, [resources]);
 
   const colSpan = editingAllocations ? 5 : 4;
 
@@ -176,7 +197,7 @@ export function InvestmentDetailAllocationsPanel({
 
           <div className="min-h-0 flex-1">
             <div className="border-border/60 mt-1 border-t pt-4">
-              <Table>
+              <Table className="table-fixed w-full">
                 <TableHeader
                   className={cn(
                     "bg-muted/40 [&_th]:bg-muted/40 [&_tr]:border-border/60",
@@ -184,8 +205,12 @@ export function InvestmentDetailAllocationsPanel({
                   )}
                 >
                   <TableRow>
-                    <TableHead className={TABLE_HEAD_CLASS}>FTE % / units</TableHead>
-                    <TableHead className={TABLE_HEAD_CLASS}>Man days</TableHead>
+                    <TableHead className={cn(TABLE_HEAD_CLASS, ALLOCATION_ASSIGNMENT_COL)}>
+                      FTE % / units
+                    </TableHead>
+                    <TableHead className={cn(TABLE_HEAD_CLASS, ALLOCATION_ASSIGNMENT_COL)}>
+                      Man days
+                    </TableHead>
                     <TableHead className={TABLE_HEAD_CLASS}>Resource</TableHead>
                     <TableHead
                       className={cn(
@@ -213,15 +238,22 @@ export function InvestmentDetailAllocationsPanel({
                   ) : (
                     <>
                       {editingAllocations
-                        ? pendingAllocationDraftIds.map((draftId) => (
+                        ? pendingAllocationDrafts.map((draft) => (
                             <InvestmentDetailAllocationPendingRow
-                              key={draftId}
-                              resources={resources}
-                              isConfirming={confirmingPendingDraftId === draftId}
-                              onSelectResource={(resourceId) =>
-                                void onConfirmPendingAllocationDraft(draftId, resourceId)
+                              key={draft.clientId}
+                              resourceGroupKey={draft.resourceGroupKey}
+                              filteredResources={resources.filter(
+                                (r) => r.type === draft.resourceGroupKey
+                              )}
+                              isConfirming={confirmingPendingDraftId === draft.clientId}
+                              onSave={(payload) =>
+                                void onConfirmPendingAllocationDraft(
+                                  draft.clientId,
+                                  draft.resourceGroupKey,
+                                  payload
+                                )
                               }
-                              onDiscard={() => onRemovePendingAllocationDraft(draftId)}
+                              onDiscard={() => onRemovePendingAllocationDraft(draft.clientId)}
                             />
                           ))
                         : null}
@@ -229,17 +261,44 @@ export function InvestmentDetailAllocationsPanel({
                         <TableRow className={cn("hover:bg-transparent", UNDER_GROUP_INDENT)}>
                           <TableCell className="py-2" colSpan={4} />
                           <TableCell className="py-2 text-right">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5"
-                              disabled={resources.length === 0}
-                              onClick={() => void onAddAllocation()}
-                            >
-                              <Plus className="size-3.5" />
-                              Add allocation
-                            </Button>
+                            <Popover open={addTypePopoverOpen} onOpenChange={setAddTypePopoverOpen}>
+                              <PopoverTrigger
+                                type="button"
+                                disabled={resources.length === 0}
+                                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+                              >
+                                <Plus className="size-3.5" />
+                                Add allocation
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="end"
+                                side="bottom"
+                                className="w-56 p-2"
+                                collisionAvoidance={{ side: "none", fallbackAxisSide: "none" }}
+                              >
+                                <p className="text-muted-foreground mb-2 text-xs font-medium">
+                                  Add resource type
+                                </p>
+                                <div className="flex flex-col gap-1">
+                                  {RESOURCE_GROUP_ORDER.map((key) => (
+                                    <Button
+                                      key={key}
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="justify-start font-normal"
+                                      disabled={resourceCountByGroup[key] === 0}
+                                      onClick={() => {
+                                        void onAddAllocationDraft(key);
+                                        setAddTypePopoverOpen(false);
+                                      }}
+                                    >
+                                      {RESOURCE_GROUP_LABEL[key]}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                         </TableRow>
                       ) : null}
@@ -286,7 +345,7 @@ export function InvestmentDetailAllocationsPanel({
                   )}
                 </TableBody>
               </Table>
-              {!allocLoading && allocations.length === 0 && pendingAllocationDraftIds.length === 0 ? (
+              {!allocLoading && allocations.length === 0 && pendingAllocationDrafts.length === 0 ? (
                 <p className="text-muted-foreground mt-3 text-sm">
                   {editingAllocations
                     ? "No allocations yet. Use Add allocation to create one."

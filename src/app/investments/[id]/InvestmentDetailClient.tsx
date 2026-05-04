@@ -67,8 +67,8 @@ export function InvestmentDetailClient({
     costByAllocId,
     handleSelectInitiative,
     refreshCosts,
-    addAllocation,
-    pendingAllocationDraftIds,
+    addAllocationDraft,
+    pendingAllocationDrafts,
     removePendingAllocationDraft,
     discardPendingAllocationDrafts,
     confirmPendingAllocationDraft,
@@ -171,8 +171,8 @@ export function InvestmentDetailClient({
               allocationTotals={allocationTotals}
               allocationGroupsWithRows={allocationGroupsWithRows}
               allocationTotalsByGroup={allocationTotalsByGroup}
-              onAddAllocation={addAllocation}
-              pendingAllocationDraftIds={pendingAllocationDraftIds}
+              onAddAllocationDraft={addAllocationDraft}
+              pendingAllocationDrafts={pendingAllocationDrafts}
               onRemovePendingAllocationDraft={removePendingAllocationDraft}
               onDiscardPendingAllocationDrafts={discardPendingAllocationDrafts}
               onConfirmPendingAllocationDraft={confirmPendingAllocationDraft}

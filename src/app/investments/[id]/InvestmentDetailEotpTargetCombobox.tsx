@@ -120,7 +120,12 @@ export function InvestmentDetailEotpTargetCombobox({
         </span>
         <ChevronsUpDown className="ml-1 size-4 shrink-0 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent className="w-[min(100vw-2rem,380px)] p-0" align="start">
+      <PopoverContent
+        className="w-[min(100vw-2rem,380px)] p-0"
+        align="start"
+        side="bottom"
+        collisionAvoidance={{ side: "none", fallbackAxisSide: "none" }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search by label, code, team, or division…"

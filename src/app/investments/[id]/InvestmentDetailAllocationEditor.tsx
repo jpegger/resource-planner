@@ -11,12 +11,14 @@ import {
   patchAllocation,
   quantityFromAssignmentFieldString,
 } from "@/app/investments/[id]/investment-detail-helpers";
+import { ALLOCATION_ASSIGNMENT_COL } from "@/app/investments/[id]/investment-detail-layout";
 import type {
   AllocationCostBreakdown,
   AllocationDTO,
 } from "@/app/investments/[id]/investment-detail-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { ResourceOption } from "@/lib/investment-types";
 import { cn } from "@/lib/utils";
@@ -97,10 +99,26 @@ export function InvestmentDetailAllocationEditor({
     row.manDays === null || row.manDays === undefined ? "—" : String(row.manDays);
 
   if (!editing) {
+    const qtyWithUnit =
+      qtyDisplay === ""
+        ? "—"
+        : isStaff
+          ? (
+              <>
+                {qtyDisplay}
+                <span className="text-muted-foreground">%</span>
+              </>
+            )
+          : qtyDisplay;
+
     return (
       <TableRow className={cn("hover:bg-muted/30", UNDER_GROUP_INDENT)}>
-        <TableCell className="text-foreground w-28 text-sm tabular-nums">{qtyDisplay}</TableCell>
-        <TableCell className="text-foreground w-28 text-sm tabular-nums">{daysDisplay}</TableCell>
+        <TableCell className={cn("text-foreground text-sm tabular-nums", ALLOCATION_ASSIGNMENT_COL)}>
+          {qtyWithUnit}
+        </TableCell>
+        <TableCell className={cn("text-foreground text-sm tabular-nums", ALLOCATION_ASSIGNMENT_COL)}>
+          {daysDisplay}
+        </TableCell>
         <TableCell className="text-foreground min-w-[200px] text-sm">{row.resource.fullName}</TableCell>
         <TableCell
           className={cn(
@@ -116,35 +134,44 @@ export function InvestmentDetailAllocationEditor({
 
   return (
     <TableRow className={UNDER_GROUP_INDENT}>
-      <TableCell className="w-28">
-        <Input
-          type="number"
-          step={isStaff ? "0.1" : "0.01"}
-          min={0}
-          className="h-8"
-          title={
-            isStaff
-              ? "FTE % (50 = 50% of capacity; matches DB decimal × 100)"
-              : "Quantity in units (direct cost)"
-          }
-          value={qty}
-          onChange={(e) => {
-            const v = e.target.value;
-            setQty(v);
-            const n = v === "" ? null : parseFloat(v);
-            if (v !== "" && Number.isNaN(n!)) return;
-            schedulePatch({
-              quantity: quantityFromAssignmentFieldString(resType, n),
-            });
-          }}
-        />
+      <TableCell className={ALLOCATION_ASSIGNMENT_COL}>
+        <InputGroup className="h-8 min-w-0 w-full shadow-none">
+          <InputGroupInput
+            type="number"
+            step={isStaff ? "0.1" : "0.01"}
+            min={0}
+            className="h-8 min-w-0"
+            title={
+              isStaff
+                ? "FTE % (50 = 50% of capacity; matches DB decimal × 100)"
+                : "Quantity in units (direct cost)"
+            }
+            value={qty}
+            onChange={(e) => {
+              const v = e.target.value;
+              setQty(v);
+              const n = v === "" ? null : parseFloat(v);
+              if (v !== "" && Number.isNaN(n!)) return;
+              schedulePatch({
+                quantity: quantityFromAssignmentFieldString(resType, n),
+              });
+            }}
+          />
+          <InputGroupAddon
+            align="inline-end"
+            className="tabular-nums"
+            title={isStaff ? "Percent of FTE capacity" : "Units (direct cost)"}
+          >
+            {isStaff ? "%" : "u."}
+          </InputGroupAddon>
+        </InputGroup>
       </TableCell>
-      <TableCell className="w-28">
+      <TableCell className={ALLOCATION_ASSIGNMENT_COL}>
         <Input
           type="number"
           step="0.1"
           min={0}
-          className="h-8"
+          className="h-8 w-full min-w-0"
           value={days}
           onChange={(e) => {
             const v = e.target.value;
