@@ -28,6 +28,7 @@ type RollupRow = {
   external: number;
   direct: number;
   total: number;
+  revenue: number;
 };
 
 type ApiResponse = {
@@ -399,12 +400,13 @@ export default function BudgetRechartsPage() {
                   <th className="px-3 py-2">External</th>
                   <th className="px-3 py-2">Direct</th>
                   <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Est. revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-3 py-3 text-muted-foreground" colSpan={5}>
+                    <td className="px-3 py-3 text-muted-foreground" colSpan={6}>
                       Loading…
                     </td>
                   </tr>
@@ -420,11 +422,12 @@ export default function BudgetRechartsPage() {
                       <td className="px-3 py-2">{formatEuro(r.externalShown)}</td>
                       <td className="px-3 py-2">{formatEuro(r.directShown)}</td>
                       <td className="px-3 py-2 font-medium">{formatEuro(r.totalShown)}</td>
+                      <td className="px-3 py-2">{formatEuro(r.revenue)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-3 text-muted-foreground" colSpan={5}>
+                    <td className="px-3 py-3 text-muted-foreground" colSpan={6}>
                       No data
                     </td>
                   </tr>

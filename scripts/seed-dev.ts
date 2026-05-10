@@ -27,6 +27,7 @@ import Papa from "papaparse";
 import { createEotpCostsView } from "./eotp-views";
 import { createComparisonView } from "./comparison-view";
 import { createSnapshotBaselineViews } from "./snapshot-baseline-views";
+import { createRealizedViews } from "./realized-views";
 import {
   CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
   DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
@@ -537,6 +538,7 @@ async function main() {
     await createEotpCostsView(prisma);
     await createSnapshotBaselineViews(prisma);
     await createComparisonView(prisma);
+    await createRealizedViews(prisma);
     console.log("✅ View updated.");
     return;
   }
@@ -554,6 +556,7 @@ async function main() {
   await createEotpCostsView(prisma);
   await createSnapshotBaselineViews(prisma);
   await createComparisonView(prisma);
+  await createRealizedViews(prisma);
 
   console.log("✅ Seed complete.");
 }

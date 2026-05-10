@@ -30,8 +30,31 @@ function resolveCsvPath(filename: string): string {
 
 function parseRevenue(raw: string): number {
   if (!raw || raw.trim() === "" || raw.trim() === "-") return 0;
-  const cleaned = raw.replace(/['\u2019\s€]/g, "").replace(",", ".");
-  const n = parseFloat(cleaned);
+  const s = raw.replace(/['"\u2019\s€]/g, "").trim();
+  if (!s || s === "-") return 0;
+
+  // Handle both:
+  // - "432,563.00" (comma thousands, dot decimals)
+  // - "432.563,00" (dot thousands, comma decimals)
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+
+  let normalized = s;
+  if (lastComma !== -1 && lastDot !== -1) {
+    // Both separators present: the last one is the decimal separator.
+    const decimalSep = lastComma > lastDot ? "," : ".";
+    const thousandSep = decimalSep === "," ? "." : ",";
+    normalized = normalized.split(thousandSep).join("");
+    if (decimalSep === ",") normalized = normalized.replace(",", ".");
+  } else if (lastComma !== -1) {
+    // Only commas: treat as decimal separator (EU style).
+    normalized = normalized.replace(",", ".");
+  } else {
+    // Only dots (or none): parseFloat can handle it (US style / integer).
+    normalized = normalized;
+  }
+
+  const n = Number.parseFloat(normalized);
   return Number.isNaN(n) ? 0 : n;
 }
 

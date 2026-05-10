@@ -11,6 +11,7 @@ export type BudgetRollupRow = {
   external: number;
   direct: number;
   total: number;
+  revenue: number;
 };
 
 export type BudgetRollupParams = {
@@ -47,18 +48,40 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
         external: unknown;
         direct: unknown;
         total: unknown;
+        revenue: unknown;
       }[]
     >(Prisma.sql`
+      WITH initiative_totals AS (
+        SELECT
+          v.jira_key,
+          v.division,
+          v.team,
+          v.product_name,
+          v.summary,
+          COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
+          COALESCE(SUM(v.external_cost), 0)::double precision AS external,
+          COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
+          COALESCE(SUM(v.computed_cost), 0)::double precision AS total,
+          COALESCE(r.revenue, 0)::double precision AS revenue
+        FROM v_allocation_costs v
+        LEFT JOIN (
+          SELECT initiative_id, SUM(amount)::double precision AS revenue
+          FROM initiative_revenue
+          GROUP BY initiative_id
+        ) r ON r.initiative_id = v.jira_key
+        ${where}
+        GROUP BY v.jira_key, v.division, v.team, v.product_name, v.summary, r.revenue
+      )
       SELECT
-        v.division AS key,
-        v.division AS label,
-        COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
-        COALESCE(SUM(v.external_cost), 0)::double precision AS external,
-        COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
-        COALESCE(SUM(v.computed_cost), 0)::double precision AS total
-      FROM v_allocation_costs v
-      ${where}
-      GROUP BY v.division
+        division AS key,
+        division AS label,
+        COALESCE(SUM(internal), 0)::double precision AS internal,
+        COALESCE(SUM(external), 0)::double precision AS external,
+        COALESCE(SUM(direct), 0)::double precision AS direct,
+        COALESCE(SUM(total), 0)::double precision AS total,
+        COALESCE(SUM(revenue), 0)::double precision AS revenue
+      FROM initiative_totals
+      GROUP BY division
       ORDER BY total DESC
     `);
     return rows.map((r) => ({
@@ -68,6 +91,7 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
       total: Number(r.total ?? 0),
+      revenue: Number(r.revenue ?? 0),
     }));
   }
 
@@ -80,18 +104,40 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
         external: unknown;
         direct: unknown;
         total: unknown;
+        revenue: unknown;
       }[]
     >(Prisma.sql`
+      WITH initiative_totals AS (
+        SELECT
+          v.jira_key,
+          v.division,
+          v.team,
+          v.product_name,
+          v.summary,
+          COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
+          COALESCE(SUM(v.external_cost), 0)::double precision AS external,
+          COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
+          COALESCE(SUM(v.computed_cost), 0)::double precision AS total,
+          COALESCE(r.revenue, 0)::double precision AS revenue
+        FROM v_allocation_costs v
+        LEFT JOIN (
+          SELECT initiative_id, SUM(amount)::double precision AS revenue
+          FROM initiative_revenue
+          GROUP BY initiative_id
+        ) r ON r.initiative_id = v.jira_key
+        ${where}
+        GROUP BY v.jira_key, v.division, v.team, v.product_name, v.summary, r.revenue
+      )
       SELECT
-        v.team AS key,
-        v.team AS label,
-        COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
-        COALESCE(SUM(v.external_cost), 0)::double precision AS external,
-        COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
-        COALESCE(SUM(v.computed_cost), 0)::double precision AS total
-      FROM v_allocation_costs v
-      ${where}
-      GROUP BY v.team
+        team AS key,
+        team AS label,
+        COALESCE(SUM(internal), 0)::double precision AS internal,
+        COALESCE(SUM(external), 0)::double precision AS external,
+        COALESCE(SUM(direct), 0)::double precision AS direct,
+        COALESCE(SUM(total), 0)::double precision AS total,
+        COALESCE(SUM(revenue), 0)::double precision AS revenue
+      FROM initiative_totals
+      GROUP BY team
       ORDER BY total DESC
     `);
     return rows.map((r) => ({
@@ -101,6 +147,7 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
       total: Number(r.total ?? 0),
+      revenue: Number(r.revenue ?? 0),
     }));
   }
 
@@ -113,18 +160,40 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
         external: unknown;
         direct: unknown;
         total: unknown;
+        revenue: unknown;
       }[]
     >(Prisma.sql`
+      WITH initiative_totals AS (
+        SELECT
+          v.jira_key,
+          v.division,
+          v.team,
+          v.product_name,
+          v.summary,
+          COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
+          COALESCE(SUM(v.external_cost), 0)::double precision AS external,
+          COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
+          COALESCE(SUM(v.computed_cost), 0)::double precision AS total,
+          COALESCE(r.revenue, 0)::double precision AS revenue
+        FROM v_allocation_costs v
+        LEFT JOIN (
+          SELECT initiative_id, SUM(amount)::double precision AS revenue
+          FROM initiative_revenue
+          GROUP BY initiative_id
+        ) r ON r.initiative_id = v.jira_key
+        ${where}
+        GROUP BY v.jira_key, v.division, v.team, v.product_name, v.summary, r.revenue
+      )
       SELECT
-        v.product_name AS key,
-        v.product_name AS label,
-        COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
-        COALESCE(SUM(v.external_cost), 0)::double precision AS external,
-        COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
-        COALESCE(SUM(v.computed_cost), 0)::double precision AS total
-      FROM v_allocation_costs v
-      ${where}
-      GROUP BY v.product_name
+        product_name AS key,
+        product_name AS label,
+        COALESCE(SUM(internal), 0)::double precision AS internal,
+        COALESCE(SUM(external), 0)::double precision AS external,
+        COALESCE(SUM(direct), 0)::double precision AS direct,
+        COALESCE(SUM(total), 0)::double precision AS total,
+        COALESCE(SUM(revenue), 0)::double precision AS revenue
+      FROM initiative_totals
+      GROUP BY product_name
       ORDER BY total DESC
     `);
     return rows.map((r) => ({
@@ -134,6 +203,7 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
       external: Number(r.external ?? 0),
       direct: Number(r.direct ?? 0),
       total: Number(r.total ?? 0),
+      revenue: Number(r.revenue ?? 0),
     }));
   }
 
@@ -146,18 +216,39 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
       external: unknown;
       direct: unknown;
       total: unknown;
+      revenue: unknown;
     }[]
   >(Prisma.sql`
+    WITH initiative_totals AS (
+      SELECT
+        v.jira_key,
+        v.division,
+        v.team,
+        v.product_name,
+        v.summary,
+        COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
+        COALESCE(SUM(v.external_cost), 0)::double precision AS external,
+        COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
+        COALESCE(SUM(v.computed_cost), 0)::double precision AS total,
+        COALESCE(r.revenue, 0)::double precision AS revenue
+      FROM v_allocation_costs v
+      LEFT JOIN (
+        SELECT initiative_id, SUM(amount)::double precision AS revenue
+        FROM initiative_revenue
+        GROUP BY initiative_id
+      ) r ON r.initiative_id = v.jira_key
+      ${where}
+      GROUP BY v.jira_key, v.division, v.team, v.product_name, v.summary, r.revenue
+    )
     SELECT
-      v.jira_key,
-      v.summary,
-      COALESCE(SUM(v.internal_cost), 0)::double precision AS internal,
-      COALESCE(SUM(v.external_cost), 0)::double precision AS external,
-      COALESCE(SUM(v.direct_cost), 0)::double precision AS direct,
-      COALESCE(SUM(v.computed_cost), 0)::double precision AS total
-    FROM v_allocation_costs v
-    ${where}
-    GROUP BY v.jira_key, v.summary
+      jira_key,
+      summary,
+      internal,
+      external,
+      direct,
+      total,
+      revenue
+    FROM initiative_totals
     ORDER BY total DESC
   `);
 
@@ -168,6 +259,7 @@ export async function queryBudgetRollup(params: BudgetRollupParams): Promise<Bud
     external: Number(r.external ?? 0),
     direct: Number(r.direct ?? 0),
     total: Number(r.total ?? 0),
+    revenue: Number(r.revenue ?? 0),
   }));
 }
 

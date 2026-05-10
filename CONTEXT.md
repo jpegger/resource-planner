@@ -1,6 +1,6 @@
 # Resource Planner — Application Design Document
 
-**Paradigm · Brussels Capital Region · v1.10 · May 2026**
+**Paradigm · Brussels Capital Region · v1.13 · May 2026**
 
 ---
 
@@ -9,10 +9,10 @@
 1. [Purpose & Scope](#1-purpose--scope)
 2. [Core Business Logic](#2-core-business-logic)
 3. [Technology Stack](#3-technology-stack)
-4. [Database Schema](#4-database-schema)
-5. [Power BI Cost View](#5-power-bi-cost-view-v_allocation_costs) (includes §5.3 planning vs baseline views, §5.4 `v_revenues`)
+4. [Database Schema](#4-database-schema) (includes §4.12 realized-layer mapping tables, §4.13 realized-layer import tables, §4.14 SAP designation mapping)
+5. [Power BI Cost View](#5-power-bi-cost-view-v_allocation_costs) (includes §5.3 planning vs baseline views, §5.4 `v_revenues`, §5.5 realized-layer views)
 6. [Application Architecture](#6-application-architecture)
-7. [Application Screens](#7-application-screens)
+7. [Application Screens](#7-application-screens) (includes §7.7 imports & realized-data mappings)
 8. [Jira Sync](#8-jira-sync)
 9. [Seed Scripts](#9-seed-scripts)
 10. [Local Development Setup](#10-local-development-setup)
@@ -275,7 +275,6 @@ One row per resource × initiative assignment. The `manDays` and `quantity` fiel
 
 ### 4.7 EotpDefinition (SAP EOTP catalog)
 
-PostgreSQL table **`eotp_definition`**. Canonical SAP EOTP lines used by the app for **labels**, **org metadata** (division, team, budget owner, …), and optional FK links from **`allocation_entity`** and **`eotp_routing`**. Seeded from **`scripts/datasets/dev/EOTP-Budget-Owner.csv`** via **`npm run db:seed:eotp`** (`scripts/seed-eotp-definitions.ts`). **Unique** on **`(sapEotpCode, label)`** — the same SAP code may appear more than once with different labels.
 PostgreSQL table **`eotp_definition`**. Canonical SAP EOTP lines used by the app for **labels**, **org metadata** (division, team, budget owner, …), and optional FK links from **`allocation_entity`** and **`eotp_routing`**. Seeded from **`scripts/datasets/dev/EOTP-Budget-Owner.csv`** via **`npm run db:seed:eotp`** (`scripts/seed-eotp-definitions.ts`). **Unique** on **`sapEotpCode`** (one row per SAP code).
 
 | Field | Type | Req | Notes |
@@ -340,11 +339,84 @@ Resource (1) ──── (N) Allocation   [resourceId]
 Initiative (1) ── (N) Allocation    [initiativeId]
 Initiative (1) ── (N) InitiativeRevenue [initiative_id — indexed, not unique]
 RateStandard     ── (no FK)       [joined by type + year at query time]
+
+# Realized layer (§4.12 – §4.14) — all *_entry rows ON DELETE CASCADE on import_id
+TimesheetImport (1) ── (N) TimesheetEntry [allocation_entity_id?, initiative_id?, resource_id?]
+InvoiceImport   (1) ── (N) InvoiceEntry   [eotp_definition_id?, cost_type ∈ EXTERNAL|DIRECT_COST]
+ArImport        (1) ── (N) ArEntry        [allocation_entity_id?]
+RevenueImport   (1) ── (N) RevenueEntry   [allocation_entity_id?, ar_entry_id? → ArEntry]
+SnProgrammeMapping       ── (no FK from imports — looked up by sn_programme_name)
+SnProjectMapping         ── (no FK from imports — looked up by sn_project_nr)
+SfMasterProductMapping   ── (no FK from imports — looked up by sf_product_name)
+SapDesignationMapping    ── (no FK from imports — looked up by sap_designation)
 ```
 
 ### 4.11 InitiativeRevenue (table: `initiative_revenue`)
 
 Multiple revenue rows per initiative. **`RevenueType`** enum: **`Mission`** \| **`Subscription`**. Fields: `id`, `initiativeId` (FK → `Initiative`, **no** unique constraint — many rows allowed), `type`, `amount` (EUR), `comment` (optional), `createdOn`, `modifiedOn`. Back-relation: **`Initiative.revenues`**. Seeded from **`REVENU.csv`** via **`npm run db:seed:revenues`** (all CSV lines as **`Mission`**; matched by Jira key in **Colonne1**; **delete-then-insert** per affected initiative for idempotency).
+
+### 4.12 Realized-layer mapping tables (managed in-app)
+
+The realized-cost / revenue imports never reject rows — when source data does not match the planner catalog, the import writes an `import_warning` and the user fixes it from the **`/imports/mappings`** UI (§7.7). Mapping tables are **not** seeded from imports; they are edited by the user (with optional one-off CSV bootstraps).
+
+| Table | Purpose | UNIQUE | Used by |
+|---|---|---|---|
+| **`sn_programme_mapping`** | ServiceNow `top_program` text → **`AllocationEntity.id`** | **`sn_programme_name`** | timesheet import |
+| **`sn_project_mapping`** | ServiceNow `top_task` (PRJxxxxxxx) → **`Initiative.id`** (optional) | **`sn_project_nr`** | timesheet import |
+| **`sf_master_product_mapping`** | Salesforce `Product` text → **`AllocationEntity.id`** (when `Product OTP` cannot resolve) | **`sf_product_name`** | AR import |
+| **`sap_designation_mapping`** | SAP client-invoice `Désignation poste` (col 23) → **`AllocationEntity.id`** | **`sap_designation`** | revenue import (step 2 fallback — see §4.14) |
+
+All mapping tables share the same shape: surrogate `id` (cuid), the source text key (unique), an optional **`allocation_entity_id`** (or **`initiative_id`** for SN projects), an optional `notes` field, plus `createdAt` / `updatedAt`. Imports do a single in-process lookup per row (no joins) and stamp the resolved FK onto the import-entry row.
+
+### 4.13 Realized-layer import tables (audit + entries)
+
+Each realized-data import follows the same **header + rows** pattern: an `*_import` audit row with file metadata is created in a single transaction with the parsed `*_entry` rows, and **`ON DELETE CASCADE`** on `import_id` lets the user remove an import with one click and reimport.
+
+| Audit table | Entries table | Source file | Cost / revenue type |
+|---|---|---|---|
+| **`timesheet_import`** | **`timesheet_entry`** | `SN_Time_Card_Export_YYYY.csv` (ServiceNow Platform Analytics) | INTERNAL labour |
+| **`invoice_import`** | **`invoice_entry`** | `SAP_VIM_Factures_Fournisseurs.csv` (ZVIM_ANA_DETAIL, périmètre 1700) | EXTERNAL (1211) + DIRECT_COST (1221) |
+| **`ar_import`** | **`ar_entry`** | `SalesForce_AR_export.csv` (SF "AR DPM by Product") | Planned revenue (signed contracts) |
+| **`revenue_import`** | **`revenue_entry`** | `SAP_Clients_Invoices.csv` (ZCOMM_REPORT, périmètre 1800) | Realized revenue (ZCS positive, ZCR negative — see §4.14) |
+
+**Common fields on every `*_entry` row:** `import_id` (cascade FK), the resolved **`allocation_entity_id`** (nullable when unresolved), an optional **`initiative_id`** / domain-specific FK (e.g. **`ar_entry_id`** on `revenue_entry` — see §4.14), and an **`import_warning`** string set only when resolution failed. Cost / revenue amounts are stored as **EUR (positive)** for invoices and AR, with the SAP credit-note sign convention applied at parse time for `revenue_entry`.
+
+**Filters applied at parse time** (rows failing these are skipped, **not** stored):
+
+- **Timesheets** — `category = 'Project/Project Task'` and `state IN ('Processed', 'Approved')`.
+- **VIM invoices** — `Descr = 'Approbation terminée'` and `Compte budgét. ∈ {1211, 1221}`. Skip `Annulé`, `T_GRIR`, blank `Compte`.
+- **AR** — `Document Status = 'Signed'`.
+- **SAP client invoices** — `Facture` (col 41) non-empty; **`year` parameter** mismatched against col 58 → skipped (`skippedYearMismatch` counter).
+
+**Idempotency / upsert keys:** AR uses `(sf_line_item_id, year)`; revenue uses `(sap_invoice_nr, year, sap_invoice_item)` — one DB row per **SAP invoice line item** (`Poste`, col 48), so a single `Facture` carrying several `Désignation poste` lines (e.g. `CRM UC`, `CRM Framework`, `Consultance Expertise`) lands as several `revenue_entry` rows. Re-importing the same file with the same `year` parameter is idempotent (existing rows are updated, not duplicated). Timesheet and VIM imports are append-only — delete the import header to clear them.
+
+### 4.14 RevenueEntry & SAP designation resolution (sections 5.10 / 7.4 of the realized-revenue design)
+
+**`revenue_entry`** carries three columns added in migration **`20260510063935_revenue_entry_ar_link`** to link SAP client invoices back to the planning catalog and to Salesforce AR contracts, plus a **`sap_invoice_item`** column added in migration **`20260510121147_revenue_entry_invoice_item`** so the unique key is per-line, not per-invoice:
+
+| Column | Type | Source (CSV col) | Notes |
+|---|---|---|---|
+| `sap_doc_type` | `TEXT NOT NULL` | col 0 — `Type document vente` | `ZCS` (invoice) or `ZCR` (credit note). Backfilled to `'ZCS'` for legacy rows. |
+| `sap_invoice_item` | `INTEGER NOT NULL` | col 48 — `Poste` | SAP invoice line item (10/20/30…). Part of the **unique key** `(sap_invoice_nr, year, sap_invoice_item)` so each `Désignation poste` lands as its own row. Backfilled to `0` for legacy rows; re-import the source CSV to recover the real per-line breakdown. |
+| `ext_doc_ref` | `TEXT` | col 40 — `Numéro externe de document de vente` | When non-empty, primary lookup key against **`ar_entry.counterpart_reference`**. |
+| `ar_entry_id` | `TEXT` (FK → `ar_entry.id`, `ON DELETE SET NULL`) | resolved | Set when an AR line matches: **step 1** — `counterpart_reference` + SAP `product_label` = `sf_product_name`; or **step 2** — same AR ref + **`sap_designation_mapping.sf_product_name`** (after mapping SAP designation) when that row exists on the contract. |
+
+**Sign convention:** the parser negates `amount_eur` when `sap_doc_type = 'ZCR'`. `ZCS` keeps the SAP positive value as imported (already EUR-converted). This makes `SUM(amount_eur)` directly equal **net realized revenue** without further client-side handling.
+
+**4-step resolution (`src/lib/revenue-import-resolve.ts`):** every row is resolved exactly once, in priority order. The resolver returns `{ arEntryId, allocationEntityId, importWarning, step }`; the API route counts steps for the response summary.
+
+| Step | Condition | Output | Warning? |
+|---|---|---|---|
+| **1** | `ext_doc_ref` non-empty **AND** an `ar_entry` row matches both `sf_product_name = designation` (col 23 — `product_label`) **AND** `counterpart_reference = ext_doc_ref` | `ar_entry_id` set; `allocation_entity_id` inherited from the AR row | No |
+| **2** | Step 1 misses **and** `ext_doc_ref` non-empty | Look up **`sap_designation_mapping`** by `sap_designation = designation`. If **`sf_product_name`** is set on the mapping, retry the same AR match as step 1 using `counterpart_reference = ext_doc_ref` and `sf_product_name = mapping.sf_product_name`. If an AR line exists → **`ar_entry_id`** + inherited **`allocation_entity_id`** (same as step 1; response **`step1Count`**). If no AR line but **`allocation_entity_id`** on the mapping → set that only. If mapping missing → both FKs null. | Yes when no AR link is found (warnings describe missing AR line for mapped SF name, allocation-only fallback, or unmapped designation) |
+| **3** | `ext_doc_ref` empty | EOTP root from col 31 → **`allocation_entity.sapEotpCode`** (no SAP-designation fallback) | No |
+| **4** | Nothing resolved | both FKs `NULL` | Yes — `STEP 4: No EOTP and no AR match` |
+
+**API response** (`POST /api/imports/revenue`) returns `{ import, summary }` where `summary` includes `totalLines`, `parseSkipped`, `skippedYearMismatch`, `upsertedRows`, **`step1Count`**, **`step2Count`**, **`step3Count`**, **`step4Count`**, **`warnCount`**. **`upsertedRows`** counts distinct `(sap_invoice_nr, year, sap_invoice_item)` triples — i.e. one per imported SAP invoice **line item**, so an invoice with several `Désignation poste` lines contributes several rows and several increments.
+
+**Date parsing nuance:** col 59 (`Date de la pièce`) was usually `DD/MM/YYYY` in early exports but newer SAP exports of the same column are **Excel 1900-system serial integers** (e.g. `45497`). `parseInvoicePieceDate` tries `DD/MM/YYYY` first, then falls back to **`parseExcelSerialDate`** (uses 25_569 as the JS-epoch offset, accounting for Excel's 1900 leap-year bug); rows where neither parses are skipped (`parseSkipped`).
+
+**Operational impact:** mapping rows for step 2 are managed at **`/imports/mappings`** (§7.7) — re-running the import after adding mappings will resolve previously-warned rows on the next pass (idempotent on `(sap_invoice_nr, year, sap_invoice_item)`).
 
 ---
 
@@ -416,6 +488,16 @@ See `README.md` (Power BI notes) for step-by-step import notes.
 
 **`v_revenues`** — one row per **`InitiativeRevenue`** record. Columns: **`revenue_id`**, **`initiative_id`**, **`jira_key`**, **`summary`**, **`initiative_year`**, **`initiative_type`** (varchar), **`status`** (varchar), org dimensions, **`sap_eotp_code`**, **`sap_eotp_name`**, **`revenue_type`** (varchar — `'Mission'` or `'Subscription'`), **`revenue_amount`**, **`revenue_comment`**, timestamps. All enum-like columns **cast to VARCHAR** (§2.8). **`SUM(revenue_amount)`** is additive at revenue-line grain. Do **not** join **`v_revenues`** to **`v_allocation_costs`** in the model — different granularities (revenue line vs allocation row); filter both via shared slicers (e.g. year, product). Created by **`createRevenueView()`** in **`scripts/seed-production.ts`**. Recreated by **`SEED_VIEW_ONLY=1 npm run db:seed:prod`**.
 
+### 5.5 Realized-layer views (`v_realized_costs`, `v_planned_revenue`, `v_realized_revenue`)
+
+Created by **`createRealizedViews()`** in **`scripts/realized-views.ts`** (called from `seed-production.ts`, also rebuilt by `SEED_VIEW_ONLY=1 npm run db:seed:prod`). These views never alter or replace `v_allocation_costs` / `v_eotp_costs`.
+
+- **`v_realized_costs`** — `UNION ALL` of `timesheet_entry` (`cost_type = 'INTERNAL'`, `amount_eur = (hours / 8.0) × COALESCE(rate.dailyRate, rate_standard.dailyRate)`) and `invoice_entry` (`cost_type ∈ {EXTERNAL, DIRECT_COST}`, `amount_eur` from `invoice_entry`). Joins **`eotp_definition`** for division / sub_division / team / owner on the VIM half. Filterable by year / month / cost type / ownership / `allocation_entity_id`.
+- **`v_planned_revenue`** — `ar_entry GROUP BY year × allocation_entity_id × sf_product_name × client_name`. Used for AR coverage dashboards.
+- **`v_realized_revenue`** — `revenue_entry GROUP BY year × month × allocation_entity_id × sap_article_code × product_label × client_name`. The new **`ar_entry_id`**, **`ext_doc_ref`**, **`sap_doc_type`** columns (§4.14) are **not** projected by this view today — query `revenue_entry` directly when AR-link drilldowns are needed (Power BI relationship: `revenue_entry[ar_entry_id]` → `ar_entry[id]`). _Open item: extend the view when reporting needs it._
+
+**Power BI:** these views are intentionally "additive" — `SUM(amount_eur)` is correct at the row grain. Use shared `dim_year` / `dim_eotp` already in the model (§4.9, §5.3) to slice with the planning views.
+
 ---
 
 ## 6. Application Architecture
@@ -457,6 +539,41 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_cos
 | `/api/baselines` | GET, POST | List budget baselines; POST multipart **`name`**, **`version`**, **`year`**, **`file`** (Excel). |
 | `/api/baselines/[id]` | DELETE | Delete baseline (cascade rows). |
 | `/api/reports/comparison` | GET | **Planning vs baseline** rows for **`/reports/comparison`**. Query: **`year`**, **`baselineId`**, optional **`snapshotId`** (absent ⇒ **live** current allocations via **`fetchLivePlanningVsBaselineComparison`** / **`computeAllocationBreakdownForYear`**), optional org filters. Uses view **`v_comparison`** when a snapshot is selected. |
+
+**Realized-layer imports** (multipart `file`, query / form `year`):
+
+| Route | Methods | Purpose |
+|---|---|---|
+| `/api/imports/timesheets` | GET, POST | List timesheet imports / upload `SN_Time_Card_Export_YYYY.csv`; resolves **`allocation_entity_id`** via **`sn_programme_mapping`** and optional **`initiative_id`** via **`sn_project_mapping`** |
+| `/api/imports/timesheets/[id]` | DELETE | Cascade-delete one timesheet import + its `timesheet_entry` rows |
+| `/api/imports/timesheets/sync` | POST | Re-resolve unmapped `timesheet_entry` rows after mapping edits (no re-upload) |
+| `/api/imports/invoices` | GET, POST | List VIM imports / upload `SAP_VIM_Factures_Fournisseurs.csv`; resolves **`eotp_definition_id`** from EOTP root |
+| `/api/imports/invoices/[id]` | DELETE | Cascade-delete one VIM import |
+| `/api/imports/ar` | GET, POST | List AR imports / upload `SalesForce_AR_export.csv`; required `year` form field; UPSERT on `(sf_line_item_id, year)` |
+| `/api/imports/ar/[id]` | DELETE | Cascade-delete one AR import |
+| `/api/imports/ar/sync` | POST | Re-resolve unmapped `ar_entry` rows after **`sf_master_product_mapping`** edits |
+| `/api/imports/revenue` | POST | Upload `SAP_Clients_Invoices.csv`; required `year` form field; UPSERT on `(sap_invoice_nr, year, sap_invoice_item)` — one row per SAP invoice **line item** (`Poste`, col 48); runs the **4-step resolver** (§4.14) and returns `summary` with **`step1Count`** / **`step2Count`** / **`step3Count`** / **`step4Count`** / **`warnCount`** |
+| `/api/imports/revenue/[id]` | DELETE | Cascade-delete one revenue import |
+| `/api/imports/config` | GET | Return server-side defaults for the import UI (e.g. current import year) |
+
+**Realized-layer mapping CRUD** (managed in-app — see §4.12, §7.7):
+
+| Route | Methods | Purpose |
+|---|---|---|
+| `/api/mappings/sn-programmes` | GET, POST | List / create `sn_programme_mapping` rows |
+| `/api/mappings/sn-programmes/[id]` | PATCH, DELETE | Update / delete one row |
+| `/api/mappings/sn-projects` | GET, POST | List / create `sn_project_mapping` rows (FK → Initiative) |
+| `/api/mappings/sn-projects/[id]` | PATCH, DELETE | Update / delete one row |
+| `/api/mappings/sf-products` | GET, POST | List / create `sf_master_product_mapping` rows (Salesforce master `Product` → AllocationEntity) |
+| `/api/mappings/sf-products/[id]` | PATCH, DELETE | Update / delete one row |
+| `/api/mappings/sap-designations` | GET, POST | List / create `sap_designation_mapping` rows (SAP `Désignation poste` → AllocationEntity) — backs **step 2** of the revenue resolver (§4.14) |
+| `/api/mappings/sap-designations/[id]` | DELETE | Delete one row |
+
+**Realized-layer reports**:
+
+| Route | Methods | Purpose |
+|---|---|---|
+| `/api/reports/ar-invoicing` | GET | Backs **`/reports/ar-invoicing`** (§7.6). Query: optional **`year`** (omitted ⇒ cross-year view), `division`, `subdivision`, `team`, `productId`, `allocationProductName`, `mapped`, `warningsOnly`, `client`, `masterProduct`, `contractNumber`, `counterpartReference`, `signedFrom` / `signedTo`, `importId`, `limit`, `offset`. Returns `{ meta, summary, lines, unmatched }`. `meta.availableYears` lists every year present in `ar_entry ∪ revenue_entry` (drives the UI dropdown). `lines[]` are AR line items with their matched SAP `revenue_entry` rows aggregated via a **lateral join** that links by FK (`re.ar_entry_id = ar.id`, year-agnostic) **or** by the legacy `(sap_so_number, sf_product_name)` heuristic (year-required). `unmatched[]` aggregates SAP rows whose `ext_doc_ref` references an AR on the page but match no AR line item (one bucket per `(counterpart_reference, allocation_entity_id)`). |
 
 **Legacy URLs:** No Next.js redirects are configured for old paths — use the canonical routes in the table above only.
 
@@ -501,9 +618,31 @@ Management screen: **take snapshots** (name, year), **import baselines** (Excel)
 
 **Planning vs baseline** table: select **year**, **baseline**, and **planning source** — **current allocations (live)** or a saved **snapshot**. Optional filters: division, subdivision, team, owner (narrowed from loaded rows). KPIs and sortable columns include internal / external / direct / **cash out**, baseline amount, coverage, gap. **`GET /api/reports/comparison`**: without **`snapshotId`**, the API builds rows from **`computeAllocationBreakdownForYear`** + baseline join (**`comparison-live.ts`**); with **`snapshotId`**, it reads **`v_comparison`**. **Export Excel** writes an **Excel table** (exceljs): formatted EUR (`#,##0`), coverage **`0%`**, metadata rows for filters, totals row; download name **`Baseline-Planning_Comparison_{year}_{dd.MM.yyyy}.xlsx`**.
 
-### 7.6 Legacy routes
+### 7.6 Realized-layer reports (`/reports/realized-costs`, `/reports/revenu`, `/reports/ar`, `/reports/ar-invoicing`)
 
-Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`**, **`/budget-comparison`**, **`/reports/*`**, and **`/api/allocation-entities`** (see §6.2).
+In-app drilldowns over the realized layer (§5.5):
+
+- **`/reports/realized-costs`** — INTERNAL labour (timesheet) + EXTERNAL/DIRECT (VIM) split by year/month/cost type and ownership hierarchy from `eotp_definition`.
+- **`/reports/revenu`** — Realized revenue (`v_realized_revenue` + raw `revenue_entry` for AR-link drilldown). Surfaces step-1/step-2 resolution rates and unresolved warnings to flag missing **`sap_designation_mapping`** rows.
+- **`/reports/ar`** — Salesforce AR coverage (`v_planned_revenue`) vs realized revenue gap.
+- **`/reports/ar-invoicing`** — **AR invoicing follow-up.** For each AR contract, shows planned revenue (from `ar_entry`) vs invoiced (from `revenue_entry`) and the **delta**. Filters: **Year** (defaults to *All years*; options come from `meta.availableYears` — every year actually present in `ar_entry ∪ revenue_entry`), Division, Subdivision, Team, Product, Status, Mapped/Unmapped, Warnings only, client / master product / contract / counterpart-reference / signed-date range. Lines are grouped client-side by **`counterpart_reference`** (one card per AR contract) and within each card a **table of AR line items** (`sf_product_name`, `Description`, allocation entity, planned, invoiced, delta) drills down on click into the matching SAP `revenue_entry` rows (`sapDocType`, `sapInvoiceNr`, `sapInvoiceItem`, month/year, amount, designation, `extDocRef`, allocation entity). **Cross-year matching:** when `revenue_entry.ar_entry_id` is set (resolver step 1 / step 2 with mapped SF name), the join ignores the year — a 2025 AR contract correctly shows its 2023 SAP invoices. The legacy `(sap_so_number, sf_product_name)` heuristic fallback still requires `re.year = ar.year` to avoid spurious matches between unrelated years. SAP invoice rows whose `ext_doc_ref` matches an AR's `counterpart_reference` but no AR line item are surfaced as a synthetic **"Unmatched line items"** row per `(counterpart_reference, allocation_entity_id)` bucket, displayed with an amber background. Read by **`GET /api/reports/ar-invoicing`** (§6.2).
+
+These supplement (not replace) Power BI; the canonical enterprise dashboards still consume the views directly.
+
+### 7.7 Imports & realized-data mappings (`/imports`, `/imports/mappings`)
+
+- **`/imports`** — operations console for the four realized-layer imports (timesheets, VIM, AR, SAP client revenue). Each card shows recent `*_import` headers with row counts and `import_warning` totals, an **Upload** button (multipart `file` + `year` for AR / revenue), per-import **Delete** with **Dialog** confirmation, and (for timesheets / AR) a **Re-resolve** action that runs the corresponding `/sync` endpoint after the user has edited mappings. The revenue card displays the full **4-step summary** (`step1` / `step2` / `step3` / `step4` / `warnCount`) returned by the import.
+- **`/imports/mappings`** — single-page editor for the four managed mapping tables (§4.12). Layout: four `PANEL_CARD_CLASS` cards in a responsive grid:
+  1. **SN — Programme → Investment** (`sn_programme_mapping`)
+  2. **SN — Project → Initiative** (`sn_project_mapping`, optional Initiative FK)
+  3. **Salesforce — Master Product → Investment** (`sf_master_product_mapping`)
+  4. **SAP — Désignation poste → produit** (`sap_designation_mapping`) — backs **step 2** of the revenue resolver (§4.14); columns: **Désignation SAP**, **Produit SF (réf.)**, **Produit** (allocation entity), **Notes**, delete action
+
+  Each card includes an inline "add new" form and an editable table with row-level delete (icon-only, outline button — same pattern as **Daily rates** on `/resources`). After saving a new mapping, the user can hit **Re-resolve** on `/imports` (or re-upload the source file) to clear the corresponding `import_warning` rows on already-imported entries.
+
+### 7.8 Legacy routes
+
+Older prototype paths (e.g. `/test/products`, `/api/products`, `/initiatives`) are **not** mapped — they 404 unless you add routes or redirects. Use **`/investments`**, **`/budget-comparison`**, **`/reports/*`**, **`/imports`**, **`/imports/mappings`**, and **`/api/allocation-entities`** (see §6.2).
 
 ---
 
@@ -605,10 +744,16 @@ npx tsx scripts/jira/update-jira-products-and-links.ts --step all --sample all -
 |---|---|---|---|
 | `seed-dev.ts` | `npm run db:seed` (or `db:seed:dev`) | `scripts/datasets/dev/*.csv` | Dev/test seed dataset |
 | `seed-products.ts` | `npm run db:seed:products` | `scripts/datasets/dev/PRODUCTS.csv` | Upsert **`AllocationEntity`** rows (table `allocation_entity`; SAP fields, scores, **`entity_type`**) |
-| `seed-production.ts` | `npm run db:seed:prod` | `scripts/datasets/prod-import/*.csv` | Production import: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`**, **`v_comparison`**, **`v_revenues`**, **`dim_eotp`**, seed **`dim_year`** |
+| `seed-production.ts` | `npm run db:seed:prod` | `scripts/datasets/prod-import/*.csv` | Production import: resources, standards, rates, initiatives, allocations, **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_snapshot_detail`**, **`v_baseline_detail`**, **`v_comparison`**, **`v_revenues`**, **`v_realized_costs`**, **`v_planned_revenue`**, **`v_realized_revenue`**, **`dim_eotp`**, seed **`dim_year`**; also calls `seedSapDesignationMappingIfPresent()` so the `sap_designation_mapping` CSV (when present) is upserted as part of a full seed |
 | `seed-eotp-definitions.ts` | `npm run db:seed:eotp` | `scripts/datasets/dev/EOTP-Budget-Owner.csv` | Upsert **`eotp_definition`** (SAP code, label, org metadata) |
 | `seed-eotp-routing.ts` | `npm run db:seed:routing` | `scripts/datasets/dev/EOTP_ROUTING.csv` | Upsert **`eotp_routing`** from CSV (`productName` → **`AllocationEntity.name`**, columns: internal / external / direct EUR); links **`eotp_definition_id`** when definitions exist |
 | `seed-revenues.ts` | `npm run db:seed:revenues` | `scripts/datasets/dev/REVENU.csv` | Insert **`InitiativeRevenue`** (type = **`Mission`**) one row per CSV line; matched by Jira key in **Colonne1**; **delete-then-insert** per affected initiative |
+| `seed-sn-programme-mapping.ts` | `npm run db:seed:sn-programmes` | `scripts/datasets/dev/SN_PROGRAMME_MAPPING.csv` | Bootstrap **`sn_programme_mapping`** (one-off, ongoing edits via `/imports/mappings`) |
+| `seed-sn-project-mapping.ts` | `npm run db:seed:sn-projects` | `scripts/datasets/dev/SN_PROJECT_MAPPING.csv` | Bootstrap **`sn_project_mapping`** (one-off) |
+| `seed-sf-master-product-mapping.ts` | `npm run db:seed:sf-master-products` | `scripts/datasets/dev/SF_MASTER_PRODUCT_MAPPING.csv` | Bootstrap **`sf_master_product_mapping`** (one-off) |
+| `seed-sap-designation-mapping.ts` | `npm run db:seed:sap-designations` | `scripts/datasets/dev/SAP_DESIGNATION_MAPPING.csv` | Bootstrap **`sap_designation_mapping`** (one-off); validates `allocation_entity_id` against the catalog and skips invalid / blank rows |
+| `build-sap-designation-mapping-csv.ts` | `npm run db:build:sap-designation-mapping-csv` | `revenue_entry` warnings + `PRODUCTS.csv` + **`scripts/data/sf-product-names.ts`** | Writes **`scripts/datasets/dev/SAP_DESIGNATION_MAPPING.csv`** (union of DB warnings, fallback list, and existing CSV keys) with **`sf_product_name`** from **fuzzy** match to the canonical SF catalogue (tiered confidence). Writes **`scripts/datasets/dev/SAP_DESIGNATION_FUZZY_REPORT.md`** (per-row score, runner-up, tier). Overrides in the script still win for `allocation_entity_id` / explicit `sf_product_name`. |
+| `build-sf-master-product-mapping-suggestions.ts` | (manual `tsx`) | `ar_entry` warnings + `PRODUCTS.csv` | Same idea as above for the AR side — proposes Salesforce master product mappings from unresolved AR rows |
 | `xlsx-to-prod-data-auto.ts` | `tsx scripts/xlsx-to-prod-data-auto.ts --input "<xlsx>" --outDir scripts/datasets/prod-import` | Excel workbook | Generate `Assignement.csv`, `RESSOURCES.csv`, `RATES.csv`, `REVENU.csv` into **`scripts/datasets/prod-import/`**; also copies **`EOTP_ROUTING.csv`** from the script’s reference dataset directory when present so prod reset can seed routing |
 | `backfill-eotp-routing-eotp-definition-ids.ts` | `npm run db:backfill:eotp-routing-fks` | — | One-off: set **`eotp_definition_id`** on existing **`eotp_routing`** / **`allocation_entity`** rows from code ± label |
 | `convert-eotp-routing-csv.ts` | `npm run db:convert:eotp-csv` | (optional path) | One-off: convert **legacy** routing CSV (cost type + percent/amount) → new three-column format (needs DB + **`v_allocation_costs`** for percent→EUR) |
@@ -638,7 +783,7 @@ SEED_PROD_RESET=1 npm run db:seed:prod
 # Upsert only (leave existing rows not touched by CSV logic)
 npm run db:seed:prod
 
-# Recreate Power BI views only — no CSV import (`v_allocation_costs`, `v_eotp_costs`, `v_revenues`, snapshot/baseline views, `dim_eotp`, seed `dim_year`)
+# Recreate Power BI views only — no CSV import (`v_allocation_costs`, `v_eotp_costs`, `v_revenues`, snapshot/baseline views, realized-layer views, `dim_eotp`, seed `dim_year`)
 SEED_VIEW_ONLY=1 npm run db:seed:prod
 
 # Recreate only v_eotp_costs (requires v_allocation_costs)
@@ -792,6 +937,13 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
 
 Consolidated documentation of major changes since the initial design doc:
 
+- **AR invoicing report — cross-year matching, dynamic year filter, designation-mapped retry, fuzzy mapping CSV (v1.13)** — Three fixes and one tooling refresh on the realized-revenue side:
+  - **`/reports/ar-invoicing` — cross-year AR↔invoice matching.** The lateral join in **`src/app/api/reports/ar-invoicing/route.ts`** previously gated every match on `re.year = ar.year`, which hid revenue rows whose calendar year differs from their AR contract's year (e.g. a 2025 AR carrying SAP invoices booked in 2023). The predicate is now split: **FK link** (`re.ar_entry_id = ar.id`) is year-agnostic, **legacy `(sap_so_number, sf_product_name)` heuristic** still requires `re.year = ar.year` to avoid spurious cross-year matches between unrelated rows. Affects both the row-detail and aggregate-only lateral helpers.
+  - **`/reports/ar-invoicing` — Year filter from real data.** API response gained **`meta.availableYears`** (sorted distinct years from `ar_entry ∪ revenue_entry`); the UI uses it for the Year dropdown instead of the hard-coded `[currentYear-1 .. currentYear+1]` window. The static window remains as a pre-load fallback only.
+  - **Resolver step 2 — retry AR match through `sap_designation_mapping.sf_product_name` (v1.12 follow-up).** **`src/lib/revenue-import-resolve.ts`** now uses a populated `sap_designation_mapping.sf_product_name` to retry the step-1 AR lookup with the mapped SF name + `ext_doc_ref`. Successful retries return as **step 1** (`ar_entry_id` set, `allocation_entity_id` inherited from AR, no warning); failures fall back to allocation-only (mapping's `allocation_entity_id` only) with a granular `STEP 2` warning. This finally closes the loop for designations like `CRM UC` → `CRM - Use Case` so they bind to the correct AR line on import. Re-run **`/imports`** *Re-resolve* (or re-upload the source CSV) after editing mappings.
+  - **`scripts/build-sap-designation-mapping-csv.ts` — fuzzy SF product names + confidence report.** New helper data **`scripts/data/sf-product-names.ts`** (195 canonical Salesforce `Product2.Name` values). The script now scores each SAP designation against this list (Levenshtein + token-overlap + dominant-token constraint), populates **`sf_product_name`** automatically when score ≥ 50 (unless an explicit `OVERRIDES` entry sets it), and **skips redundant rows** where the SAP designation already matches an SF name verbatim (Step 1 of the resolver handles these without a mapping). Side-output **`scripts/datasets/dev/SAP_DESIGNATION_FUZZY_REPORT.md`** lists per-designation: best SF match, score, tier (HIGH/MEDIUM/LOW/REVIEW), runner-up, final SF written to CSV, PRD, and notes — review before seeding to catch low-confidence matches. Removed redundant `DPOaaS-*` overrides; `DPO Analysis` now maps to `DPO - Analysis`. See §9 and §11.3 entry below.
+- **Revenue per SAP invoice line item (v1.12)** — `revenue_entry` now stores **one row per SAP invoice line item** (`Poste`, col 48) instead of one per `Facture`. Migration **`20260510121147_revenue_entry_invoice_item`** adds **`sap_invoice_item INTEGER NOT NULL`** (legacy rows backfilled to `0`) and replaces the unique key `(sap_invoice_nr, year)` with **`(sap_invoice_nr, year, sap_invoice_item)`**. Parser **`src/lib/sap-revenue-parser.ts`** reads col 48 into **`sapInvoiceItem`**; **`POST /api/imports/revenue`** upserts on the new triple key. Effect: a single `Facture` like `90836590` carrying `CRM UC` (item 10), `CRM Framework` (item 30/40) and `Consultance Expertise` (item 50) is no longer collapsed — `v_realized_revenue` and the **AR invoicing follow-up** report (§7.6) now see the true per-product breakdown. After applying the migration, **re-import** the source CSV; legacy `(…, item=0)` rows from prior imports can be cleared by deleting the stale `revenue_import` headers (cascade). See §4.14, §6.2, design doc §3.6 / §5.10 / §13.
+- **Realized costs & revenue layer (v1.11)** — End-to-end realized layer landed (timesheets, VIM supplier invoices, Salesforce AR, SAP client revenue), aligned with **`calude-design/claude_realized-costs-revenue-design.md`**. New tables: **`timesheet_import` / `timesheet_entry`**, **`invoice_import` / `invoice_entry`**, **`ar_import` / `ar_entry`**, **`revenue_import` / `revenue_entry`** (§4.13); managed mapping tables **`sn_programme_mapping`**, **`sn_project_mapping`**, **`sf_master_product_mapping`**, **`sap_designation_mapping`** (§4.12). **`revenue_entry`** gains **`sap_doc_type`** (`ZCS`/`ZCR`), **`ext_doc_ref`** (col 40), **`ar_entry_id`** (FK → `ar_entry`) — migration **`20260510063935_revenue_entry_ar_link`**; **`sap_designation_mapping`** in migration **`20260510064047_sap_designation_mapping`**. Parser **`src/lib/sap-revenue-parser.ts`** now negates `amount_eur` on `ZCR` and falls back to **Excel 1900-system serial dates** when col 59 is not `DD/MM/YYYY` (newer SAP exports). Resolver **`src/lib/revenue-import-resolve.ts`** rewritten to a **4-step priority** (§4.14): AR match by `(designation, ext_doc_ref)` → `sap_designation_mapping` → EOTP root → null. **`POST /api/imports/revenue`** returns `{ step1Count, step2Count, step3Count, step4Count, warnCount }`. Realized-layer reporting views in **`scripts/realized-views.ts`** (`v_realized_costs`, `v_planned_revenue`, `v_realized_revenue`); recreated by `SEED_VIEW_ONLY=1 npm run db:seed:prod` (§5.5). New screens **`/imports`** and **`/imports/mappings`** (§7.7); **`/reports/realized-costs`**, **`/reports/revenu`**, **`/reports/ar`** (§7.6). New seed scripts and bootstraps: `seed-sn-programme-mapping.ts`, `seed-sn-project-mapping.ts`, `seed-sf-master-product-mapping.ts`, `seed-sap-designation-mapping.ts`, plus generators `build-sap-designation-mapping-csv.ts` and `build-sf-master-product-mapping-suggestions.ts` (§9). Existing planner views and `ar_entry` / `timesheet_entry` / `invoice_entry` were **not** modified.
 - **Baseline vs planning in-app + export (v1.10)** — **`/reports/comparison`**: live planning or snapshot vs imported baseline; **`GET /api/reports/comparison`** with optional **`snapshotId`**; **`src/lib/comparison-live.ts`**, **`src/lib/export-comparison-xlsx.ts`** (exceljs, real Excel Table, **`Baseline-Planning_Comparison_{year}_{date}.xlsx`**). **`computeAllocationBreakdownForYear`** extracted in **`src/lib/snapshot.ts`** for reuse. SQL: **`catchout`** renamed to **`cash_out`** in **`v_snapshot_detail`**, **`v_comparison`**, snapshot rollups; docs and DAX examples updated. **Prod CSV gen:** **`xlsx-to-prod-data-auto.ts`** copies **`EOTP_ROUTING.csv`** into prod-import when available. **Investments:** budget initiatives grouped by **initiative type** (`GET …/budget` returns **`initiative_type`**). **Jira CLI:** product create maps select-list fields to Jira option IDs. **Budget report:** drill-down sets level once per click. See §4.9, §5.3, §7.3–§7.5, §8.1, §9.
 - **Docker / OpenShift prep** — Multi-stage **`Dockerfile`** (Next **standalone**, non-root, **`PORT=8080`**), **`compose.yaml`** (Postgres + optional **`app`** profile), **`GET /api/health`**, **`deploy/README.md`** and **`deploy/kubernetes/`** samples. Prisma reads **`process.env["DATABASE_URL"]`**; build uses a dummy URL only for **`prisma generate`** / **`next build`**; runtime **`DATABASE_URL`** from container env. **`/investments`** is **`force-dynamic`** to avoid DB access during image build. Rebuild image after code changes.
 - **Revenue assignment (v1.9)** — **`RevenueType`** enum (**`Mission`** \| **`Subscription`**); **`InitiativeRevenue`** (table **`initiative_revenue`**) — **multiple** rows per initiative (`type`, `comment`, EUR **`amount`**). Seeded from **`REVENU.csv`** (**`npm run db:seed:revenues`**, all lines **`Mission`**; delete-then-insert). API: **`GET` / `POST /api/revenues`**, **`PATCH` / `DELETE /api/revenues/[id]`**; budget API returns **`total_revenue`** + per-type sums. UI: **`InvestmentDetailRevenuePanel`** (grouped table, drafts, auto-save, delete **Dialog**); **Budget Key Figures**: **Revenues** + **Margin**. Power BI: **`v_revenues`** one row per revenue line (varchar casts); use **independently** of **`v_allocation_costs`** (different grain).
@@ -863,6 +1015,29 @@ src/
       baselines/[id]/route.ts   ← DELETE baseline
       reports/comparison/route.ts ← GET — planning vs baseline (omit snapshotId = live)
       health/route.ts           ← GET — liveness/readiness (no DB)
+      imports/timesheets/route.ts ← GET, POST — SN timesheet imports
+      imports/timesheets/[id]/route.ts ← DELETE
+      imports/timesheets/sync/route.ts ← POST — re-resolve unmapped rows
+      imports/invoices/route.ts ← GET, POST — SAP VIM imports
+      imports/invoices/[id]/route.ts ← DELETE
+      imports/ar/route.ts       ← GET, POST — Salesforce AR imports
+      imports/ar/[id]/route.ts  ← DELETE
+      imports/ar/sync/route.ts  ← POST — re-resolve unmapped rows
+      imports/revenue/route.ts  ← POST — SAP client revenue (4-step resolver, returns step counts)
+      imports/revenue/[id]/route.ts ← DELETE
+      imports/config/route.ts   ← GET — UI defaults (current import year)
+      mappings/sn-programmes/route.ts ← GET, POST
+      mappings/sn-programmes/[id]/route.ts ← PATCH, DELETE
+      mappings/sn-projects/route.ts ← GET, POST
+      mappings/sn-projects/[id]/route.ts ← PATCH, DELETE
+      mappings/sf-products/route.ts ← GET, POST
+      mappings/sf-products/[id]/route.ts ← PATCH, DELETE
+      mappings/sap-designations/route.ts ← GET, POST
+      mappings/sap-designations/[id]/route.ts ← DELETE
+    imports/page.tsx            ← Imports console (timesheets, VIM, AR, revenue)
+    imports/imports-home-client.tsx ← Cards + upload + delete + per-import summaries
+    imports/mappings/page.tsx   ← Realized-data mapping tables
+    imports/mappings/imports-mappings-client.tsx ← 4 cards: SN programme/project, SF master product, SAP designation
   generated/prisma/             ← Auto-generated Prisma client (do not edit)
   lib/prisma.ts                 ← Prisma singleton with PrismaPg adapter
   lib/auth.ts                   ← getUserFromRequest (X-Auth-Request-Email)
@@ -876,6 +1051,11 @@ src/
   lib/eotp-routing-target-options-query.ts ← load definition rows for target picker
   lib/eotp-target-options.ts    ← build JSON options; exclude main SAP code
   lib/investment-year-summary.ts ← helpers for year-summary / budget UI
+  lib/sap-revenue-parser.ts     ← SAP_Clients_Invoices.csv parser (ZCS/ZCR sign, Excel-serial date fallback)
+  lib/sap-vim-parser.ts         ← SAP VIM supplier-invoice parser (cost_type from Compte budgét.)
+  lib/sn-timesheet-parser.ts    ← SN_Time_Card_Export parser (filters: category/state)
+  lib/salesforce-ar-parser.ts   ← Salesforce AR export parser (outer-quoted CSV)
+  lib/revenue-import-resolve.ts ← 4-step resolver for revenue_entry (AR match → designation map → EOTP → null)
 prisma.config.ts                ← Prisma 7 config (project root; datasource URL for CLI)
 next.config.ts                  ← Next.js config (`output: "standalone"` for Docker)
 Dockerfile                      ← Multi-stage production image (Next standalone + non-root)
@@ -894,14 +1074,21 @@ scripts/
   eotp-views.ts                 ← Shared CREATE VIEW for v_eotp_costs
   seed-eotp-definitions.ts      ← Seed eotp_definition from EOTP-Budget-Owner.csv
   seed-eotp-routing.ts          ← Seed eotp_routing from EOTP_ROUTING.csv
+  seed-sn-programme-mapping.ts  ← Bootstrap sn_programme_mapping from CSV
+  seed-sn-project-mapping.ts    ← Bootstrap sn_project_mapping from CSV
+  seed-sf-master-product-mapping.ts ← Bootstrap sf_master_product_mapping from CSV
+  seed-sap-designation-mapping.ts ← Bootstrap sap_designation_mapping (validates allocation_entity_id)
+  build-sap-designation-mapping-csv.ts ← Generate SAP_DESIGNATION_MAPPING.csv + SAP_DESIGNATION_FUZZY_REPORT.md (fuzzy SF names from scripts/data/sf-product-names.ts)
+  build-sf-master-product-mapping-suggestions.ts ← Same idea for AR side (Salesforce master products)
+  realized-views.ts             ← Shared CREATE OR REPLACE for v_realized_costs, v_planned_revenue, v_realized_revenue
   backfill-eotp-routing-eotp-definition-ids.ts ← Backfill eotp_definition_id FKs
   convert-eotp-routing-csv.ts   ← Legacy CSV → three-column EUR format
   rebuild-eotp-routing-csv.ts   ← Rebuild EOTP_ROUTING.csv from source export
   recreate-eotp-costs-view.ts    ← Recreate v_eotp_costs only
-  datasets/dev/                 ← Dev/test CSV dataset
+  datasets/dev/                 ← Dev/test CSV dataset (incl. mapping bootstraps: SN_*, SF_MASTER_*, SAP_DESIGNATION_MAPPING.csv)
   datasets/prod-import/         ← Production import dataset (generated from Excel)
 ```
 
 ---
 
-*Last updated: May 2026 — Resource Planner v1.10 (see §11.3 changelog)*
+*Last updated: May 2026 — Resource Planner v1.13 (see §11.3 changelog)*

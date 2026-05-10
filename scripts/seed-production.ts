@@ -27,11 +27,13 @@ import Papa from "papaparse";
 import { createEotpCostsView } from "./eotp-views";
 import { createComparisonView } from "./comparison-view";
 import { createSnapshotBaselineViews } from "./snapshot-baseline-views";
+import { createRealizedViews } from "./realized-views";
 import { resourceFullNameFromParts } from "../src/lib/resource-display-name";
 import {
   CREATE_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
   DROP_V_ALLOCATION_ENTITY_COST_TOTALS_VIEW,
 } from "./v-allocation-entity-cost-totals-view";
+import { resolveDatasetCsvPath } from "./seed-dataset-helpers";
 
 const adapter = new PrismaPg({
   connectionString: process.env["DATABASE_URL"] as string,
@@ -410,6 +412,240 @@ async function seedEotpRoutingIfPresent(): Promise<void> {
   }
 
   console.log(`  ✓ eotp_routing: ${upserted} upserted, ${skipped} skipped\n`);
+}
+
+/** Optional: `SN_PROGRAMME_MAPPING.csv` — ServiceNow programme name → product / EOTP hints. */
+async function seedSnProgrammeMappingIfPresent(): Promise<void> {
+  const csvPath = resolveDatasetCsvPath("SN_PROGRAMME_MAPPING.csv");
+  if (!fs.existsSync(csvPath)) {
+    console.log("No SN_PROGRAMME_MAPPING.csv found — skipping sn_programme_mapping seed.\n");
+    return;
+  }
+
+  console.log(`Seeding sn_programme_mapping from ${path.relative(process.cwd(), csvPath)}...`);
+  const contentProg = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+  const parsedProg = Papa.parse<Record<string, string>>(contentProg, { header: true, skipEmptyLines: true });
+  const progRows = (parsedProg.data ?? []).filter((r) => r && typeof r === "object");
+
+  let upserted = 0;
+  let skipped = 0;
+  for (const row of progRows) {
+    const snProgrammeName = (row["sn_programme_name"] ?? "").trim();
+    if (!snProgrammeName) {
+      skipped++;
+      continue;
+    }
+    const snProgrammeEotp = (row["sn_programme_eotp"] ?? "").trim() || null;
+    const allocationEntityIdRaw = (row["allocation_entity_id"] ?? "").trim();
+    const allocationEntityId = allocationEntityIdRaw || null;
+    const notes = (row["notes"] ?? "").trim() || null;
+
+    if (allocationEntityId) {
+      const ae = await prisma.allocationEntity.findUnique({
+        where: { id: allocationEntityId },
+        select: { id: true },
+      });
+      if (!ae) {
+        console.warn(`  ⚠ Unknown allocation_entity_id ${allocationEntityId} for "${snProgrammeName}" — skipped`);
+        skipped++;
+        continue;
+      }
+    }
+
+    await prisma.snProgrammeMapping.upsert({
+      where: { snProgrammeName },
+      create: {
+        snProgrammeName,
+        snProgrammeEotp,
+        allocationEntityId,
+        notes,
+      },
+      update: {
+        snProgrammeEotp,
+        allocationEntityId,
+        notes,
+      },
+    });
+    upserted++;
+  }
+  console.log(`  ✓ sn_programme_mapping: ${upserted} upserted, ${skipped} skipped\n`);
+}
+
+/** Optional: `SN_PROJECT_MAPPING.csv` — SN project nr → initiative (Jira id). */
+async function seedSnProjectMappingIfPresent(): Promise<void> {
+  const csvPath = resolveDatasetCsvPath("SN_PROJECT_MAPPING.csv");
+  if (!fs.existsSync(csvPath)) {
+    console.log("No SN_PROJECT_MAPPING.csv found — skipping sn_project_mapping seed.\n");
+    return;
+  }
+
+  console.log(`Seeding sn_project_mapping from ${path.relative(process.cwd(), csvPath)}...`);
+  const content = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+  const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+  const projRows = (parsed.data ?? []).filter((r) => r && typeof r === "object");
+
+  let upserted = 0;
+  let skipped = 0;
+  for (const row of projRows) {
+    const snProjectNr = (row["sn_project_nr"] ?? "").trim();
+    if (!snProjectNr) {
+      skipped++;
+      continue;
+    }
+    const snProjectName = (row["sn_project_name"] ?? "").trim() || null;
+    const initiativeIdRaw = (row["initiative_id"] ?? "").trim();
+    const initiativeId = initiativeIdRaw || null;
+    const yearRaw = (row["year"] ?? "").trim();
+    const year =
+      yearRaw === "" ? null : Number.isFinite(Number.parseInt(yearRaw, 10)) ? Number.parseInt(yearRaw, 10) : null;
+    if (yearRaw !== "" && year === null) {
+      skipped++;
+      continue;
+    }
+    const notes = (row["notes"] ?? "").trim() || null;
+
+    if (initiativeId) {
+      const ini = await prisma.initiative.findUnique({
+        where: { id: initiativeId },
+        select: { id: true },
+      });
+      if (!ini) {
+        console.warn(`  ⚠ Unknown initiative_id ${initiativeId} for ${snProjectNr} — skipped`);
+        skipped++;
+        continue;
+      }
+    }
+
+    const existing = await prisma.snProjectMapping.findFirst({
+      where: { snProjectNr, year },
+    });
+    if (existing) {
+      await prisma.snProjectMapping.update({
+        where: { id: existing.id },
+        data: { snProjectName, initiativeId, notes },
+      });
+    } else {
+      await prisma.snProjectMapping.create({
+        data: { snProjectNr, snProjectName, initiativeId, year, notes },
+      });
+    }
+    upserted++;
+  }
+  console.log(`  ✓ sn_project_mapping: ${upserted} upserted, ${skipped} skipped\n`);
+}
+
+/** Optional: `SF_MASTER_PRODUCT_MAPPING.csv` — Salesforce master product name → `allocation_entity.id` (PRD-*). */
+async function seedSfMasterProductMappingIfPresent(): Promise<void> {
+  const csvPath = resolveDatasetCsvPath("SF_MASTER_PRODUCT_MAPPING.csv");
+  if (!fs.existsSync(csvPath)) {
+    console.log("No SF_MASTER_PRODUCT_MAPPING.csv found — skipping sf_master_product_mapping seed.\n");
+    return;
+  }
+
+  console.log(`Seeding sf_master_product_mapping from ${path.relative(process.cwd(), csvPath)}...`);
+  const contentSf = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+  const parsedSf = Papa.parse<Record<string, string>>(contentSf, { header: true, skipEmptyLines: true });
+  const rows = (parsedSf.data ?? []).filter((r) => r && typeof r === "object");
+
+  let upserted = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const sfMasterProductName = (row["sf_master_product_name"] ?? "").trim();
+    const allocationEntityId = (row["allocation_entity_id"] ?? "").trim();
+    const sfMasterProductKey = (row["sf_master_product_key"] ?? "").trim() || null;
+    const notes = (row["notes"] ?? "").trim() || null;
+
+    if (!sfMasterProductName || !allocationEntityId) {
+      skipped++;
+      continue;
+    }
+
+    const ae = await prisma.allocationEntity.findUnique({
+      where: { id: allocationEntityId },
+      select: { id: true },
+    });
+    if (!ae) {
+      console.warn(`  ⚠ Unknown allocation_entity_id ${allocationEntityId} for SF master "${sfMasterProductName}" — skipped`);
+      skipped++;
+      continue;
+    }
+
+    await prisma.sfMasterProductMapping.upsert({
+      where: { sfMasterProductName },
+      create: {
+        sfMasterProductName,
+        allocationEntityId,
+        sfMasterProductKey,
+        notes,
+      },
+      update: {
+        allocationEntityId,
+        sfMasterProductKey,
+        notes,
+      },
+    });
+    upserted++;
+  }
+
+  console.log(`  ✓ sf_master_product_mapping: ${upserted} upserted, ${skipped} skipped\n`);
+}
+
+/** Optional: `SAP_DESIGNATION_MAPPING.csv` — SAP ZCOMM designation poste → `allocation_entity.id` (PRD-*). */
+async function seedSapDesignationMappingIfPresent(): Promise<void> {
+  const csvPath = resolveDatasetCsvPath("SAP_DESIGNATION_MAPPING.csv");
+  if (!fs.existsSync(csvPath)) {
+    console.log("No SAP_DESIGNATION_MAPPING.csv found — skipping sap_designation_mapping seed.\n");
+    return;
+  }
+
+  console.log(`Seeding sap_designation_mapping from ${path.relative(process.cwd(), csvPath)}...`);
+  const content = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+  const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+  const rows = (parsed.data ?? []).filter((r) => r && typeof r === "object");
+
+  let upserted = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const sapDesignation = (row["sap_designation"] ?? "").trim();
+    const allocationEntityId = (row["allocation_entity_id"] ?? "").trim();
+    const sfProductName = (row["sf_product_name"] ?? "").trim() || null;
+    const notes = (row["notes"] ?? "").trim() || null;
+
+    if (!sapDesignation || !allocationEntityId) {
+      skipped++;
+      continue;
+    }
+
+    const ae = await prisma.allocationEntity.findUnique({
+      where: { id: allocationEntityId },
+      select: { id: true },
+    });
+    if (!ae) {
+      console.warn(`  ⚠ Unknown allocation_entity_id ${allocationEntityId} for SAP "${sapDesignation}" — skipped`);
+      skipped++;
+      continue;
+    }
+
+    await prisma.sapDesignationMapping.upsert({
+      where: { sapDesignation },
+      create: {
+        sapDesignation,
+        allocationEntityId,
+        sfProductName,
+        notes,
+      },
+      update: {
+        allocationEntityId,
+        sfProductName,
+        notes,
+      },
+    });
+    upserted++;
+  }
+
+  console.log(`  ✓ sap_designation_mapping: ${upserted} upserted, ${skipped} skipped\n`);
 }
 
 // ─── 3. Rates ────────────────────────────────────────────────────────────────
@@ -918,6 +1154,7 @@ async function main(): Promise<void> {
     await createComparisonView(prisma);
     await createDimEotpView();
     await createDimTeamView();
+    await createRealizedViews(prisma);
     console.log("Done.");
     return;
   }
@@ -979,6 +1216,10 @@ async function main(): Promise<void> {
   await seedRates();
   await seedAllocations();
   await seedEotpRoutingIfPresent();
+  await seedSnProgrammeMappingIfPresent();
+  await seedSnProjectMappingIfPresent();
+  await seedSfMasterProductMappingIfPresent();
+  await seedSapDesignationMappingIfPresent();
   await createCostView();
   await createAllocationEntityCostTotalsView();
   await createEotpCostsView(prisma);
@@ -988,6 +1229,7 @@ async function main(): Promise<void> {
   await createComparisonView(prisma);
   await createDimEotpView();
   await createDimTeamView();
+  await createRealizedViews(prisma);
 
   console.log("Done.");
 }

@@ -1,0 +1,114 @@
+﻿sap_designation,sf_product_name,allocation_entity_id,notes
+365 Assistance,MS365 Assistance,PRD-MS365_ASSISTANCE_365,Same as Assistance 365 wording variant | SF from fuzzy HIGH 94% → MS365 Assistance
+Assistance 365,IT Assistance,PRD-MS365_ASSISTANCE_365,override | SF from fuzzy MEDIUM 83% → IT Assistance
+Audit sécurité_365,MS365 Audit,PRD-MS365_SECURITY,override | SF from fuzzy MEDIUM 74% → MS365 Audit
+BOS_Framework,BOS - Foundation,PRD-BOS,BOS framework component
+BOS_Gov,BOS - Gov,PRD-BOS,fuzzy contains: BOS | SF fuzzy HIGH 99% → BOS - Gov
+BOS_MeetingPack,BOS - MeetingPack,PRD-BOS,fuzzy contains: BOS | SF fuzzy HIGH 99% → BOS - MeetingPack
+BOS_Session,BOS - Session,PRD-BOS,BOS session consumption | SF from fuzzy HIGH 99% → BOS - Session
+BOS_Setup,BOS - Setup,PRD-BOS,fuzzy contains: BOS | SF fuzzy HIGH 99% → BOS - Setup
+BOS_UC,BOS - Use Case,PRD-BOS,BOS UC
+BOS_Xchange,BOS - Xchange,PRD-XCHANGE_BOS,xCHANGE (BOS) product line | SF from fuzzy HIGH 99% → BOS - Xchange
+BUonline 4XL,BUonline 4XL,PRD-BUO,BU online / backup online family | SF from fuzzy HIGH 100% → BUonline 4XL
+Consultance Expertise,Consultance Expertise,PRD-AMS,REVIEW: consulting expertise → AMS default | SF from fuzzy HIGH 100% → Consultance Expertise
+CRM Framework,CRM Framework,PRD-CRM,Canonical SF name matches AR line item label
+CRM UC,CRM - Use Case,PRD-CRM,Canonical SF name; AR resolver step-2 retry uses this column
+CRM_Org,CRM - Dedicated Org,PRD-CRM,CRM organisation / org charting | SF from fuzzy HIGH 90% → CRM - Dedicated Org
+CRM_Org dédiée,CRM - Dedicated Org,PRD-CRM,Dedicated CRM org | SF from fuzzy HIGH 86% → CRM - Dedicated Org
+DataCatalog DataBase,DataCatalog DataBase,PRD-DATA_CATALOG,override | SF from fuzzy HIGH 100% → DataCatalog DataBase
+DataCatalog Manager,DataCatalog - Manager,PRD-DATA_CATALOG,override | SF from fuzzy HIGH 99% → DataCatalog - Manager
+DataCatalog Technology,DataCatalog - Technology,PRD-DATA_CATALOG,override | SF from fuzzy HIGH 99% → DataCatalog - Technology
+DataGov Support,DataGov Support,PRD-DATA_GOV,override | SF from fuzzy HIGH 100% → DataGov Support
+DataGov Support - annulation 6000000966,DataGov Support,PRD-DATA_GOV,Cancelled line; same product bucket | SF from fuzzy HIGH 85% → DataGov Support
+DataHub Add-on Consume,DataHub - Consumption,PRD-DATA_HUB,fuzzy contains: DATA HUB | SF fuzzy MEDIUM 73% → DataHub - Consumption
+DataHub Framework,DataHub - Consumption,PRD-DATA_HUB,Data hub framework | SF from fuzzy MEDIUM 81% → DataHub - Consumption
+DataHub UC,DATA HUB use case,PRD-DATA_HUB,DataHub UC → DATA HUB (plateforme)
+DataMaturityAssessment Large,DataMaturityAssessment Large,PRD-DATA_GOV,REVIEW: data governance / maturity; confirm with finance | SF from fuzzy HIGH 100% → DataMaturityAssessment Large
+DataStore,Datastore,PRD-DATASTORE,override | SF from fuzzy HIGH 100% → Datastore
+Digital Transformation by EA,Digital Transformation,PRD-INNOVATION,REVIEW: enterprise architecture / transformation bucket | SF from fuzzy HIGH 93% → Digital Transformation
+DNS Agent,DNS - Agent,PRD-DNS,override | SF from fuzzy HIGH 99% → DNS - Agent
+DNS Agent - annul 6000000655 du 25092025,DNS - Agent,PRD-DNS,Cancellation line | SF from fuzzy MEDIUM 82% → DNS - Agent
+DNS free,DNS - Free,PRD-DNS,override | SF from fuzzy HIGH 99% → DNS - Free
+DPO Analysis,DPO - Analysis,PRD-DPO_IS,SAP omits the dash; map to canonical SF name for AR step-2 retry
+DPO Operations,DPO - Operations,PRD-DPO_IS,"token ""dpo"" in DPO-IS | SF fuzzy HIGH 99% → DPO - Operations"
+DPOaaS,,PRD-DPO_IS,SAP-only generic line — no DPOaaS variant on SF; allocation only (step 2)
+EPN,Espaces Publiques Numériques,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 88% → Espaces Publiques Numériques
+eSign Certificat,eSign - Foundation,PRD-ESIGN,fuzzy contains: eSIGN | SF fuzzy MEDIUM 79% → eSign - Foundation
+eSign Connecteur,eSign - Foundation,PRD-ESIGN,override | SF from fuzzy MEDIUM 79% → eSign - Foundation
+eSign Connecteur Sharepoint maintenance,eSign - Connect Sharepoint Maintenance,PRD-ESIGN,override | SF from fuzzy HIGH 90% → eSign - Connect Sharepoint Maintenance
+eSign Connecteur Sharepoint setup,eSign - Connector Sharepoint Setup,PRD-ESIGN,fuzzy contains: eSIGN | SF fuzzy HIGH 90% → eSign - Connector Sharepoint Setup
+eSign Framework,eSign - Foundation,PRD-ESIGN,eSIGN framework | SF from fuzzy MEDIUM 79% → eSign - Foundation
+eSign Rest-Api Support,eSign - Rest-Api Support,PRD-ESIGN,override | SF from fuzzy HIGH 99% → eSign - Rest-Api Support
+eSign StarterKit,eSign - StarterKit,PRD-ESIGN,override | SF from fuzzy HIGH 99% → eSign - StarterKit
+eSign Token,eSign - Token,PRD-ESIGN,override | SF from fuzzy HIGH 99% → eSign - Token
+Expertise_365,Expertise_365,PRD-MS365_EXPERTISE_MS365,override | SF from fuzzy HIGH 100% → Expertise_365
+FaaS Add-on Consume,FaaS U,PRD-FAAS,FaaS add-on consumption | SF from fuzzy MEDIUM 73% → FaaS U
+FaaS Rack,FaaS - Rack,PRD-FAAS,FaaS rack | SF from fuzzy HIGH 99% → FaaS - Rack
+FIDUS,FIDUS,PRD-FIDUS,override | SF from fuzzy HIGH 100% → FIDUS
+FMS_UC,Financial management use case,PRD-WEPULSE_FIN,REVIEW: FMS assumed WePulse FIN; confirm with controlling
+Gestion Intune Tenant dédié,MS365 Intune - Setup,PRD-MS365_INTUNE,override | SF from fuzzy MEDIUM 71% → MS365 Intune - Setup
+HMS UC,HMS use case,PRD-HMS,HMS use-case billing
+Implementation and Setup 365,MS365 Implementation and Setup,PRD-MS365_ONBOARDING,REVIEW: onboarding vs generic MS365 | SF from fuzzy HIGH 90% → MS365 Implementation and Setup
+Intranet 365,MS365 Intranet - Setup,PRD-MS365_ASSISTANCE_365,"token ""365"" in MS365/Assistance 365 | SF fuzzy MEDIUM 77% → MS365 Intranet - Setup"
+Intranet 365_Déploiement,MS365 Intranet - Setup,PRD-MS365_ASSISTANCE_365,"token ""365"" in MS365/Assistance 365 | SF fuzzy MEDIUM 74% → MS365 Intranet - Setup"
+Intranet 365_Maintenance,MS365 Intranet Maintenance,PRD-MS365_INTRANET,override | SF from fuzzy HIGH 90% → MS365 Intranet Maintenance
+IRISbox Portail,IRISbox - Portal,PRD-IRISBOX,IRISbox portal | SF from fuzzy HIGH 86% → IRISbox - Portal
+IRISbox_Setup Formulaire,IRISbox - Setup Form,PRD-IRISBOX,fuzzy contains: IRISBOX | SF fuzzy HIGH 91% → IRISbox - Setup Form
+IRISbox_UC,IRISbox use case,PRD-IRISBOX,override
+ISA Missions,ISA - Missions,PRD-CYBER_SECURITY,REVIEW: ISA missions → security portfolio | SF from fuzzy HIGH 99% → ISA - Missions
+ISAaaS,UrbISaaS,,NEEDS_REVIEW: no automatic match | SF fuzzy LOW 63% → UrbISaaS
+ISaaS-M/M,Erreur_ISaaS-M/M,PRD-URBISAAS,"token ""isaas"" in URBISAAS | SF fuzzy HIGH 88% → Erreur_ISaaS-M/M"
+ISACoaching,ISA - Missions,PRD-CYBER_SECURITY,REVIEW: ISA coaching → security portfolio | SF from fuzzy LOW 55% → ISA - Missions
+ISP L,Firewall_SISP,PRD-ISP,fuzzy contains: ISP | SF fuzzy LOW 59% → Firewall_SISP
+ISP M,Firewall_SISP,PRD-ISP,ISP managed | SF from fuzzy LOW 59% → Firewall_SISP
+ISP S,Firewall_SISP,PRD-ISP,fuzzy contains: ISP | SF fuzzy LOW 59% → Firewall_SISP
+ITassist,ITassist_T2,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 92% → ITassist_T2
+ITassist_T1,ITassist_T2,PRD-AMS,REVIEW: AMS as managed-service proxy for ITassist tier-1 billing | SF from fuzzy HIGH 85% → ITassist_T2
+ITCells,IT Cells,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 99% → IT Cells
+ITSM Add-on Consume,ITSM - Foudation,PRD-SN_ITSM,fuzzy contains: (SN) ITSM | SF fuzzy MEDIUM 71% → ITSM - Foudation
+ITSM Framework,ITSM - Foudation,PRD-SN_ITSM,fuzzy contains: (SN) ITSM | SF fuzzy MEDIUM 78% → ITSM - Foudation
+ITSM licence basic,ITSM - Licence basic,PRD-SN_ITSM,SN ITSM licence | SF from fuzzy HIGH 99% → ITSM - Licence basic
+ITSM UC,ITSM - UC,PRD-SN_ITSM,exact name match: (SN) ITSM | SF fuzzy HIGH 99% → ITSM - UC
+Managed server in a local network,Managed Server - Local network,PRD-SMS,REVIEW: could be SWH; picked Servers Managed Service | SF from fuzzy HIGH 90% → Managed Server - Local network
+Managed server in VDC,Managed Server - VDC,PRD-VDC,override | SF from fuzzy HIGH 90% → Managed Server - VDC
+MyAccess-Application,MyAccess - Application,PRD-MYACCESS,fuzzy contains: MYACCESS | SF fuzzy HIGH 99% → MyAccess - Application
+MyAccess-Citizen,MyAccess - Citizen,PRD-MYACCESS,override | SF from fuzzy HIGH 99% → MyAccess - Citizen
+MyAccess-Setup Application,MyAccess - Setup Application,PRD-MYACCESS,fuzzy contains: MYACCESS | SF fuzzy HIGH 99% → MyAccess - Setup Application
+MyPermit UC Enviro,MyPermit use case (env.),PRD-MYPERMIT_ENVIRONNEMENT,override
+MyPermit UC Urbanisme,MyPermit use case (urban),PRD-MYPERMIT_URBAN,override
+NOVA PL,NOVA - Local,PRD-NOVA,fuzzy contains: NOVA | SF fuzzy MEDIUM 78% → NOVA - Local
+NOVA_R,NOVA - Local,PRD-NOVA,NOVA recurring / R-line | SF from fuzzy HIGH 87% → NOVA - Local
+NOVA_UC,NOVA use case,PRD-NOVA,Same UC pattern as CRM UC → NOVA catalogue product
+NWOW,New Way Of Working,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 88% → New Way Of Working
+Plone,Erreur_Plone,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 86% → Erreur_Plone
+ServerManaged,Erreur_ServerManaged,,NEEDS_REVIEW: no automatic match | SF fuzzy HIGH 90% → Erreur_ServerManaged
+ServerManaged_fix,Erreur_ServerManaged_fix,PRD-FIX_MY_STREET,"token ""fix"" in FIX MY STREET | SF fuzzy HIGH 91% → Erreur_ServerManaged_fix"
+service mission (PCE) - Livré,Internet Service Provider - Large,PRD-MS365_SERVICE_SUPPORT,"token ""service"" in MS365/SERVICE & SUPPORT | SF fuzzy MEDIUM 70% → Internet Service Provider - Large"
+service mission (UTL) - Livré,Internet Service Provider - Large,PRD-MS365_SERVICE_SUPPORT,"token ""service"" in MS365/SERVICE & SUPPORT | SF fuzzy MEDIUM 70% → Internet Service Provider - Large"
+SharedHost,Shared Web Hosting,PRD-SWH,Shared web hosting (SWH) | SF from fuzzy LOW 69% → Shared Web Hosting
+SharePoint_Storage,MS365 SharePoint - Storage,PRD-MS365_SHAREPOINT,"token ""sharepoint"" in MS365/SharePoint | SF fuzzy HIGH 92% → MS365 SharePoint - Storage"
+SharePoint_Technique,MS365 SharePoint - Storage,PRD-MS365_SHAREPOINT,"token ""sharepoint"" in MS365/SharePoint | SF fuzzy MEDIUM 79% → MS365 SharePoint - Storage"
+SInCrHo PL,SInCrHo - Hospitals,PRD-SINCRHO,fuzzy contains: SINCRHO | SF fuzzy MEDIUM 81% → SInCrHo - Hospitals
+SInCrHo_H,SInCrHo - Local,PRD-SINCRHO,SINCHRO hosting line | SF from fuzzy HIGH 90% → SInCrHo - Local
+Soft HR Framework,Soft HR  - Framework,PRD-SOFT_HR,override | SF from fuzzy HIGH 99% → Soft HR  - Framework
+Soft HR UC,Soft HR use case,PRD-SOFT_HR,override
+vDC,vDC,PRD-VDC,override | SF from fuzzy HIGH 100% → vDC
+vDC - annule 6000000649 du 25.09.2025,vDC,PRD-VDC,Cancellation; same product | SF from fuzzy LOW 66% → vDC
+vDC - annule 6000000651 du 25.09.2025,vDC,PRD-VDC,Cancellation; same product | SF from fuzzy LOW 66% → vDC
+vDC - annule 6000000653 du 25.09.2025,vDC,PRD-VDC,Cancellation; same product | SF from fuzzy LOW 66% → vDC
+vDC Add-on Consume,vDC,PRD-VDC,vDC add-on | SF from fuzzy MEDIUM 72% → vDC
+VPN,VPN - Connect,PRD-VPN,exact name match: VPN | SF fuzzy HIGH 86% → VPN - Connect
+VPN MFA Set-up,VPN - xFA Set-up,PRD-VPN,fuzzy contains: VPN | SF fuzzy HIGH 90% → VPN - xFA Set-up
+VPN non-managed,VPN - Managed,PRD-VPN,fuzzy contains: VPN | SF fuzzy HIGH 90% → VPN - Managed
+VPN unmanaged,VPN - Unmanaged,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - Unmanaged
+VPN xFA Set-up,VPN - xFA Set-up,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - xFA Set-up
+VPN_Connect,VPN - Connect,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - Connect
+VPS,VPS,PRD-VPS,override | SF from fuzzy HIGH 100% → VPS
+Workplace Add-on/ Defender Office P2,Workplace eMail Office,PRD-BESTADDRESS,"token ""add"" in BeStAddress | SF fuzzy MEDIUM 80% → Workplace eMail Office"
+Workplace eMail,MS365 Workplace eMail,PRD-MS365_EMAIL,"token ""email"" in MS365/EMAIL | SF fuzzy HIGH 91% → MS365 Workplace eMail"
+Workplace Essential,MS365 Workplace Essential,PRD-MS365_TENANT_REGIONAL,REVIEW: BX365 / tenant bundle naming from SAP Workplace | SF from fuzzy HIGH 92% → MS365 Workplace Essential
+Workplace Extended,MS365 Workplace Extended,PRD-MS365_TENANT_REGIONAL,REVIEW: BX365 / tenant bundle naming from SAP Workplace | SF from fuzzy HIGH 92% → MS365 Workplace Extended
+Workplace licence MS,Workplace FrontLine,PRD-MS365_LICENCES,"token ""licence"" in MS365/LICENCES | SF fuzzy MEDIUM 78% → Workplace FrontLine"
+Workplace MS365/E3,MS365 Workplace Essential,PRD-MS365_ASSISTANCE_365,"token ""ms365"" in MS365/Assistance 365 | SF fuzzy HIGH 90% → MS365 Workplace Essential"
+Workplace MS365/F3,MS365 Workplace Essential,PRD-MS365_ASSISTANCE_365,"token ""ms365"" in MS365/Assistance 365 | SF fuzzy HIGH 90% → MS365 Workplace Essential"
+Workplace O365/E3,Workplace FrontLine,PRD-MS365_LICENCES,REVIEW: O365 E3 licence line | SF from fuzzy MEDIUM 78% → Workplace FrontLine

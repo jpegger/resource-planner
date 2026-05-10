@@ -1,0 +1,186 @@
+<svg viewBox="0 0 880 660" xmlns="http://www.w3.org/2000/svg" style="background:#0f172a;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arr"   markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+    <marker id="arr-g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/></marker>
+    <marker id="arr-b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#60a5fa"/></marker>
+    <marker id="arr-o" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#fb923c"/></marker>
+    <marker id="arr-p" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#c084fc"/></marker>
+    <marker id="arr-r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#f87171"/></marker>
+  </defs>
+
+  <!-- Zone backgrounds -->
+  <rect x="8"   y="28" width="205" height="590" rx="8" fill="#1e293b" stroke="#334155" stroke-width=".5"/>
+  <rect x="222" y="28" width="430" height="590" rx="8" fill="#172035" stroke="#2563eb44" stroke-width=".5"/>
+  <rect x="661" y="28" width="212" height="590" rx="8" fill="#16241e" stroke="#16a34a44" stroke-width=".5"/>
+
+  <!-- Zone labels -->
+  <text x="110"  y="22" text-anchor="middle" font-size="10" fill="#64748b" font-weight="600" letter-spacing=".06em">EXTERNAL SYSTEMS</text>
+  <text x="437"  y="22" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="600" letter-spacing=".06em">IMPORT TABLES</text>
+  <text x="767"  y="22" text-anchor="middle" font-size="10" fill="#22c55e" font-weight="600" letter-spacing=".06em">CORE TABLES</text>
+
+  <!-- ── ServiceNow ── -->
+  <rect x="18" y="40" width="184" height="98" rx="6" fill="#1c1208" stroke="#fb923c" stroke-width="1.2"/>
+  <text x="110" y="56"  text-anchor="middle" font-size="11" font-weight="700" fill="#fb923c">ServiceNow</text>
+  <text x="28"  y="72"  font-size="10" fill="#94a3b8">programme_eotp</text>
+  <text x="28"  y="86"  font-size="10" fill="#94a3b8">project_id / project_name</text>
+  <text x="28"  y="100" font-size="10" fill="#94a3b8">employee_id</text>
+  <text x="28"  y="114" font-size="10" fill="#94a3b8">year · month · days</text>
+  <text x="28"  y="130" font-size="9" fill="#fb923c" font-style="italic">CSV → API later</text>
+
+  <!-- ── SAP Invoices ── -->
+  <rect x="18" y="154" width="184" height="84" rx="6" fill="#1c0a0a" stroke="#f87171" stroke-width="1.2"/>
+  <text x="110" y="170" text-anchor="middle" font-size="11" font-weight="700" fill="#f87171">SAP Invoices</text>
+  <text x="28"  y="186" font-size="10" fill="#94a3b8">invoice_nr</text>
+  <text x="28"  y="200" font-size="10" fill="#94a3b8">eotp_code · cost_type</text>
+  <text x="28"  y="214" font-size="10" fill="#94a3b8">year · month · amount_eur</text>
+  <text x="28"  y="228" font-size="10" fill="#94a3b8">vendor · description</text>
+
+  <!-- ── Salesforce AR ── -->
+  <rect x="18" y="370" width="184" height="98" rx="6" fill="#140e20" stroke="#c084fc" stroke-width="1.2"/>
+  <text x="110" y="386" text-anchor="middle" font-size="11" font-weight="700" fill="#c084fc">Salesforce AR</text>
+  <text x="28"  y="402" font-size="10" fill="#94a3b8">contract_ref</text>
+  <text x="28"  y="416" font-size="10" fill="#94a3b8">sf_product_ref</text>
+  <text x="28"  y="430" font-size="10" fill="#c084fc" font-weight="500">jira_key  ← KEY MAPPING</text>
+  <text x="28"  y="444" font-size="10" fill="#94a3b8">year · amount_eur · ar_type</text>
+  <text x="28"  y="458" font-size="9"  fill="#c084fc" font-style="italic">CSV → API later</text>
+
+  <!-- ── SAP Revenue ── -->
+  <rect x="18" y="484" width="184" height="84" rx="6" fill="#0a1c10" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="110" y="500" text-anchor="middle" font-size="11" font-weight="700" fill="#22c55e">SAP Revenue</text>
+  <text x="28"  y="516" font-size="10" fill="#94a3b8">sap_line_ref</text>
+  <text x="28"  y="530" font-size="10" fill="#22c55e" font-weight="500">sf_product_ref  ← lookup key</text>
+  <text x="28"  y="544" font-size="10" fill="#94a3b8">year · month · amount_eur</text>
+  <text x="28"  y="558" font-size="9" fill="#64748b" font-style="italic">prereq: AR import must run first</text>
+
+  <!-- ── timesheet_entry ── -->
+  <rect x="232" y="40" width="200" height="130" rx="6" fill="#1c1208" stroke="#fb923c" stroke-width="1"/>
+  <text x="332" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#fb923c">timesheet_entry</text>
+  <text x="242" y="72"  font-size="10" fill="#94a3b8">sn_programme_eotp  (raw)</text>
+  <text x="242" y="86"  font-size="10" fill="#fb923c">sn_project_id       (always stored)</text>
+  <text x="242" y="100" font-size="10" fill="#fb923c">sn_project_name     (always stored)</text>
+  <text x="242" y="114" font-size="10" fill="#94a3b8">sn_employee_id     (raw)</text>
+  <text x="242" y="128" font-size="10" fill="#94a3b8">year · month · days · cost_eur?</text>
+  <text x="242" y="142" font-size="10" fill="#22c55e">allocation_entity_id  ··· FK</text>
+  <text x="242" y="156" font-size="10" fill="#60a5fa">initiative_id  ··· FK (NULL = ok)</text>
+
+  <!-- ── invoice_entry ── -->
+  <rect x="232" y="186" width="200" height="98" rx="6" fill="#1c0a0a" stroke="#f87171" stroke-width="1"/>
+  <text x="332" y="202" text-anchor="middle" font-size="11" font-weight="700" fill="#f87171">invoice_entry</text>
+  <text x="242" y="218" font-size="10" fill="#94a3b8">sap_invoice_nr · eotp (raw)</text>
+  <text x="242" y="232" font-size="10" fill="#94a3b8">cost_type  (EXTERNAL | DIRECT_COST)</text>
+  <text x="242" y="246" font-size="10" fill="#94a3b8">year · month · amount_eur</text>
+  <text x="242" y="260" font-size="10" fill="#94a3b8">vendor · description</text>
+  <text x="242" y="274" font-size="10" fill="#22c55e">eotp_definition_id  ··· FK</text>
+
+  <!-- ── ar_entry ── -->
+  <rect x="232" y="370" width="200" height="112" rx="6" fill="#140e20" stroke="#c084fc" stroke-width="1"/>
+  <text x="332" y="386" text-anchor="middle" font-size="11" font-weight="700" fill="#c084fc">ar_entry</text>
+  <text x="242" y="402" font-size="10" fill="#94a3b8">sf_contract_ref  (UNIQUE + year)</text>
+  <text x="242" y="416" font-size="10" fill="#c084fc">sf_product_ref  (shared key w/ SAP rev)</text>
+  <text x="242" y="430" font-size="10" fill="#94a3b8">jira_key · year · amount_eur</text>
+  <text x="242" y="444" font-size="10" fill="#94a3b8">ar_type  (CONTRACT | SUBSCRIPTION)</text>
+  <text x="242" y="458" font-size="10" fill="#22c55e">allocation_entity_id  ··· FK</text>
+  <text x="242" y="472" font-size="9"  fill="#64748b" font-style="italic">UPSERT on (sf_contract_ref, year)</text>
+
+  <!-- ── revenue_entry ── -->
+  <rect x="232" y="498" width="200" height="98" rx="6" fill="#0a1c10" stroke="#22c55e" stroke-width="1"/>
+  <text x="332" y="514" text-anchor="middle" font-size="11" font-weight="700" fill="#22c55e">revenue_entry</text>
+  <text x="242" y="530" font-size="10" fill="#94a3b8">sap_line_ref</text>
+  <text x="242" y="544" font-size="10" fill="#c084fc">sf_product_ref  → lookup ar_entry</text>
+  <text x="242" y="558" font-size="10" fill="#94a3b8">year · month · amount_eur</text>
+  <text x="242" y="572" font-size="10" fill="#22c55e">allocation_entity_id  ··· FK</text>
+  <text x="242" y="586" font-size="9"  fill="#64748b" font-style="italic">resolved via ar_entry lookup</text>
+
+  <!-- ── eotp_definition ── -->
+  <rect x="671" y="40" width="194" height="98" rx="6" fill="#0c1628" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="768" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#60a5fa">eotp_definition</text>
+  <text x="681" y="72"  font-size="10" fill="#94a3b8">eotp  (SAP code)</text>
+  <text x="681" y="86"  font-size="10" fill="#94a3b8">division · sub_division</text>
+  <text x="681" y="100" font-size="10" fill="#94a3b8">team · owner</text>
+  <text x="681" y="114" font-size="10" fill="#94a3b8">id  (PK)</text>
+  <text x="681" y="128" font-size="9"  fill="#60a5fa" font-style="italic">ownership nav hierarchy</text>
+
+  <!-- ── allocation_entity ── -->
+  <rect x="671" y="154" width="194" height="98" rx="6" fill="#0a1c10" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="768" y="170" text-anchor="middle" font-size="11" font-weight="700" fill="#22c55e">allocation_entity</text>
+  <text x="681" y="186" font-size="10" fill="#94a3b8">id  (PK)</text>
+  <text x="681" y="200" font-size="10" fill="#c084fc">jiraKey  ← AR mapping</text>
+  <text x="681" y="214" font-size="10" fill="#fb923c">sapEotpCode  ← SN mapping</text>
+  <text x="681" y="228" font-size="10" fill="#94a3b8">name · productFamily …</text>
+  <text x="681" y="242" font-size="9"  fill="#22c55e" font-style="italic">no new columns needed</text>
+
+  <!-- ── initiative ── -->
+  <rect x="671" y="268" width="194" height="84" rx="6" fill="#0c1628" stroke="#60a5fa" stroke-width="1"/>
+  <text x="768" y="284" text-anchor="middle" font-size="11" font-weight="700" fill="#60a5fa">initiative</text>
+  <text x="681" y="300" font-size="10" fill="#94a3b8">id  (PK)</text>
+  <text x="681" y="314" font-size="10" fill="#60a5fa">jiraKey  ← SN project mapping</text>
+  <text x="681" y="328" font-size="9"  fill="#64748b" font-style="italic">NULL initiative_id = product-level</text>
+  <text x="681" y="342" font-size="9"  fill="#64748b" font-style="italic">cost only. Not a warning.</text>
+
+  <!-- ── resource ── -->
+  <rect x="671" y="368" width="194" height="56" rx="6" fill="#0c1628" stroke="#60a5fa" stroke-width=".6" stroke-dasharray="4,3"/>
+  <text x="768" y="384" text-anchor="middle" font-size="11" font-weight="700" fill="#60a5fa">resource</text>
+  <text x="681" y="400" font-size="10" fill="#94a3b8">id  (PK) · employee_id</text>
+  <text x="681" y="414" font-size="9"  fill="#64748b" font-style="italic">resolved from sn_employee_id</text>
+
+  <!-- ── VIEWS ── -->
+  <rect x="450" y="448" width="200" height="128" rx="6" fill="#1a1a1a" stroke="#475569" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="550" y="466" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b">VIEWS (read-only)</text>
+  <text x="460" y="484" font-size="10" fill="#fb923c">v_realized_costs</text>
+  <text x="466" y="498" font-size="9"  fill="#64748b">timesheet_entry UNION invoice_entry</text>
+  <text x="460" y="514" font-size="10" fill="#c084fc">v_planned_revenue</text>
+  <text x="466" y="528" font-size="9"  fill="#64748b">ar_entry grouped by product × year</text>
+  <text x="460" y="544" font-size="10" fill="#22c55e">v_realized_revenue</text>
+  <text x="466" y="558" font-size="9"  fill="#64748b">revenue_entry grouped by product × month</text>
+
+  <!-- ══ ARROWS: external → import ══ -->
+  <line x1="202" y1="89"  x2="230" y2="89"  stroke="#fb923c" stroke-width="1.5" marker-end="url(#arr-o)"/>
+  <line x1="202" y1="196" x2="230" y2="225" stroke="#f87171" stroke-width="1.5" marker-end="url(#arr-r)"/>
+  <line x1="202" y1="410" x2="230" y2="415" stroke="#c084fc" stroke-width="1.5" marker-end="url(#arr-p)"/>
+  <line x1="202" y1="526" x2="230" y2="540" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <!-- ══ ARROWS: import → core ══ -->
+  <!-- timesheet → eotp_definition (EOTP code) → allocation_entity (sapEotpCode) -->
+  <path d="M432,89 Q560,60 671,90" stroke="#fb923c" stroke-width="1.2" fill="none" marker-end="url(#arr-o)"/>
+  <text x="535" y="56" text-anchor="middle" font-size="9" fill="#fb923c">EOTP code</text>
+
+  <!-- eotp_definition → allocation_entity (sapEotpCode) -->
+  <line x1="768" y1="138" x2="768" y2="152" stroke="#22c55e" stroke-width="1.2" marker-end="url(#arr-g)"/>
+  <text x="778" y="148" font-size="9" fill="#22c55e">sapEotpCode</text>
+
+  <!-- timesheet → initiative (optional) -->
+  <path d="M432,140 Q590,200 671,296" stroke="#60a5fa" stroke-width="1" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+  <text x="575" y="220" font-size="9" fill="#60a5fa">jiraKey (optional)</text>
+
+  <!-- invoice → eotp_definition -->
+  <path d="M432,235 Q600,170 671,110" stroke="#f87171" stroke-width="1.2" fill="none" marker-end="url(#arr-r)"/>
+  <text x="565" y="168" font-size="9" fill="#f87171">eotp code</text>
+
+  <!-- ar_entry → allocation_entity (jira_key) -->
+  <path d="M432,420 Q600,350 671,210" stroke="#c084fc" stroke-width="1.2" fill="none" marker-end="url(#arr-p)"/>
+  <text x="590" y="328" font-size="9" fill="#c084fc">jira_key</text>
+
+  <!-- revenue_entry → ar_entry (sf_product_ref lookup) -->
+  <path d="M332,498 Q332,480 332,482" stroke="#22c55e" stroke-width="1.2" fill="none" marker-end="url(#arr-g)"/>
+
+  <!-- revenue_entry → allocation_entity (via ar_entry) -->
+  <path d="M432,560 Q620,460 671,230" stroke="#22c55e" stroke-width=".8" fill="none" stroke-dasharray="4,3" marker-end="url(#arr-g)"/>
+  <text x="612" y="424" font-size="9" fill="#22c55e">via ar_entry</text>
+
+  <!-- import → views (dashed) -->
+  <path d="M432,150 Q445,450 450,495" stroke="#475569" stroke-width=".7" fill="none" stroke-dasharray="3,3" marker-end="url(#arr)"/>
+  <path d="M432,270 Q445,450 450,510" stroke="#475569" stroke-width=".7" fill="none" stroke-dasharray="3,3" marker-end="url(#arr)"/>
+  <path d="M432,460 Q445,465 450,478" stroke="#475569" stroke-width=".7" fill="none" stroke-dasharray="3,3" marker-end="url(#arr)"/>
+  <path d="M432,555 Q445,555 450,540" stroke="#475569" stroke-width=".7" fill="none" stroke-dasharray="3,3" marker-end="url(#arr)"/>
+
+  <!-- ══ LEGEND ══ -->
+  <rect x="232" y="596" width="420" height="50" rx="4" fill="#1e293b" stroke="#334155" stroke-width=".5"/>
+  <line x1="244" y1="613" x2="270" y2="613" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="274" y="617" font-size="10" fill="#94a3b8">Resolved FK</text>
+  <line x1="360" y1="613" x2="386" y2="613" stroke="#60a5fa" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="390" y="617" font-size="10" fill="#94a3b8">Optional FK (NULL = valid)</text>
+  <line x1="244" y1="633" x2="270" y2="633" stroke="#475569" stroke-width=".7" stroke-dasharray="3,3"/>
+  <text x="274" y="637" font-size="10" fill="#94a3b8">Feeds view</text>
+  <rect x="360" y="626" width="10" height="10" rx="2" fill="none" stroke="#c084fc" stroke-width="1"/>
+  <text x="374" y="637" font-size="10" fill="#94a3b8">AR must import before SAP revenue</text>
+</svg>

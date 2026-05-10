@@ -1,0 +1,52 @@
+sf_master_product_name,allocation_entity_id,sf_master_product_key,notes
+_M-MyBruSo,PRD-BRUSO,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-VPN,PRD-VPN,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-BackUp Online,PRD-BUO,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DNS,PRD-DNS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-FIDUS,PRD-FIDUS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Editoria,PRD-EDITORIA,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Tenant Management,PRD-MS365_TENANT_MANAGEMENT,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DataGov,PRD-DATA_GOV,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Gestion Intune Tenant dédié,PRD-MS365_INTUNE,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-ITSM,PRD-SN_ITSM,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-VPS,PRD-VPS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-NOVA,PRD-NOVA,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DataHub,PRD-DATA_HUB,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-FaaS,PRD-FAAS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Digital Transformation,PRD-PROJETS_STRUCTURANTS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Sharepoint,PRD-MS365_SHAREPOINT,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-IRISbox,PRD-IRISBOX,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-BOS,PRD-BOS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-vDC,PRD-VDC,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Trados,PRD-TRADOS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DataMaturityAssessment,PRD-DATA_GOV,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Implementation and Setup,PRD-MS365_ONBOARDING,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Licences,PRD-MS365_LICENCES,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-eSign,PRD-ESIGN,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-ANPR,PRD-ANPR,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Assistance,PRD-MS365_ASSISTANCE_365,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Backup,PRD-MS365_BACKUP_365,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-FixMyStreet,PRD-FIX_MY_STREET,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Audit sécurité,PRD-MS365_AUDIT,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Intranet,PRD-MS365_INTRANET,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-SharedWebHosting,PRD-SWH,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MS365 Workplace,PRD-MS365_TENANT_MANAGEMENT,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Managed server,PRD-SMS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-HMS,PRD-HMS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-eMail Relay,PRD-MS365_EMAIL,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MyAccess,PRD-MYACCESS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-ISA Missions,PRD-DPO_IS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-WePulse Finances,PRD-WEPULSE_FIN,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Soft HR,PRD-SOFT_HR,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Datastore,PRD-DATASTORE,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-NOTERO,PRD-NOTERO,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DPO,PRD-DPO_IS,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-DataCatalog,PRD-DATA_CATALOG,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-SInCrHo,PRD-SINCRHO,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Internet Service Provider,PRD-ISP,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-CRM,PRD-CRM,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-EPN,PRD-INCLUSION_NUMERIQUE,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Baux Habitation,PRD-IRISBOX,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-MyPermit,PRD-MYPERMIT_ENVIRONNEMENT,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Firewall,PRD-FIREWALL,,reviewed master_product_to_csv_product_mapping_reviewed.csv
+_M-Consultance Expertise,PRD-MS365_EXPERTISE_MS365,,reviewed master_product_to_csv_product_mapping_reviewed.csv

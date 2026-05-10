@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, Scale, Users } from "lucide-react";
+import { BarChart3, Database, LayoutDashboard, Scale, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -53,6 +53,16 @@ export function SidebarNav() {
         )}
       >
         <BarChart3 className="size-5" aria-hidden />
+      </Link>
+      <Link
+        href="/imports"
+        title="Données réalisées — imports & mappings"
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-md text-white transition-colors hover:bg-white/10",
+          pathname.startsWith("/imports") && "bg-white/15"
+        )}
+      >
+        <Database className="size-5" aria-hidden />
       </Link>
     </aside>
   );

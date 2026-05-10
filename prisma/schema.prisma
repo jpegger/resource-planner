@@ -74,6 +74,7 @@ model Resource {
 
   rates       Rate[]
   allocations Allocation[]
+  timesheetEntries TimesheetEntry[]
 
   createdOn   DateTime
   modifiedOn  DateTime
@@ -141,6 +142,7 @@ model EotpDefinition {
   team               String?
   allocationEntities AllocationEntity[]  @relation("AllocationEntityEotpDefinition")
   eotpRoutings       EotpRouting[]       @relation("EotpRoutingTargetEotpDefinition")
+  invoiceEntries     InvoiceEntry[]
   createdOn          DateTime            @default(now()) @map("created_on")
   modifiedOn         DateTime            @updatedAt @map("modified_on")
 
@@ -179,6 +181,12 @@ model AllocationEntity {
   eotpRoutings       EotpRouting[]
   /// Rollup of INT/EXT/DIR from v_allocation_costs (see v_allocation_entity_cost_totals).
   costTotals         VAllocationEntityCostTotals?
+  snProgrammeMappings   SnProgrammeMapping[]
+  sfMasterProductMappings SfMasterProductMapping[]
+  sapDesignationMappings SapDesignationMapping[]
+  timesheetEntries      TimesheetEntry[]
+  arEntries             ArEntry[]
+  revenueEntries        RevenueEntry[]
   createdOn          DateTime              @default(now())
   modifiedOn         DateTime              @updatedAt
 
@@ -323,6 +331,8 @@ model Initiative {
 
   allocations    Allocation[]
   revenues       InitiativeRevenue[]
+  snProjectMappings SnProjectMapping[]
+  timesheetEntries  TimesheetEntry[]
 
   @@map("initiative")
 }
@@ -370,4 +380,237 @@ model InitiativeRevenue {
 
   @@index([initiativeId])
   @@map("initiative_revenue")
+}
+
+// ============================================================
+// REALIZED LAYER — SN timesheets, SAP VIM, SF AR, SAP client revenue
+// (see claude_realized-costs-revenue-design.md)
+// ============================================================
+
+model SnProgrammeMapping {
+  id                 String             @id @default(cuid())
+  snProgrammeName    String             @unique @map("sn_programme_name")
+  snProgrammeEotp    String?            @map("sn_programme_eotp")
+  allocationEntityId String?            @map("allocation_entity_id")
+  allocationEntity   AllocationEntity?  @relation(fields: [allocationEntityId], references: [id])
+  notes              String?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@map("sn_programme_mapping")
+}
+
+model SnProjectMapping {
+  id              String       @id @default(cuid())
+  snProjectNr     String       @map("sn_project_nr")
+  snProjectName   String?      @map("sn_project_name")
+  initiativeId    String?      @map("initiative_id")
+  initiative      Initiative?  @relation(fields: [initiativeId], references: [id])
+  year            Int?
+  notes           String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@index([snProjectNr, year])
+  @@map("sn_project_mapping")
+}
+
+model SfMasterProductMapping {
+  id                   String             @id @default(cuid())
+  sfMasterProductName  String             @unique @map("sf_master_product_name")
+  sfMasterProductKey   String?            @map("sf_master_product_key")
+  allocationEntityId   String?            @map("allocation_entity_id")
+  allocationEntity     AllocationEntity?  @relation(fields: [allocationEntityId], references: [id])
+  notes                String?
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@map("sf_master_product_mapping")
+}
+
+/// Reactive mapping populated from import warnings when a SAP `Désignation poste`
+/// arrives with an `ext_doc_ref` that doesn't match any AR line item (parser STEP 2).
+model SapDesignationMapping {
+  id                   String             @id @default(cuid())
+  sapDesignation       String             @unique @map("sap_designation")
+  sfProductName        String?            @map("sf_product_name")
+  allocationEntityId   String?            @map("allocation_entity_id")
+  allocationEntity     AllocationEntity?  @relation(fields: [allocationEntityId], references: [id])
+  notes                String?
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@map("sap_designation_mapping")
+}
+
+model TimesheetImport {
+  id          String            @id @default(cuid())
+  fileName    String            @map("file_name")
+  year        Int
+  importedBy  String          @map("imported_by")
+  rowCount    Int               @map("row_count")
+  warnCount   Int               @default(0) @map("warn_count")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  entries     TimesheetEntry[]
+
+  @@map("timesheet_import")
+}
+
+model TimesheetEntry {
+  id                   String            @id @default(cuid())
+  importId             String            @map("import_id")
+  import               TimesheetImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  snUser               String            @map("sn_user")
+  snProgrammeName      String?           @map("sn_programme_name")
+  snProjectNr          String?           @map("sn_project_nr")
+  snProjectLabel       String?           @map("sn_project_label")
+  snTaskNr             String?           @map("sn_task_nr")
+  snTaskLabel          String?           @map("sn_task_label")
+  weekStartsOn         DateTime          @map("week_starts_on") @db.Date
+  year                 Int
+  month                Int
+  hours                Decimal           @db.Decimal(8, 2)
+  state                String
+  allocationEntityId   String?           @map("allocation_entity_id")
+  allocationEntity     AllocationEntity? @relation(fields: [allocationEntityId], references: [id])
+  initiativeId         String?           @map("initiative_id")
+  initiative           Initiative?       @relation(fields: [initiativeId], references: [id])
+  resourceId           String?           @map("resource_id")
+  resource             Resource?         @relation(fields: [resourceId], references: [id])
+  importWarning        String?           @map("import_warning")
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  @@index([importId])
+  @@index([allocationEntityId])
+  @@map("timesheet_entry")
+}
+
+model InvoiceImport {
+  id          String          @id @default(cuid())
+  fileName    String          @map("file_name")
+  year        Int
+  importedBy  String          @map("imported_by")
+  rowCount    Int             @map("row_count")
+  warnCount   Int             @default(0) @map("warn_count")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  entries     InvoiceEntry[]
+
+  @@map("invoice_import")
+}
+
+model InvoiceEntry {
+  id                 String           @id @default(cuid())
+  importId           String           @map("import_id")
+  import             InvoiceImport    @relation(fields: [importId], references: [id], onDelete: Cascade)
+  sapVimDocId        String           @map("sap_vim_doc_id")
+  sapReservationNr   String?          @map("sap_reservation_nr")
+  sapVendorCode      String?          @map("sap_vendor_code")
+  vendorName         String?          @map("vendor_name")
+  eotpFullPath       String           @map("eotp_full_path")
+  invoiceDate        DateTime         @map("invoice_date") @db.Date
+  year               Int
+  month              Int
+  amountEur          Decimal          @map("amount_eur") @db.Decimal(12, 2)
+  compteBudgetaire   String           @map("compte_budgetaire")
+  costType           String           @default("EXTERNAL") @map("cost_type")
+  eotpDefinitionId   String?          @map("eotp_definition_id")
+  eotpDefinition     EotpDefinition?  @relation(fields: [eotpDefinitionId], references: [id])
+  importWarning      String?          @map("import_warning")
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@index([importId])
+  @@index([eotpDefinitionId])
+  @@map("invoice_entry")
+}
+
+model ArImport {
+  id          String    @id @default(cuid())
+  fileName    String    @map("file_name")
+  year        Int
+  importedBy  String    @map("imported_by")
+  rowCount    Int       @map("row_count")
+  warnCount   Int       @default(0) @map("warn_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  entries     ArEntry[]
+
+  @@map("ar_import")
+}
+
+model ArEntry {
+  id                     String             @id @default(cuid())
+  importId               String             @map("import_id")
+  import                 ArImport           @relation(fields: [importId], references: [id], onDelete: Cascade)
+  uniqueArId             String             @map("unique_ar_id")
+  contractNumber         String             @map("contract_number")
+  contractName           String?            @map("contract_name")
+  counterpartReference   String?            @map("counterpart_reference")
+  lineItemNumber         String             @map("line_item_number")
+  documentStatus         String             @map("document_status")
+  signedDate             DateTime?          @map("signed_date") @db.Date
+  clientName             String?            @map("client_name")
+  sfMasterProductName    String?            @map("sf_master_product_name")
+  sfMasterProductKey     String?            @map("sf_master_product_key")
+  sfProductName          String             @map("sf_product_name")
+  description            String?
+  sapProductCode         String?            @map("sap_product_code")
+  sapSoNumber            String?            @map("sap_so_number")
+  wbs                    String?
+  endDate                DateTime?          @map("end_date") @db.Date
+  quantity               Decimal?           @db.Decimal(12, 2)
+  amountEur              Decimal            @map("amount_eur") @db.Decimal(12, 2)
+  year                   Int
+  allocationEntityId     String?            @map("allocation_entity_id")
+  allocationEntity       AllocationEntity?  @relation(fields: [allocationEntityId], references: [id])
+  revenueEntries         RevenueEntry[]
+  importWarning          String?            @map("import_warning")
+  createdAt              DateTime           @default(now()) @map("created_at")
+
+  @@unique([uniqueArId, year])
+  @@index([importId])
+  @@index([allocationEntityId])
+  @@map("ar_entry")
+}
+
+model RevenueImport {
+  id          String          @id @default(cuid())
+  fileName    String          @map("file_name")
+  year        Int
+  importedBy  String          @map("imported_by")
+  rowCount    Int             @map("row_count")
+  warnCount   Int             @default(0) @map("warn_count")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  entries     RevenueEntry[]
+
+  @@map("revenue_import")
+}
+
+model RevenueEntry {
+  id                   String             @id @default(cuid())
+  importId             String             @map("import_id")
+  import               RevenueImport      @relation(fields: [importId], references: [id], onDelete: Cascade)
+  sapDocType           String             @map("sap_doc_type")
+  sapInvoiceNr         String             @map("sap_invoice_nr")
+  /// SAP invoice line item (`Poste`, col 48 in ZCOMM_REPORT). Multiple per `sap_invoice_nr`.
+  sapInvoiceItem       Int                @map("sap_invoice_item")
+  sapSalesOrder        String?            @map("sap_sales_order")
+  extDocRef            String?            @map("ext_doc_ref")
+  clientName           String?            @map("client_name")
+  sapArticleCode       String?            @map("sap_article_code")
+  productLabel         String?            @map("product_label")
+  eotpFull             String?            @map("eotp_full")
+  year                 Int
+  month                Int
+  amountEur            Decimal            @map("amount_eur") @db.Decimal(12, 2)
+  arEntryId            String?            @map("ar_entry_id")
+  arEntry              ArEntry?           @relation(fields: [arEntryId], references: [id])
+  allocationEntityId   String?            @map("allocation_entity_id")
+  allocationEntity     AllocationEntity?  @relation(fields: [allocationEntityId], references: [id])
+  importWarning        String?            @map("import_warning")
+  createdAt            DateTime           @default(now()) @map("created_at")
+
+  @@unique([sapInvoiceNr, year, sapInvoiceItem])
+  @@index([importId])
+  @@index([allocationEntityId])
+  @@index([arEntryId])
+  @@index([extDocRef])
+  @@map("revenue_entry")
 }

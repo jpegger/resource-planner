@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { FileDown } from "lucide-react";
 
@@ -22,6 +23,8 @@ import { ComparisonKpis } from "./ComparisonKpis";
 import type { ComparisonRow } from "./ComparisonTable";
 import { ComparisonTable, type ComparisonSortDir, type ComparisonSortKey } from "./ComparisonTable";
 import { OwnershipNav } from "./OwnershipNav";
+import { RealizedCostsTab } from "./RealizedCostsTab";
+import { RevenueTab } from "./RevenueTab";
 
 type SnapshotOpt = {
   id: string;
@@ -47,6 +50,8 @@ function yearOptions(): number[] {
 
 const PLANNING_LIVE = "live";
 
+type ReportTab = "planning" | "realized" | "revenue";
+
 export default function ComparisonClient({
   snapshots,
   baselines,
@@ -54,6 +59,36 @@ export default function ComparisonClient({
   snapshots: SnapshotOpt[];
   baselines: BaselineOpt[];
 }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [reportTab, setReportTab] = useState<ReportTab>(() => {
+    const t = searchParams.get("tab");
+    if (t === "realized" || t === "revenue" || t === "planning") return t;
+    return "planning";
+  });
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "realized" || t === "revenue" || t === "planning") {
+      setReportTab(t);
+      return;
+    }
+    setReportTab("planning");
+  }, [searchParams]);
+
+  const selectReportTab = useCallback(
+    (tab: ReportTab) => {
+      setReportTab(tab);
+      const p = new URLSearchParams(searchParams.toString());
+      if (tab === "planning") p.delete("tab");
+      else p.set("tab", tab);
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
   const [year, setYear] = useState<number>(() => new Date().getFullYear());
   const [planningSource, setPlanningSource] = useState<string>(PLANNING_LIVE);
   const [baselineId, setBaselineId] = useState<string>("");
@@ -269,6 +304,37 @@ export default function ComparisonClient({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant={reportTab === "planning" ? "default" : "outline"}
+          size="sm"
+          onClick={() => selectReportTab("planning")}
+        >
+          Planning vs baseline
+        </Button>
+        <Button
+          type="button"
+          variant={reportTab === "realized" ? "default" : "outline"}
+          size="sm"
+          onClick={() => selectReportTab("realized")}
+        >
+          Realized costs
+        </Button>
+        <Button
+          type="button"
+          variant={reportTab === "revenue" ? "default" : "outline"}
+          size="sm"
+          onClick={() => selectReportTab("revenue")}
+        >
+          Revenue
+        </Button>
+      </div>
+
+      {reportTab === "realized" ? <RealizedCostsTab /> : null}
+      {reportTab === "revenue" ? <RevenueTab /> : null}
+
+      {reportTab === "planning" ? (
       <Card className={cn(PANEL_CARD_CLASS, "min-w-0")}>
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
@@ -418,6 +484,7 @@ export default function ComparisonClient({
           />
         </CardContent>
       </Card>
+      ) : null}
     </div>
   );
 }

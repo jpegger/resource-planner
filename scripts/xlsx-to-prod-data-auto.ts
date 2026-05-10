@@ -373,6 +373,11 @@ async function main(): Promise<void> {
   const wb = xlsx.readFile(input, { raw: true, cellDates: false });
   const jiraHeaderRow0 = findHeaderRow0ByCellValue(wb, "(J) Initiative Export", "Key");
   const assignHeaderRow0 = findHeaderRow0ByCellValue(wb, "(B) Assignements", "RessourceId");
+  const revenueHeaderRow0 = findHeaderRow0ByCellValue(
+    wb,
+    "(B) Revenues Assignments",
+    "Initiative"
+  );
 
   const specs: SheetSpec[] = [
     {
@@ -647,7 +652,7 @@ async function main(): Promise<void> {
     },
     {
       sheetName: "(B) Revenues Assignments",
-      headerRow0: 5,
+      headerRow0: revenueHeaderRow0,
       outFilename: "REVENU.csv",
       outHeaders: refRevHeaders,
       mapRow: (row) =>
