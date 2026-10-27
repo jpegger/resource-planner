@@ -1,177 +1,128 @@
-# Resource Planner — Application Design Document
+# Resource Planner — Technical Design Document (Node / Next.js)
 
-**Paradigm · Brussels Capital Region · v1.13 · May 2026**
+**Paradigm · Brussels Capital Region · v1.13**
+
+Product scope, user stories and business rules: **[`PRD.md`](./PRD.md)**.  
+This file is the **Node / Next.js** implementation reference (schema, APIs, views, screens, seeds, ops). Do not duplicate product policy here — if PRD and this file disagree, **PRD wins** and this file should be updated.
 
 ---
 
 ## Table of Contents
 
-1. [Purpose & Scope](#1-purpose--scope)
-2. [Core Business Logic](#2-core-business-logic)
-3. [Technology Stack](#3-technology-stack)
-4. [Database Schema](#4-database-schema) (includes §4.12 realized-layer mapping tables, §4.13 realized-layer import tables, §4.14 SAP designation mapping)
-5. [Power BI Cost View](#5-power-bi-cost-view-v_allocation_costs) (includes §5.3 planning vs baseline views, §5.4 `v_revenues`, §5.5 realized-layer views)
-6. [Application Architecture](#6-application-architecture)
-7. [Application Screens](#7-application-screens) (includes §7.7 imports & realized-data mappings)
-8. [Jira Sync](#8-jira-sync)
-9. [Seed Scripts](#9-seed-scripts)
-10. [Local Development Setup](#10-local-development-setup)
-11. [Open Questions & Next Steps](#11-open-questions--next-steps)
-12. [Project File Structure](#12-project-file-structure)
+1. [Role & PRD alignment](#1-role--prd-alignment)
+2. [Core business logic (implementation)](#2-core-business-logic-implementation)
+3. [Technology stack](#3-technology-stack)
+4. [Database schema](#4-database-schema)
+5. [Reporting SQL views](#5-reporting-sql-views)
+6. [Application architecture](#6-application-architecture)
+7. [Application screens](#7-application-screens)
+8. [Jira sync](#8-jira-sync)
+9. [Seed scripts](#9-seed-scripts)
+10. [Local development setup](#10-local-development-setup)
+11. [Gaps, open items & next steps](#11-gaps-open-items--next-steps)
+12. [Project file structure](#12-project-file-structure)
 
 ---
 
-## 1. Purpose & Scope
+## 1. Role & PRD alignment
 
-This document captures all design decisions, architecture choices, trade-offs and open questions for the Resource Planner internal tool. It serves as a handoff document between development sessions and as a reference for any developer picking up the project.
+### Product rules that drive this stack (from PRD)
 
-The application manages resource allocations against a portfolio of Jira initiatives for the Brussels Capital Region (Paradigm). It replaces a set of Excel workbooks and exposes the underlying data to Power BI for reporting.
+- **Investments / initiatives** come from **Jira only** (pull-sync). Planner UI must not create or edit catalog fields.
+- **Allocations** (and planned initiative revenue) only on **Jira-synced initiatives**.
+- **Reporting** is in-app (**Recharts** + Excel); no external BI tool.
+- **Access:** IdP in production; among authorized users, flat rights on editable planning data; admin-only bulk import. Confirmed in PRD §7.
+
+### Implementation vs PRD (this repo)
+
+| Area | Status |
+|---|---|
+| Allocations, rates, EOTP routing, planned revenue, snapshots, SAP baseline, comparison + Excel | Implemented |
+| In-app reports (Recharts) + SQL views (planning + realized) | Implemented |
+| Realized layer (timesheets, VIM, AR, SAP client revenue, mappings) | Implemented |
+| Jira pull-sync (Products → investments, Initiatives) | Implemented — harden field IDs against live Jira (§11) |
+| Catalog read-only / no manual investments | **UI:** Details card is read-only; list has no “create investment”. **Gap:** `PATCH`/`DELETE` on `/api/allocation-entities/[id]` still allow catalog mutation — should be locked down to match PRD |
+| No create investment/initiative via REST | **OK** — `GET` list only on `/api/allocation-entities` (no `POST`) |
+| F36 IdP authentication | **Gap** — no login; `X-Auth-Request-Email` / `planner@local` for audit only |
+| F37 Admin-gated bulk CSV / seed | **Gap** — admin generate/seed routes unprotected |
+| F22 Duplicate snapshot as editable baseline | **Gap** — Java only |
+| F38 Resource Excel import/export | **Gap** — Java only |
 
 ---
 
-## 2. Core Business Logic
+## 2. Core business logic (implementation)
 
-> Understanding this section is essential before touching any code. The cost model is the heart of the application.
+Business rules with numeric examples: **PRD §6 (R1–R15)**. Below is how this stack implements them.
 
-### 2.1 The Three Resource Types
+### 2.1 Resource types & assignment fields
 
-Every resource belongs to one of three types, which determines how cost is calculated:
+| Type | How planners enter work | Cost driver |
+|---|---|---|
+| INTERNAL / EXTERNAL | `quantity` = FTE fraction **or** `manDays` | Rate × days (see below) |
+| DIRECT_COST | `quantity` = units | `quantity × dailyRate` (unit price) |
 
-- **INTERNAL** — Named employees of the organisation. Allocated by % FTE or man-days. Cost calculated against an internal daily rate (EUR/day) × working days.
-- **EXTERNAL** — Named consultants or external roles. Same allocation and cost logic as Internal, but with external daily rates which are typically higher.
-- **DIRECT_COST** — Non-human costs: software licences, hosting fees, event costs, framework contracts, etc. Allocated by quantity (units). Cost = unit rate × quantity assigned.
+If both `manDays` and `quantity` are set, **man-days win** for cost and FTE.
 
-### 2.2 Two Ways to Assign a Resource to an Initiative
+### 2.2 Rate resolution (by initiative year)
 
-When assigning an Internal or External resource to an initiative, the planner chooses one of two methods. Direct Costs always use quantity.
+Always use **`initiative.year`**, never “today”:
 
-#### Method A — Percentage of FTE
+1. Individual `Rate` for `(resourceId, year)` → `dailyRate`
+2. Else `RateStandard` for `(type, year)` → `dailyRate` (INTERNAL/EXTERNAL only; no standard for DIRECT_COST)
+3. Else 0
 
-The planner enters what fraction of the person's working capacity is dedicated to this initiative, expressed as a decimal (e.g. 0.5 = 50%, 1.2 = 120% meaning overtime or shared between two people counted as one).
+**Days per year (`nbrDaysPerYear`):** required on each individual `Rate` row. `v_allocation_costs` uses **only** that column for FTE/man-day math — **no** fallback to `rate_standard.nbrDaysPerYear`. Typical entry values: 200 INTERNAL, 220 EXTERNAL, 1.0 DIRECT_COST units.
 
-Stored in the `quantity` field. The man-days equivalent is derived automatically:
+### 2.3 Cost formulas (computed on read — never stored)
 
-```
-Man Days = quantity × nbrDaysPerYear
-Example: 0.5 FTE × 200 days/year = 100 man-days
-```
-
-#### Method B — Man Days
-
-The planner enters a fixed number of working days directly. Useful for fixed-scope deliverables or external contractors billed by the day.
-
-Stored in the `manDays` field. The FTE % equivalent is derived automatically:
-
-```
-FTE % = manDays / nbrDaysPerYear × 100
-Example: 60 man-days / 200 days/year = 30% FTE
-```
-
-> **Important:** the two fields are mutually exclusive in practice. If `manDays > 0`, it takes precedence over `quantity` for cost calculation. Only 2 rows in the entire historical dataset use both simultaneously.
-
-### 2.3 Days Per Year — nbrDaysPerYear
-
-This value converts between FTE % and man-days. **`rate.nbrDaysPerYear` is required** (non-null): each individual **`Rate`** row stores the working days (or unit multiplier for direct costs) for that resource×year. **`v_allocation_costs` uses only this column** for FTE/man-day math — **no** `COALESCE` to `rate_standard.nbrDaysPerYear`.
-
-Typical values when entering data: **200** internal staff, **220** external, **1.0** direct-cost unit model. **`RateStandard`** still carries 200/220 for **daily rate** fallbacks and documentation; it is **not** used as a days fallback in the cost view.
-
-### 2.4 Rate Resolution — Always by Initiative Year
-
-A critical design decision: rates are always resolved using the `year` field of the **initiative**, not the current calendar year. This guarantees historical consistency — a 2023 initiative always uses 2023 rates even when consulted in 2026.
-
-The resolution order is:
-
-1. Look for an individual `Rate` row matching `(resourceId, initiative.year)`. If found, use its `dailyRate`.
-2. If no individual rate exists, fall back to the `RateStandard` row matching `(type, initiative.year)`.
-3. Direct Cost resources always have an individual Rate. There is no standard fallback for `DIRECT_COST`.
-
-### 2.5 Cost Calculation Formula
-
-Cost is never stored in the database — always computed on read. The `v_allocation_costs` view handles this for Power BI.
-
-| Resource Type | Condition | Formula |
+| Type | Condition | Formula |
 |---|---|---|
 | DIRECT_COST | Always | `quantity × Rate.dailyRate` |
-| INTERNAL / EXTERNAL | Man-days billing | `manDays × effective_rate` |
-| INTERNAL / EXTERNAL | FTE billing | `quantity × nbrDaysPerYear × effective_rate` |
+| INTERNAL / EXTERNAL | `manDays` > 0 | `manDays × effective_rate` |
+| INTERNAL / EXTERNAL | else | `quantity × nbrDaysPerYear × effective_rate` |
 
-Where `effective_rate` = individual `Rate.dailyRate` if exists, else `RateStandard.dailyRate` for `(type, initiative.year)`.
+Split into non-overlapping `internal_cost` / `external_cost` / `direct_cost` (sum = `computed_cost`). **Cash-out** = external + direct.
 
-The cost is then split into three non-overlapping columns in the view: `internal_cost`, `external_cost`, `direct_cost`. Their sum always equals `computed_cost`.
+### 2.4 View helpers (`calculated_man_days`, FTE)
 
-### 2.6 Calculated Man Days in the Power BI View
+- Staff man-days: raw `manDays`, or `quantity × Rate.nbrDaysPerYear` for FTE entry.
+- Staff FTE: `quantity`, or `manDays ÷ daysPerYear` when man-days drive the row.
+- DIRECT_COST: FTE columns are 0; quantity path uses `nbrDaysPerYear` (usually 1.0) as unit multiplier.
 
-The view exposes a unified `calculated_man_days` column for capacity-style reporting:
+### 2.5 EOTP exception routing
 
-- **INTERNAL / EXTERNAL** — If `manDays` > 0: raw man-days. If FTE (`quantity` > 0): `quantity × Rate.nbrDaysPerYear` (from the joined rate row only).
-- **DIRECT_COST** — Man-days path uses `manDays` directly. Quantity path uses `quantity × Rate.nbrDaysPerYear` (typically **1.0** for licences). If there is **no** matching `rate` row for `(resource, initiative year)`, view columns that depend on `rt.*` are null — data should always include a rate row with **`nbrDaysPerYear` set**.
+Exceptions only (`eotp_routing`): EUR INT/EXT/DIR to a **target** EOTP ≠ main `AllocationEntity.sapEotpCode`. Main EOTP gets remainder per bucket, **clamped ≥ 0**. Catalog: `eotp_definition`. Rollup view: `v_eotp_costs` (§5.2).
 
-So `SUM(calculated_man_days)` is comparable across assignment methods for staff; direct-cost quantity and cost use the same per-unit multiplier as in `computed_cost` (cost still needs a `Rate.dailyRate` for a non-zero EUR amount).
+### 2.6 Reporting SQL conventions
 
-### 2.7 FTE % in the Power BI View
-
-For **INTERNAL** and **EXTERNAL** only (`fte_decimal` / `fte_percent` are 0 for **DIRECT_COST**):
-
-| Entry method | `fte_decimal` (0–1) | `fte_percent` |
-|---|---|---|
-| **FTE / %** (`quantity` > 0, man-days not used) | `quantity` | `quantity × 100` |
-| **Man-days** (`manDays` > 0) | `manDays ÷ effective_days_per_year` (same `nbrDaysPerYear` resolution as costing) | implied FTE × 100 |
-
-If **both** are present (rare), **man-days** take precedence for FTE so the same row can be summed in `SUM(fte_decimal)` with FTE-only rows. Missing rate days → `COALESCE` to 0 to avoid NULLs in DirectQuery.
-
-### 2.8 Power BI Compatibility Notes
-
-- `product_group` was removed from `v_allocation_costs` and `v_revenues`. The canonical grouping is now the allocation-entity dimensions (not an initiative-level grouping). If you need this dimension again later, add it to `allocation_entity` and expose it from the views.
-- The `::` cast syntax is avoided in the view — `CAST(... AS float)` is used instead for ODBC compatibility.
-- `<>` is used instead of `!=` for the same reason.
-- **Enum columns must always be cast to `VARCHAR` in any view exposed to Power BI.** PostgreSQL enum types are not foldable by the ODBC driver. Apply `CAST(col AS VARCHAR)` to every enum column in every Power BI-facing view.
-
-### 2.9 EOTP exception routing (summary)
-
-Financial initiative costs (INT / EXT / DIR) for a product can be **split across SAP EOTP codes** for a given year. The **`eotp_routing`** table holds **exceptions only**: each row fixes how many **EUR** go to a **target EOTP** for each of the three buckets. Anything not explicitly routed remains on **`Product.sapEotpCode`**. There are **no percentage fields** in the current model — amounts are EUR. Routing targets and labels are backed by the **`eotp_definition`** catalog (**§4.7**); exception rows: **§4.8**. Power BI rollups: **§5.2**.
+- Prefer `CAST(... AS float)` / `<>` over `::` / `!=`.
+- Cast enums to `VARCHAR` in reporting views.
+- Grouping dimensions live on **allocation entity**, not initiative `product_group`.
 
 ---
 
-## 3. Technology Stack
-
-### 3.1 Chosen Stack
+## 3. Technology stack
 
 | Component | Choice |
 |---|---|
-| Frontend | Next.js 16 (App Router, TypeScript, Tailwind CSS) |
-| UI Components | shadcn/ui + cmdk (combobox search) |
-| ORM | Prisma 7 with @prisma/adapter-pg (PostgreSQL adapter) |
-| Database | PostgreSQL — company-hosted cluster (dev: Docker local) |
-| Reporting | Power BI Desktop connected directly to PostgreSQL view |
-| Spreadsheet export (in-app) | exceljs — Excel workbook download with real **Excel Table** metadata (comparison report) |
-| Jira Sync | jira.js (Version3Client) — official TypeScript Jira client |
-| Salesforce (optional) | jsforce — used for describing / integrating custom objects |
-| IDE | Cursor (AI-assisted) running against WSL2 on Windows |
-| Runtime | Node.js 20 inside WSL2 (Ubuntu) |
+| Frontend | Next.js 16 (App Router, TypeScript, Tailwind, shadcn/ui, cmdk) |
+| ORM / DB | Prisma 7 + `@prisma/adapter-pg` → PostgreSQL |
+| Reporting | **Recharts** on `/reports/*`; exceljs Excel exports; SQL views feed APIs |
+| Jira | jira.js (`Version3Client`) |
+| Salesforce (optional) | jsforce (AR API path when enabled) |
+| Runtime | Node.js 20 (WSL2 / containers) |
 
-### 3.2 Key Decisions & Rationale
-
-- **Next.js fullstack** — Single project, API routes replace a dedicated backend. Developer has PHP/Java expertise but wanted to avoid writing a traditional backend for a simple internal tool.
-- **Prisma over Supabase** — Company already runs a PostgreSQL cluster. Supabase's managed layer was unnecessary overhead. Prisma gives type-safe queries and a raw SQL escape hatch.
-- **Power BI retained** — Developer already has complete reports built on the Excel structure. A PostgreSQL view (`v_allocation_costs`) feeds Power BI directly — zero rework on existing reports.
-- **jira.js over raw fetch** — Official TypeScript-first Jira client with proper types, built-in pagination helpers, Jira Cloud/Server support. Eliminates manual base64 auth and response parsing.
-- **Docker for local Postgres** — One command spins up PostgreSQL 16. Switching to company cluster = one line in `.env`. Set to `restart:always` so it survives machine reboots.
-
-### 3.3 Prisma 7 Breaking Changes
-
-Prisma 7 introduced significant breaking changes from v6. Key adaptations:
-
-- **datasource url** — Removed from `schema.prisma`. URL now lives only in `prisma.config.ts` (for CLI) and passed via PrismaPg adapter at runtime.
-- **PrismaClient constructor** — Requires a driver adapter: `new PrismaClient({ adapter })` where `adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })`.
-- **Generator** — Changed from `prisma-client-js` to `prisma-client` with explicit output: `src/generated/prisma`.
-- **Seed script** — Uses `tsx` instead of `ts-node` due to ESM/CommonJS conflicts with the generated client.
-- **Auto-seeding removed** — Must run `npm run db:seed` explicitly after migrations.
+**Prisma 7 notes:** datasource URL in `prisma.config.ts` + adapter at runtime (not in `schema.prisma`); generator `prisma-client` → `src/generated/prisma`; seeds via `tsx`; run `npm run db:seed` explicitly after migrate.
 
 ---
 
-## 4. Database Schema
+## 4. Database schema
 
-Core Prisma models on the planner side: Resource, Rate, RateStandard, **AllocationEntity**, Initiative, Allocation, **InitiativeRevenue**, **EotpDefinition**, **EotpRouting**; plus **AllocationSnapshot** / **AllocationSnapshotRow** (frozen EOTP breakdowns), **BudgetBaseline** / **BudgetBaselineRow** (SAP Excel import), and **DimYear** (Power BI year bridge). Read-only Prisma **views**: **`VAllocationEntityCostTotals`**, **`DimEotp`** (`dim_eotp` — distinct EOTP codes from snapshot and baseline rows). PostgreSQL views **`v_allocation_costs`**, **`v_eotp_costs`**, **`v_revenues`**, **`v_snapshot_detail`**, **`v_baseline_detail`** are created by **`scripts/seed-production.ts`** (`SEED_VIEW_ONLY=1 npm run db:seed:prod`). All IDs are preserved from the source systems (PowerApps/Jira) where applicable. Live allocation cost is never stored — computed at query time; **snapshots** store frozen EUR amounts at capture time. **InitiativeRevenue** stores **multiple** revenue lines per initiative (**`RevenueType`**: Mission \| Subscription). **EotpRouting** stores explicit EUR splits (exception rows only); optional FKs to **`eotp_definition`** link catalog rows for the main investment line and for each exception target.
+**Catalog ownership:** `AllocationEntity` (Investment) and `Initiative` are filled by **Jira sync** (and optional admin CSV bootstrap with Jira keys). Live cost is never stored — computed in views/APIs. Snapshots store frozen EUR at capture time.
+
+Core models: Resource, Rate, RateStandard, **AllocationEntity**, Initiative, Allocation, **InitiativeRevenue**, **EotpDefinition**, **EotpRouting**, **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**, plus realized-layer import/entry and mapping tables (§4.12–§4.14).
+
+PostgreSQL reporting views (`v_allocation_costs`, `v_eotp_costs`, `v_revenues`, snapshot/baseline/realized views, `dim_eotp`) are created by **`scripts/seed-production.ts`** (`SEED_VIEW_ONLY=1 npm run db:seed:prod`). Prisma also exposes read-only view models where useful (`VAllocationEntityCostTotals`, `DimEotp`).
 
 ### 4.1 Resource
 
@@ -251,7 +202,7 @@ Synced from Jira via the `/api/jira/sync` route. The `jiraKey` (RI-xxx) is the n
 | `components` | String? | | Jira components field (product name; used to resolve allocation entity) |
 | `allocationEntityId` | String? | | Prisma FK → `AllocationEntity.id`; **DB column `allocation_entity_id`** — set by Jira sync from first matching component, or by seed |
 | `productGroup` | String? | | Higher grouping (SALES, SMART ADMIN, eCITIZEN, etc.) |
-| `initiativeType` | String? | | Run, Evolution, Rollout, Projet, Analyse, etc. |
+| `initiativeType` | String? | | Raw Jira `(RI) Type`: Run, Evolution, Rollout, Projet, Analyse, etc. **Run vs Build reporting bucket:** `if initiativeType = "Run" then "Run" else "Build"` (Build is not a Jira type — all non-Run types collapse to Build). |
 | `allocations` | Allocation[] | | Relation — all resource assignments for this initiative |
 | `revenues` | InitiativeRevenue[] | | Many rows allowed per initiative — see §4.11 |
 | `allocationEntity` | AllocationEntity? | | Optional relation when `allocationEntityId` set |
@@ -312,7 +263,7 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 
 **Downstream:** `src/lib/eotp.ts` — `computeEotpBreakdown(mainEotp, costs, routings)` rolls initiative **internal / external / direct** costs into per–EOTP amounts (main EOTP gets the remainder after subtracting non-main targets). The **budget** API attaches `eotpBreakdown` per initiative row.
 
-**Power BI:** use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/allocation-entities/[id]/eotp-routing`.
+Use view **`v_eotp_costs`** (see §5.2) for rolled-up main vs split EOTP costs in reports/APIs. There is **no** `v_eotp_routing` view — raw rows are the **`eotp_routing`** table or the REST APIs under `/api/allocation-entities/[id]/eotp-routing`.
 
 ### 4.9 Planning snapshots & budget baselines
 
@@ -320,10 +271,10 @@ Stores **exception-only** routing: fixed **EUR** amounts per cost bucket (intern
 |---|---|
 | **`allocation_snapshot` / `allocation_snapshot_row`** | Named, immutable **allocation snapshot**: at capture time **`takeSnapshot`** calls **`computeAllocationBreakdownForYear(year)`** (shared with live comparison — same INT/EXT/DIR roll-up as budget API), persists per–EOTP rows. **User identity** for `takenBy` / `importedBy`: header **`X-Auth-Request-Email`** via **`getUserFromRequest`** (`src/lib/auth.ts`); dev fallback when unset. |
 | **`budget_baseline` / `budget_baseline_row`** | SAP budget team Excel import (**xlsx**): columns **Prog Fin**, **Prog Fin lib**, **Cellule**, **Budget actuel YYYY**; amounts stored **positive EUR** (SAP negatives negated on import). |
-| **`dim_year`** | Small table (years 2023–2028 seeded) for Power BI relationships to snapshot/baseline detail views. |
+| **`dim_year`** | Small table (years 2023–2028 seeded) for relationships to snapshot/baseline detail views. |
 | **`dim_eotp`** | **View**: distinct **`eotp`** (and label) from **`allocation_snapshot_row`** ∪ **`budget_baseline_row`**; **`DISTINCT ON (eotp)`** so one row per code for dimension relationships. |
 
-**Comparison vs baseline:** **Power BI** remains the primary analytics surface (§5.3). The app also ships **`/reports/comparison`**: baseline vs **live planning** (current **`v_allocation_costs`** breakdown) or vs a **saved snapshot**, with ownership filters and an **Excel export** (see §7.6). Gap concept: baseline tracks external + direct “cash out” scope; **`v_snapshot_detail`** exposes **`cash_out`** = `external + direct`.
+**Comparison vs baseline:** the primary surface is **`/reports/comparison`**: baseline vs **live planning** (current **`v_allocation_costs`** breakdown) or vs a **saved snapshot**, with ownership filters and an **Excel export** (see §7.6). Gap concept: baseline tracks external + direct “cash out” scope; **`v_snapshot_detail`** exposes **`cash_out`** = `external + direct`.
 
 **APIs:** **`GET` / `POST /api/snapshots`**, **`DELETE /api/snapshots/[id]`**; **`GET` / `POST /api/baselines`** (multipart Excel), **`DELETE /api/baselines/[id]`**; **`GET /api/reports/comparison`** — query **`year`**, **`baselineId`**, optional **`snapshotId`** (omit for live), optional **`division`**, **`subdivision`**, **`team`**, **`owner`**. UI: **`/budget-comparison`** (capture/import), **`/reports/comparison`** (interactive gap table).
 
@@ -420,9 +371,9 @@ Each realized-data import follows the same **header + rows** pattern: an `*_impo
 
 ---
 
-## 5. Power BI Cost View (v_allocation_costs)
+## 5. Reporting SQL views
 
-The primary reporting view is **`v_allocation_costs`** (PostgreSQL), created by the seed script. Power BI should consume **views**, not ad-hoc table queries for reporting. The app uses Prisma on raw tables. **`v_allocation_costs`** is recreated each time the production seed view step runs, or on demand via:
+The primary cost view is **`v_allocation_costs`** (PostgreSQL), created by the seed script. In-app reports (Recharts) and APIs consume these views / equivalent queries — **not** an external BI tool. The app uses Prisma on raw tables for CRUD. **`v_allocation_costs`** is recreated each time the production seed view step runs, or on demand via:
 
 ```bash
 SEED_VIEW_ONLY=1 npm run db:seed:prod
@@ -442,7 +393,7 @@ SEED_VIEW_ONLY=1 npm run db:seed:prod
 | `product_family` / `division` / `sub_division` / `team` | From `Product` with `Unassigned` fallbacks (`&` → `and` on family) |
 | `sap_eotp_code` / `sap_eotp_name` | From `Product` (`Unassigned` if null) |
 | `attractiveness` / `competitiveness` | Raw floats from `Product` (nullable) |
-| `man_days` / `quantity` | Raw allocation fields (for validation / BI) |
+| `man_days` / `quantity` | Raw allocation fields (for validation / reporting) |
 | `jira_component_product` | Raw Jira component name from the initiative (traceability). |
 | `initiative_type` | Run / Evolution / Rollout / etc. |
 | `status` | Initiative status from Jira |
@@ -474,15 +425,13 @@ Created by the same production seed path as `v_allocation_costs` (after `eotp_ro
 
 **There is no `v_eotp_routing` view** — listing raw exception rows = query **`eotp_routing`** or use the app APIs. To recreate only this view after SQL changes: **`npm run db:recreate:eotp-costs`** (requires **`v_allocation_costs`**). Full planner views: **`SEED_VIEW_ONLY=1 npm run db:seed:prod`** (same as §5 command).
 
-### 5.3 Planning vs budget baseline (Power BI)
+### 5.3 Planning vs budget baseline views
 
-Created by the same production seed path as **`v_allocation_costs`** (after snapshot/baseline tables exist). Import into Power BI: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_year`**, **`dim_eotp`**.
+Created by the same production seed path as **`v_allocation_costs`** (after snapshot/baseline tables exist). Used by in-app comparison / snapshot / baseline reports: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_year`**, **`dim_eotp`**.
 
 - **`v_snapshot_detail`** — joins **`allocation_snapshot`** and **`allocation_snapshot_row`**; includes **`cash_out`** (= `external + direct`).
 - **`v_baseline_detail`** — joins **`budget_baseline`** and **`budget_baseline_row`**; **`baseline_amount`**.
-- Relationships: **`dim_year[year]`** → both detail views; **`dim_eotp[eotp]`** → **`v_snapshot_detail[eotp]`** and **`v_baseline_detail[eotp]`** (many-to-one from facts to **`dim_eotp`**). Use **`dim_eotp`** on matrix rows so measures from both facts filter per EOTP. **Measures (example):** `Planned Cash Out = SUM(v_snapshot_detail[cash_out])`, `Baseline Amount = SUM(v_baseline_detail[baseline_amount])`, `Gap = [Baseline Amount] - [Planned Cash Out]`.
-
-See `README.md` (Power BI notes) for step-by-step import notes.
+- Relationships: **`dim_year[year]`** → both detail views; **`dim_eotp[eotp]`** → **`v_snapshot_detail[eotp]`** and **`v_baseline_detail[eotp]`**. **Gap** = baseline amount − planned cash-out (same concept as `/reports/comparison`).
 
 ### 5.4 View `v_revenues` (revenue lines)
 
@@ -494,9 +443,9 @@ Created by **`createRealizedViews()`** in **`scripts/realized-views.ts`** (calle
 
 - **`v_realized_costs`** — `UNION ALL` of `timesheet_entry` (`cost_type = 'INTERNAL'`, `amount_eur = (hours / 8.0) × COALESCE(rate.dailyRate, rate_standard.dailyRate)`) and `invoice_entry` (`cost_type ∈ {EXTERNAL, DIRECT_COST}`, `amount_eur` from `invoice_entry`). Joins **`eotp_definition`** for division / sub_division / team / owner on the VIM half. Filterable by year / month / cost type / ownership / `allocation_entity_id`.
 - **`v_planned_revenue`** — `ar_entry GROUP BY year × allocation_entity_id × sf_product_name × client_name`. Used for AR coverage dashboards.
-- **`v_realized_revenue`** — `revenue_entry GROUP BY year × month × allocation_entity_id × sap_article_code × product_label × client_name`. The new **`ar_entry_id`**, **`ext_doc_ref`**, **`sap_doc_type`** columns (§4.14) are **not** projected by this view today — query `revenue_entry` directly when AR-link drilldowns are needed (Power BI relationship: `revenue_entry[ar_entry_id]` → `ar_entry[id]`). _Open item: extend the view when reporting needs it._
+- **`v_realized_revenue`** — `revenue_entry GROUP BY year × month × allocation_entity_id × sap_article_code × product_label × client_name`. The new **`ar_entry_id`**, **`ext_doc_ref`**, **`sap_doc_type`** columns (§4.14) are **not** projected by this view today — query `revenue_entry` directly when AR-link drilldowns are needed (`revenue_entry.ar_entry_id` → `ar_entry.id`). _Open item: extend the view when reporting needs it._
 
-**Power BI:** these views are intentionally "additive" — `SUM(amount_eur)` is correct at the row grain. Use shared `dim_year` / `dim_eotp` already in the model (§4.9, §5.3) to slice with the planning views.
+These views are intentionally additive — `SUM(amount_eur)` is correct at the row grain. Shared `dim_year` / `dim_eotp` (§4.9, §5.3) can slice with the planning views.
 
 ---
 
@@ -507,8 +456,8 @@ Created by **`createRealizedViews()`** in **`scripts/realized-views.ts`** (calle
 ```
 Jira API  →  /api/jira/sync  →  Initiative table (upsert by jira_key)
 Excel CSVs  →  seed-production.ts  →  Resources, rates, initiatives, allocations (+ view); allocation entities (`allocation_entity` table) seeded first when `PRODUCTS.csv` is present
-Browser  →  Next.js API routes  →  Prisma  →  PostgreSQL
-Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_costs, v_revenues, v_snapshot_detail, v_baseline_detail, dim_year, dim_eotp
+Browser  →  Next.js API routes (+ Recharts reports)  →  Prisma / SQL views  →  PostgreSQL
+Reports UI  →  /api/reports/*  →  v_allocation_costs, v_eotp_costs, v_revenues, v_snapshot_detail, v_baseline_detail, realized views, dim_year, dim_eotp
 ```
 
 ### 6.2 API Routes
@@ -579,7 +528,7 @@ Power BI  →  PostgreSQL direct connection  →  v_allocation_costs, v_eotp_cos
 
 ### 6.3 Investments UI and allocation entity catalog
 
-The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI label: **Investment**). The detail screen loads the allocation entity with **`GET /api/allocation-entities/[id]`** and drives budget, EOTP routing, and allocations against `v_allocation_costs`. The old **`/initiatives`** screen was removed; it is not redirected.
+Primary flow: **`/investments`** → **`/investments/[id]`**. Detail loads via **`GET /api/allocation-entities/[id]`**; budget / EOTP / allocations use `v_allocation_costs` and related APIs. Initiatives appear only as children of an investment (no standalone `/initiatives` route). Catalog fields are displayed read-only in the UI (Jira sync is the writer).
 
 ---
 
@@ -587,9 +536,9 @@ The primary planner flow is **`/investments`** and **`/investments/[id]`** (UI l
 
 ### 7.1 Investments (`/investments`, `/investments/[id]`) — Primary
 
-Portfolio table of allocation entities with optional budget columns (€k INT/EXT/DIR from **`/api/allocation-entities/with-budget`**). Row opens **investment detail** (modular client under **`investments/[id]/`**).
+Portfolio table of allocation entities with optional budget columns (€k INT/EXT/DIR from **`/api/allocation-entities/with-budget`**). Row opens **investment detail** (modular client under **`investments/[id]/`**). **No UI to create an investment** — catalog arrives via Jira sync / seed.
 
-**Layout (v1.6):** Shared panel chrome (**`PANEL_CARD_CLASS`** in **`src/lib/panel-card.ts`**) matches **`/resources`**. **Main title** = allocation entity **name · selected year**; **year** chips sit in the **same grid column** as the **Details** card so they align with its right edge. **Top row (two columns):** **Details** (readonly catalog: division, SAP EOTP, etc.) | **Budget Summary {year}** — opens with a **budget overview** (year, **actual budget** from **`v_allocation_costs`**, **FTE sum** via **`/api/allocation-entities/[id]/year-summary`**), short copy linking overview to the **Distribution across EOTP lines** table below. The table defaults to **EOTP · Label · Total · Actions**; **internal / external / direct**, **cash out**, and **comment** are on **expandable** rows. Optional consistency hint compares summed EOTP line totals to the overview budget.
+**Layout:** Shared panel chrome (**`PANEL_CARD_CLASS`**). **Title** = entity **name · selected year**. **Top row:** **Details** (**read-only** catalog: org, SAP EOTP, scores — PRD: Jira is source of truth) | **Budget Summary {year}** (overview from **`v_allocation_costs`**, FTE via **`year-summary`**). EOTP distribution table: **EOTP · Label · Total · Actions**; INT/EXT/DIR, cash-out, comment on expand.
 
 **EOTP routing card (`InvestmentDetailEotpRoutingSection`):** Card header = **EOTP routing** + main SAP EOTP **pill** (from the entity). **Main** bucket: read-only rows from **`GET /api/allocation-entities/[id]/eotp-main-from-view`** ( **`v_eotp_costs`**, `is_main_eotp`), table styling aligned with exception rows; expand shows INT/EXT/DIR detail. **Exception routing:** heading **Exception Routing** on the **same row** as **Edit routing** / **Cancel** (`justify-between`). Exception targets are chosen from **`eotp_definition`** only (**`/api/eotp-routing-target-options`**). Persisted via **`/api/allocation-entities/[id]/eotp-routing`**. Delete routing uses a **dialog** (not `window.confirm`). **Horizontal separator**, then **bottom row:** **Budget by initiative** | **Allocations** editor ( **`/api/allocations`**, **`/api/initiative-allocation-costs`** ) when an initiative is selected.
 
@@ -608,11 +557,11 @@ Master-detail: **left** searchable/filterable table (ID, name from Prénom+Nom, 
 
 ### 7.3 Reports hub (`/reports`)
 
-Sidebar entry **Reports** links to sub-routes (budget rollups, EOTP lines, snapshot rollups, **comparison**, etc.). In-app charts use **Recharts** where implemented; **Power BI** remains the canonical enterprise reporting path for **`v_allocation_costs`** and baseline views.
+Sidebar entry **Reports** links to sub-routes (budget rollups, EOTP lines, snapshot rollups, **comparison**, realized/revenue, etc.). Charts use **Recharts**; data comes from report APIs and SQL views (`v_allocation_costs`, baseline/snapshot/realized views). There is **no** external BI tool in the product.
 
 ### 7.4 Planning vs budget baseline — capture (`/budget-comparison`)
 
-Management screen: **take snapshots** (name, year), **import baselines** (Excel), list/delete with **Dialog** confirmations. This screen **prepares** snapshot and baseline data; **interactive comparison** is on **`/reports/comparison`** (§7.5). For dashboards, use Power BI on **`v_snapshot_detail`** / **`v_baseline_detail`** / **`dim_year`** / **`dim_eotp`** (§5.3).
+Management screen: **take snapshots** (name, year), **import baselines** (Excel), list/delete with **Dialog** confirmations. This screen **prepares** snapshot and baseline data; **interactive comparison** is on **`/reports/comparison`** (§7.5). Snapshot/baseline drilldowns use the views in §5.3.
 
 ### 7.5 Baseline vs planning comparison (`/reports/comparison`)
 
@@ -627,7 +576,7 @@ In-app drilldowns over the realized layer (§5.5):
 - **`/reports/ar`** — Salesforce AR coverage (`v_planned_revenue`) vs realized revenue gap.
 - **`/reports/ar-invoicing`** — **AR invoicing follow-up.** For each AR contract, shows planned revenue (from `ar_entry`) vs invoiced (from `revenue_entry`) and the **delta**. Filters: **Year** (defaults to *All years*; options come from `meta.availableYears` — every year actually present in `ar_entry ∪ revenue_entry`), Division, Subdivision, Team, Product, Status, Mapped/Unmapped, Warnings only, client / master product / contract / counterpart-reference / signed-date range. Lines are grouped client-side by **`counterpart_reference`** (one card per AR contract) and within each card a **table of AR line items** (`sf_product_name`, `Description`, allocation entity, planned, invoiced, delta) drills down on click into the matching SAP `revenue_entry` rows (`sapDocType`, `sapInvoiceNr`, `sapInvoiceItem`, month/year, amount, designation, `extDocRef`, allocation entity). **Cross-year matching:** when `revenue_entry.ar_entry_id` is set (resolver step 1 / step 2 with mapped SF name), the join ignores the year — a 2025 AR contract correctly shows its 2023 SAP invoices. The legacy `(sap_so_number, sf_product_name)` heuristic fallback still requires `re.year = ar.year` to avoid spurious matches between unrelated years. SAP invoice rows whose `ext_doc_ref` matches an AR's `counterpart_reference` but no AR line item are surfaced as a synthetic **"Unmatched line items"** row per `(counterpart_reference, allocation_entity_id)` bucket, displayed with an amber background. Read by **`GET /api/reports/ar-invoicing`** (§6.2).
 
-These supplement (not replace) Power BI; the canonical enterprise dashboards still consume the views directly.
+These are the product reporting surfaces for actuals (alongside planning reports in §7.3–§7.5).
 
 ### 7.7 Imports & realized-data mappings (`/imports`, `/imports/mappings`)
 
@@ -783,7 +732,7 @@ SEED_PROD_RESET=1 npm run db:seed:prod
 # Upsert only (leave existing rows not touched by CSV logic)
 npm run db:seed:prod
 
-# Recreate Power BI views only — no CSV import (`v_allocation_costs`, `v_eotp_costs`, `v_revenues`, snapshot/baseline views, realized-layer views, `dim_eotp`, seed `dim_year`)
+# Recreate reporting views only — no CSV import (`v_allocation_costs`, `v_eotp_costs`, `v_revenues`, snapshot/baseline views, realized-layer views, `dim_eotp`, seed `dim_year`)
 SEED_VIEW_ONLY=1 npm run db:seed:prod
 
 # Recreate only v_eotp_costs (requires v_allocation_costs)
@@ -909,66 +858,33 @@ DATABASE_URL=postgresql://admin:admin@localhost:5432/resource_planner?schema=pub
 
 ---
 
-## 11. Open Questions & Next Steps
+## 11. Gaps, open items & next steps
 
-### 11.1 Open Questions
+Product open questions: [`PRD.md` §12](./PRD.md#12-open-questions-and-risks). Stack-specific notes below.
 
-- **Jira custom field IDs** — The field names for `year` and `initiativeType` (`customfield_xxxxx`) need to be discovered by inspecting a live Jira API response before the sync route can be completed.
-- **Standard rate values** — `nbrDaysPerYear` values (200 internal, 220 external) need confirmation from the business as these drive all FTE → man-days conversions.
-- **Authentication** — App currently has no login. Multi-user with no access control is acceptable for now. Decision needed before production deployment.
-- **Kubernetes deployment** — Company runs a K8s cluster. A Dockerfile needs to be written when ready for production. DevOps team to confirm the deployment pipeline and container registry.
-- **Power BI read-only role** — A `powerbi_reader` Postgres role should be created on the company cluster before connecting Power BI in production:
+### Gaps vs PRD (code to change)
 
-```sql
-CREATE ROLE powerbi_reader WITH LOGIN PASSWORD 'choose_a_password';
-GRANT USAGE ON SCHEMA public TO powerbi_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO powerbi_reader;
-```
+1. **Lock investment catalog APIs** — Remove or restrict `PATCH`/`DELETE` on `/api/allocation-entities/[id]` so catalog fields cannot be edited outside Jira sync (UI is already read-only).
+2. **IdP auth (F36)** — No login today; required before production.
+3. **Admin gate (F37)** — Protect seed/generate admin routes.
+4. **F22 / F38** — Editable snapshot-baseline and resource Excel I/O exist on Java only (Should in PRD).
 
-### 11.2 Prioritised Next Steps
+### Still to confirm / finish
 
-1. **Hardening** — Auth, tests (`vitest`), CI fixes for **`tests/fixtures/load-csv.ts`** typing if needed
-2. **Apply be.brussels colour scheme** globally (sidebar `#1a2f4e`, primary `#185FA5`, background `#f4f6f8`)
-3. **Discover Jira custom field IDs** then finish field mapping in Jira sync (`year`, `initiativeType`, etc.)
-4. **Validate Power BI reports** against `v_allocation_costs` on local Docker Postgres (refresh model after view changes)
-5. **Production deployment** — Push image to registry; apply **`deploy/kubernetes`** (or OpenShift) with DevOps team
+- **Jira custom field IDs** for year, initiative type, Product org/SAP/score fields on the target Cloud instance.
+- **Working days** 200 / 220 / 1.0 — business confirmation (PRD R5).
+- **Deploy** — Image and `deploy/kubernetes` samples exist; wire registry / OpenShift with DevOps.
 
-### 11.3 Changelog — v1.2 (April 2026)
+### Prioritised next steps
 
-Consolidated documentation of major changes since the initial design doc:
+1. Catalog API lockdown + IdP/admin hardening  
+2. Finish Jira field mapping against a real instance  
+3. Validate Recharts reports vs cost views locally  
+4. Production push with DevOps  
 
-- **AR invoicing report — cross-year matching, dynamic year filter, designation-mapped retry, fuzzy mapping CSV (v1.13)** — Three fixes and one tooling refresh on the realized-revenue side:
-  - **`/reports/ar-invoicing` — cross-year AR↔invoice matching.** The lateral join in **`src/app/api/reports/ar-invoicing/route.ts`** previously gated every match on `re.year = ar.year`, which hid revenue rows whose calendar year differs from their AR contract's year (e.g. a 2025 AR carrying SAP invoices booked in 2023). The predicate is now split: **FK link** (`re.ar_entry_id = ar.id`) is year-agnostic, **legacy `(sap_so_number, sf_product_name)` heuristic** still requires `re.year = ar.year` to avoid spurious cross-year matches between unrelated rows. Affects both the row-detail and aggregate-only lateral helpers.
-  - **`/reports/ar-invoicing` — Year filter from real data.** API response gained **`meta.availableYears`** (sorted distinct years from `ar_entry ∪ revenue_entry`); the UI uses it for the Year dropdown instead of the hard-coded `[currentYear-1 .. currentYear+1]` window. The static window remains as a pre-load fallback only.
-  - **Resolver step 2 — retry AR match through `sap_designation_mapping.sf_product_name` (v1.12 follow-up).** **`src/lib/revenue-import-resolve.ts`** now uses a populated `sap_designation_mapping.sf_product_name` to retry the step-1 AR lookup with the mapped SF name + `ext_doc_ref`. Successful retries return as **step 1** (`ar_entry_id` set, `allocation_entity_id` inherited from AR, no warning); failures fall back to allocation-only (mapping's `allocation_entity_id` only) with a granular `STEP 2` warning. This finally closes the loop for designations like `CRM UC` → `CRM - Use Case` so they bind to the correct AR line on import. Re-run **`/imports`** *Re-resolve* (or re-upload the source CSV) after editing mappings.
-  - **`scripts/build-sap-designation-mapping-csv.ts` — fuzzy SF product names + confidence report.** New helper data **`scripts/data/sf-product-names.ts`** (195 canonical Salesforce `Product2.Name` values). The script now scores each SAP designation against this list (Levenshtein + token-overlap + dominant-token constraint), populates **`sf_product_name`** automatically when score ≥ 50 (unless an explicit `OVERRIDES` entry sets it), and **skips redundant rows** where the SAP designation already matches an SF name verbatim (Step 1 of the resolver handles these without a mapping). Side-output **`scripts/datasets/dev/SAP_DESIGNATION_FUZZY_REPORT.md`** lists per-designation: best SF match, score, tier (HIGH/MEDIUM/LOW/REVIEW), runner-up, final SF written to CSV, PRD, and notes — review before seeding to catch low-confidence matches. Removed redundant `DPOaaS-*` overrides; `DPO Analysis` now maps to `DPO - Analysis`. See §9 and §11.3 entry below.
-- **Revenue per SAP invoice line item (v1.12)** — `revenue_entry` now stores **one row per SAP invoice line item** (`Poste`, col 48) instead of one per `Facture`. Migration **`20260510121147_revenue_entry_invoice_item`** adds **`sap_invoice_item INTEGER NOT NULL`** (legacy rows backfilled to `0`) and replaces the unique key `(sap_invoice_nr, year)` with **`(sap_invoice_nr, year, sap_invoice_item)`**. Parser **`src/lib/sap-revenue-parser.ts`** reads col 48 into **`sapInvoiceItem`**; **`POST /api/imports/revenue`** upserts on the new triple key. Effect: a single `Facture` like `90836590` carrying `CRM UC` (item 10), `CRM Framework` (item 30/40) and `Consultance Expertise` (item 50) is no longer collapsed — `v_realized_revenue` and the **AR invoicing follow-up** report (§7.6) now see the true per-product breakdown. After applying the migration, **re-import** the source CSV; legacy `(…, item=0)` rows from prior imports can be cleared by deleting the stale `revenue_import` headers (cascade). See §4.14, §6.2, design doc §3.6 / §5.10 / §13.
-- **Realized costs & revenue layer (v1.11)** — End-to-end realized layer landed (timesheets, VIM supplier invoices, Salesforce AR, SAP client revenue), aligned with **`calude-design/claude_realized-costs-revenue-design.md`**. New tables: **`timesheet_import` / `timesheet_entry`**, **`invoice_import` / `invoice_entry`**, **`ar_import` / `ar_entry`**, **`revenue_import` / `revenue_entry`** (§4.13); managed mapping tables **`sn_programme_mapping`**, **`sn_project_mapping`**, **`sf_master_product_mapping`**, **`sap_designation_mapping`** (§4.12). **`revenue_entry`** gains **`sap_doc_type`** (`ZCS`/`ZCR`), **`ext_doc_ref`** (col 40), **`ar_entry_id`** (FK → `ar_entry`) — migration **`20260510063935_revenue_entry_ar_link`**; **`sap_designation_mapping`** in migration **`20260510064047_sap_designation_mapping`**. Parser **`src/lib/sap-revenue-parser.ts`** now negates `amount_eur` on `ZCR` and falls back to **Excel 1900-system serial dates** when col 59 is not `DD/MM/YYYY` (newer SAP exports). Resolver **`src/lib/revenue-import-resolve.ts`** rewritten to a **4-step priority** (§4.14): AR match by `(designation, ext_doc_ref)` → `sap_designation_mapping` → EOTP root → null. **`POST /api/imports/revenue`** returns `{ step1Count, step2Count, step3Count, step4Count, warnCount }`. Realized-layer reporting views in **`scripts/realized-views.ts`** (`v_realized_costs`, `v_planned_revenue`, `v_realized_revenue`); recreated by `SEED_VIEW_ONLY=1 npm run db:seed:prod` (§5.5). New screens **`/imports`** and **`/imports/mappings`** (§7.7); **`/reports/realized-costs`**, **`/reports/revenu`**, **`/reports/ar`** (§7.6). New seed scripts and bootstraps: `seed-sn-programme-mapping.ts`, `seed-sn-project-mapping.ts`, `seed-sf-master-product-mapping.ts`, `seed-sap-designation-mapping.ts`, plus generators `build-sap-designation-mapping-csv.ts` and `build-sf-master-product-mapping-suggestions.ts` (§9). Existing planner views and `ar_entry` / `timesheet_entry` / `invoice_entry` were **not** modified.
-- **Baseline vs planning in-app + export (v1.10)** — **`/reports/comparison`**: live planning or snapshot vs imported baseline; **`GET /api/reports/comparison`** with optional **`snapshotId`**; **`src/lib/comparison-live.ts`**, **`src/lib/export-comparison-xlsx.ts`** (exceljs, real Excel Table, **`Baseline-Planning_Comparison_{year}_{date}.xlsx`**). **`computeAllocationBreakdownForYear`** extracted in **`src/lib/snapshot.ts`** for reuse. SQL: **`catchout`** renamed to **`cash_out`** in **`v_snapshot_detail`**, **`v_comparison`**, snapshot rollups; docs and DAX examples updated. **Prod CSV gen:** **`xlsx-to-prod-data-auto.ts`** copies **`EOTP_ROUTING.csv`** into prod-import when available. **Investments:** budget initiatives grouped by **initiative type** (`GET …/budget` returns **`initiative_type`**). **Jira CLI:** product create maps select-list fields to Jira option IDs. **Budget report:** drill-down sets level once per click. See §4.9, §5.3, §7.3–§7.5, §8.1, §9.
-- **Docker / OpenShift prep** — Multi-stage **`Dockerfile`** (Next **standalone**, non-root, **`PORT=8080`**), **`compose.yaml`** (Postgres + optional **`app`** profile), **`GET /api/health`**, **`deploy/README.md`** and **`deploy/kubernetes/`** samples. Prisma reads **`process.env["DATABASE_URL"]`**; build uses a dummy URL only for **`prisma generate`** / **`next build`**; runtime **`DATABASE_URL`** from container env. **`/investments`** is **`force-dynamic`** to avoid DB access during image build. Rebuild image after code changes.
-- **Revenue assignment (v1.9)** — **`RevenueType`** enum (**`Mission`** \| **`Subscription`**); **`InitiativeRevenue`** (table **`initiative_revenue`**) — **multiple** rows per initiative (`type`, `comment`, EUR **`amount`**). Seeded from **`REVENU.csv`** (**`npm run db:seed:revenues`**, all lines **`Mission`**; delete-then-insert). API: **`GET` / `POST /api/revenues`**, **`PATCH` / `DELETE /api/revenues/[id]`**; budget API returns **`total_revenue`** + per-type sums. UI: **`InvestmentDetailRevenuePanel`** (grouped table, drafts, auto-save, delete **Dialog**); **Budget Key Figures**: **Revenues** + **Margin**. Power BI: **`v_revenues`** one row per revenue line (varchar casts); use **independently** of **`v_allocation_costs`** (different grain).
-- **Investment allocation drafts + API (v1.8)** — **`POST /api/allocations`** requires **`resourceId`** (no default first resource). **Resource allocations** panel: client-side **draft** rows at the **top** of the table until a resource is chosen; then **`POST`** persists. **`InvestmentDetailAllocationsPanel`**, **`InvestmentDetailAllocationEditor`**, **`InvestmentDetailAllocationPendingRow`**, **`use-investment-initiative-allocations`**. Delete row control: **`Trash2`** + outline styling (same as **Daily rates** on **`/resources`**). See §7.1.
-- **Planning vs budget baseline (v1.7)** — **AllocationSnapshot** / **AllocationSnapshotRow**, **BudgetBaseline** / **BudgetBaselineRow**, **DimYear**; **`takeSnapshot`** (`src/lib/snapshot.ts`) freezes **`computeEotpBreakdown`** + **`v_allocation_costs`** aggregates; baseline Excel via **`xlsx`** (`src/lib/baseline-parser.ts`). APIs: **`/api/snapshots`**, **`/api/baselines`**. UI **`/budget-comparison`**. Seed: **`v_snapshot_detail`**, **`v_baseline_detail`**, **`dim_eotp`**, **`dim_year`** in **`scripts/seed-production.ts`**. Power BI: **`dim_eotp`** bridges **`eotp`** on both detail views. **`getUserFromRequest`** (`src/lib/auth.ts`). README: Power BI setup for baseline comparison.
-- **EOTP definition catalog + routing UI (v1.6)** — Prisma **`EotpDefinition`** / table **`eotp_definition`**; optional **`eotp_definition_id`** on **`allocation_entity`** and **`eotp_routing`** (migration **`20260412130000_eotp_definition_catalog`**). Seeds: **`npm run db:seed:eotp`** (`EOTP-Budget-Owner.csv`); optional **`npm run db:backfill:eotp-routing-fks`**. APIs: **`GET /api/eotp-routing-target-options`**; **`GET/PATCH`** allocation-entity and eotp-routing routes resolve or persist definition links (**`src/lib/eotp-definition-resolve.ts`**, **`eotp-target-options.ts`**, **`eotp-routing-target-options-query.ts`**). Investment **EOTP routing** panel: main lines from **`eotp-main-from-view`**; **Exception Routing** title **aligned with Edit routing**; exception target combobox from **definitions only**; delete **Dialog**. **Tests:** **`tests/fixtures/load-csv.ts`** typing fix for Vitest. After markup changes, **`rm -rf .next`** / hard refresh avoids stale SSR hydration mismatches in dev.
-- **Investment detail layout + resources UX (v1.5)** — Modular **`InvestmentDetailClient`** and panels; **title** = name **·** year; year selector column-aligned with **Details**; **Budget Summary {year}** card (EOTP routing) top-right vs Details; **separator**; **Budget by initiative** + **Allocations** row. **Resources** screen: **`PANEL_CARD_CLASS`**, details/rates editing, rate **auto-save**, add-rate draft row, delete **modal**, **CRPS/PDS** direction validation, **`resource-display-name`**. **Prod seed:** **`RESSOURCES.csv`** read as **UTF-8**. Shared **`src/lib/panel-card.ts`**, **`resource-direction.ts`**, **`resource-display-name.ts`**.
-- **Schema baseline + physical rename (v1.4)** — Incremental migrations were **squashed** into a single migration **`20260405120000_baseline`**. PostgreSQL table **`allocation_entity`** replaces legacy **`product`**; FK columns **`allocation_entity_id`** on **`initiative`** and **`eotp_routing`** replace **`productId`**. Seeds, **`v_allocation_costs`** / **`v_eotp_costs`** SQL, EOTP CSV helpers, and allocation-entity API routes use the new names. **`npm run db:migrate`** runs **`prisma migrate deploy`**. **Breaking:** refresh Power BI / any native SQL; run **`migrate deploy`** on each database; **`prisma generate`** (or **`npm install`**) + **`rm -rf .next`** if the app still targets old table names.
-- **Investments list error UX (v1.4)** — **`GET /api/allocation-entities`** returns JSON **`{ error }`** on failure; **`/investments`** shows HTTP/Prisma errors and distinguishes empty DB vs filter mismatch.
-- **AllocationEntity + main app (v1.3)** — Prisma **`AllocationEntity`** maps to table **`allocation_entity`**; **`entity_type`** column + enum; **`Initiative.allocationEntityId`** / **`EotpRouting.allocationEntityId`** map to DB **`allocation_entity_id`**. Canonical REST under **`/api/allocation-entities`**; **`/api/resources`** and **`/api/initiative-allocation-costs`**; UI primary route **`/investments`**; removed **`/initiatives`** and **`/api/test/*`** (no legacy redirects in dev).
-- **Rate.nbrDaysPerYear NOT NULL** — **`rate.nbrDaysPerYear`** is required; **`v_allocation_costs`** uses only the individual rate row for days/year (no fallback to **`rate_standard`** for FTE multipliers). Migration backfills legacy nulls; **`RATES.csv`** / dev **`Rates.csv`** rows without days are skipped at seed. **`dailyRate`** may still **`COALESCE`** to **`rate_standard`** when missing.
-- **Products prototype & EOTP polish (v1.2.5)** — Single **year** strip (between product card and EOTP card) drives budget, routing, and **`eotp-main-from-view`**. **`v_eotp_costs`** adds **`cash_out`** and **`total_cost`**; view SQL simplified (**`routed_non_main`** + **`UNION ALL`**); main row uses **`sapEotpName`** as label. API **`GET /api/products/[id]/eotp-main-from-view`**; POST/PATCH **eotp-routing** rejects targeting the **main SAP EOTP** (**`eotp-routing-validation.ts`**). Prototype EOTP table: main remainder row from the view, then exceptions; columns align with **Internal / External / Direct / Total / Cash out**; unified table header styling with initiative and assignment tables; budget/assignment grids use the same **Internal / External / Direct / Total** labels as EOTP.
-- **EOTP routing (v1.2.4)** — **`EotpRouting`** model: one row per `(allocation_entity_id, year, eotp)` with **`internalAmount` / `externalAmount` / `directAmount`** (EUR); no percent / no per–cost-type rows. **`v_eotp_routing`** view **removed**; **`v_eotp_costs`** retained for Power BI. APIs: **`/api/products/[id]/eotp-routing`**, **`.../eotp-routing/[routingId]`**; budget API includes **`eotpBreakdown`**. CSV: **`EOTP_ROUTING.csv`** + **`db:seed:routing`**. Prototype: EOTP routing card + main-EOTP code **pill** when `eotp === sapEotpCode`. Shared view SQL: **`scripts/eotp-views.ts`**; **`npm run db:recreate:eotp-costs`** rebuilds **`v_eotp_costs`** only.
-- **Products prototype (v1.2.3)** — `src/app/test/products/**` and `src/app/api/test/**`: product list with budget columns; product detail with budget-by-initiative and initiative allocation editor; test APIs read from `v_allocation_costs` and Prisma; allocation responses include `resource.type` for grouping; assignment UI uses €k abbreviation (`formatK`) aligned with initiative list styling.
-- **Product model** — `allocation_entity` table + `Initiative.allocation_entity_id`; SAP EOTP split into `sapEotpCode` / `sapEotpName`; optional org/marketing fields (`productFamily`, `division`, `subDivision`, `team`, scores).
-- **API** — `GET /api/products`, `GET /api/products/[id]`.
-- **Jira sync** — Resolves `allocation_entity_id` from components ↔ `AllocationEntity.name` (case-insensitive).
-- **Single production seed** — One `scripts/seed-production.ts` (merged former alternate script): CSV merge rules, `RateStandard` fallback path, `createCostView()` with product join and corrected cost/FTE/`calculated_man_days` logic.
-- **Allocations CSV merge** — Duplicate MAT×RI rows: **sum** `quantity` (%); **first positive man-days** in CSV order wins (not summed).
-- **`SEED_PROD_RESET`** — Clears planner tables but **preserves** `allocation_entity`.
-- **Power BI view** — Extra columns (`allocation_id`, `power_id`, product dimensions, SAP, `effective_days_per_year`); staff FTE columns populated from man-days via implied FTE; direct-cost quantity path uses per-unit days from the individual rate or **1** if absent (see §2.6 — avoids treating missing licence rates as 200 “man-days”).
-- **Direct cost without rate row (v1.2.1)** — `createCostView()` in `seed-production.ts` / `seed-dev.ts`: DIRECT_COST quantity and `effective_days_per_year` default to a **unit multiplier of 1** when there is no matching `Rate` for the initiative year, instead of falling back to INTERNAL `RateStandard` (200 days). Dropped unused `rs_dc` join from the prod view.
-- **Initiatives Product card (v1.2.2)** — Flat `InitiativeDTO` + `JSON.parse(JSON.stringify)` on the server list; client fetches full **`Product`** via `/api/products/[id]` (or list + name match) on selection so SAP/org fields display reliably despite `dynamic(..., { ssr: false })` (see §6.3). `initiatives-dynamic-shell.tsx` wraps the page client.
-- **Migrations** — When altering columns referenced by `v_allocation_costs`, migrations may need `DROP VIEW IF EXISTS v_allocation_costs` first.
-- **Repository** — Large or sensitive production CSVs may be gitignored; initiative/assignment exports are excluded from version control by policy.
+### History
+
+Detailed feature changelog previously lived in this section (v1.2–v1.13). Prefer **`git log`** for history; current documented baseline is **v1.13** (realized layer + AR invoicing report).
 
 ---
 
@@ -979,7 +895,7 @@ src/
   app/
     layout.tsx                  ← Root layout (nav sidebar, header)
     page.tsx                    ← Redirect to /investments
-    budget-comparison/page.tsx  ← Snapshots + baseline import (Power BI data prep)
+    budget-comparison/page.tsx  ← Snapshots + baseline import (data prep for in-app comparison)
     reports/comparison/page.tsx ← Baseline vs planning (live or snapshot), Excel export
     investments/page.tsx        ← Investment list + budget columns
     investments/[id]/page.tsx   ← Investment detail shell
@@ -1091,4 +1007,4 @@ scripts/
 
 ---
 
-*Last updated: May 2026 — Resource Planner v1.13 (see §11.3 changelog)*
+*Last updated: 2026-10-28 — Node technical design aligned with PRD v0.1 (v1.13 feature baseline)*
