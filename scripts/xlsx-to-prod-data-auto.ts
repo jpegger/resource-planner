@@ -250,6 +250,12 @@ function isPercentAssignmentSheetColumn(header: string): boolean {
   return h.startsWith("percent assignement") || h.startsWith("percent assignment");
 }
 
+/** Man-days are stored as fractions (0.0625, 0.0375). The displayed text is rounded to one decimal. */
+function isManDaysSheetColumn(header: string): boolean {
+  const h = stripBom(header).trim().toLowerCase();
+  return h.startsWith("man days") || h.startsWith("man-days") || h === "mandays";
+}
+
 function headerKey(headers: string[], wanted: string): string {
   const clean = (s: string) =>
     stripBom(s)
@@ -473,8 +479,9 @@ async function main(): Promise<void> {
 
         const formatManDaysForCsv = (n: number): string => {
           if (!Number.isFinite(n) || n <= 0) return "";
-          const rounded = Math.round(n * 100) / 100;
-          return rounded % 1 === 0 ? rounded.toFixed(1) : String(rounded);
+          // Four decimals matches allocations.man_days numeric(19, 4) and keeps eighths of a day.
+          const rounded = Math.round(n * 10000) / 10000;
+          return String(rounded);
         };
 
         const accByPair = new Map<string, Acc>();
@@ -688,7 +695,8 @@ async function main(): Promise<void> {
 
   for (const spec of specs) {
     const inRows = sheetToObjects(wb, spec.sheetName, spec.headerRow0, {
-      preferStoredFractionForHeader: isPercentAssignmentSheetColumn,
+      preferStoredFractionForHeader: (header) =>
+        isPercentAssignmentSheetColumn(header) || isManDaysSheetColumn(header),
     });
     const kept = spec.keepRow ? inRows.filter(spec.keepRow) : inRows;
     const outRows = spec.mapRows ? spec.mapRows(kept) : kept.map(spec.mapRow);
