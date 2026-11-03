@@ -18,7 +18,15 @@ function matchesDropdowns(
 
 function matchesSearch(p: InvestmentsListRow, q: string): boolean {
   if (!q) return true;
-  const hay = [p.name, p.productFamily ?? "", p.division ?? "", p.team ?? ""]
+  const hay = [
+    p.id,
+    p.name,
+    p.productFamily ?? "",
+    p.division ?? "",
+    p.team ?? "",
+    p.sapEotpCode ?? "",
+    p.sapEotpName ?? "",
+  ]
     .join(" ")
     .toLowerCase();
   return hay.includes(q);
