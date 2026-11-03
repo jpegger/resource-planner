@@ -27,6 +27,8 @@ export function jiraToken(): string {
     (process.env.JIRA_TOKEN ?? Object.entries(process.env).find(([k]) => k.trim() === "JIRA_TOKEN")?.[1])?.trim() ||
     (process.env.JIRA_API_TOKEN ?? Object.entries(process.env).find(([k]) => k.trim() === "JIRA_API_TOKEN")?.[1])?.trim();
   if (!raw) throw new Error("Missing required environment variable: JIRA_TOKEN (or JIRA_API_TOKEN)");
+  // Modern Atlassian API tokens are ~192 chars: ATATT…=<8-char hex CRC32 checksum>.
+  // Keep the checksum — it is part of the secret (do not strip digits/hex after `=`).
   return raw;
 }
 

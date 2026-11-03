@@ -33,6 +33,7 @@
     "db:seed:sn-projects": "dotenv -e .env -- tsx scripts/seed-sn-project-mapping.ts",
     "import:realized": "dotenv -e .env -- tsx scripts/import-realized-csv.ts",
     "db:prod:generate-csv": "dotenv -e .env -- bash -lc 'tsx scripts/xlsx-to-prod-data-auto.ts --input \"$PROD_IMPORT_XLSX_PATH\" --outDir scripts/datasets/prod-import'",
+    "jira:export-service-pulse": "dotenv -e .env -- tsx scripts/jira/export-service-pulse-xlsx.ts",
     "db:backfill:eotp-routing-fks": "dotenv -e .env -- tsx scripts/backfill-eotp-routing-eotp-definition-ids.ts",
     "db:convert:eotp-csv": "dotenv -e .env -- tsx scripts/convert-eotp-routing-csv.ts",
     "db:rebuild:routing-csv": "dotenv -e .env -- tsx scripts/rebuild-eotp-routing-csv.ts",

@@ -66,6 +66,26 @@ export type ProductFieldIds = {
   typeProduct?: string;
 };
 
+/** Custom fields used by the Service Pulse board export. */
+export type ServicePulseFieldIds = {
+  team?: string;
+  statutService?: string;
+  visionProduit?: string;
+  segmentClient1?: string;
+  segmentClient2?: string;
+  segmentClient3?: string;
+  axeLo1?: string;
+  axeLo2?: string;
+  axeLo3?: string;
+  nbClientsActifs?: string;
+  kpiNom?: string;
+  kpiValeur?: string;
+  kpiTendance?: string;
+  tag?: string;
+  year?: string;
+  riType?: string;
+};
+
 export async function loadJiraFieldCatalog(client: Version3Client): Promise<JiraFieldMeta[]> {
   try {
     const rows = await client.issueFields.getFields();
@@ -106,5 +126,69 @@ export function resolveProductFieldIds(fields: JiraFieldMeta[], env: ProductFiel
   const typeProduct = resolve(env.typeProduct, ["(RI) Type Product", "(RI) Type product", "Type Product"], /\btype\b.*\bproduct\b/i);
 
   return { productFamily, division, subDivision, team, sapProgFin, attractiveness, competitiveness, typeProduct };
+}
+
+export function resolveServicePulseFieldIds(
+  fields: JiraFieldMeta[],
+  env: Partial<ServicePulseFieldIds> = {}
+): ServicePulseFieldIds {
+  const exclude = new Set<string>();
+  const resolve = (explicit: string | undefined, candidates: string[], regex?: RegExp) => {
+    const fromEnv = tryResolveFieldFromNameOrId(fields, explicit, exclude);
+    if (fromEnv) {
+      exclude.add(fromEnv);
+      return fromEnv;
+    }
+    const id = findFieldIdByExactNames(fields, candidates) ?? (regex ? findFieldIdByRegex(fields, regex) : undefined);
+    if (id) exclude.add(id);
+    return id;
+  };
+
+  return {
+    team: resolve(env.team, ["(RI) TEAM", "(RI) Team", "Team"]),
+    statutService: resolve(env.statutService, ["(RI) Statut Service", "Statut Service"]),
+    visionProduit: resolve(env.visionProduit, ["(RI) Vision Produit", "Vision Produit"]),
+    segmentClient1: resolve(env.segmentClient1, ["(RI) Segment Client 1", "Segment Client 1"]),
+    segmentClient2: resolve(env.segmentClient2, ["(RI) Segment Client 2", "Segment Client 2"]),
+    segmentClient3: resolve(env.segmentClient3, ["(RI) Segment Client 3", "Segment Client 3"]),
+    axeLo1: resolve(
+      env.axeLo1,
+      [
+        "(RI) Axe stratégique 1 – Lettre d'orientation",
+        "(RI) Axe stratégique 1 - Lettre d'orientation",
+        "(RI) Axe strategique 1 – Lettre d'orientation",
+      ],
+      /axe\s*strat[eé]gique\s*1/i
+    ),
+    axeLo2: resolve(
+      env.axeLo2,
+      [
+        "(RI) Axe stratégique 2 – Lettre d'orientation",
+        "(RI) Axe stratégique 2 - Lettre d'orientation",
+        "(RI) Axe strategique 2 – Lettre d'orientation",
+      ],
+      /axe\s*strat[eé]gique\s*2/i
+    ),
+    axeLo3: resolve(
+      env.axeLo3,
+      [
+        "(RI) Axe stratégique 3 – Lettre d'orientation",
+        "(RI) Axe stratégique 3 - Lettre d'orientation",
+        "(RI) Axe strategique 3 – Lettre d'orientation",
+      ],
+      /axe\s*strat[eé]gique\s*3/i
+    ),
+    nbClientsActifs: resolve(
+      env.nbClientsActifs,
+      ["(RI) Nombre de clients actifs", "Nombre de clients actifs"],
+      /nombre\s*de\s*clients\s*actifs/i
+    ),
+    kpiNom: resolve(env.kpiNom, ["(RI) KPI Nom", "KPI Nom"]),
+    kpiValeur: resolve(env.kpiValeur, ["(RI) KPI Valeur", "KPI Valeur"]),
+    kpiTendance: resolve(env.kpiTendance, ["(RI) KPI Tendance", "KPI Tendance"]),
+    tag: resolve(env.tag, ["Tag", "(RI) Tag"], /^tag$/i),
+    year: resolve(env.year, ["(RI) Year", "Year", "Année", "Annee"], /\(\s*ri\s*\)\s*year\b/i),
+    riType: resolve(env.riType, ["(RI) Type", "(RI) type", "Initiative Type"], /\(\s*ri\s*\)\s*type\b/i),
+  };
 }
 
