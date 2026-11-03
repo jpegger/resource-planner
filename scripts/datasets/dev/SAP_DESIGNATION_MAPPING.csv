@@ -48,6 +48,7 @@ FIDUS,FIDUS,PRD-FIDUS,override | SF from fuzzy HIGH 100% → FIDUS
 FMS_UC,Financial management use case,PRD-WEPULSE_FIN,REVIEW: FMS assumed WePulse FIN; confirm with controlling
 Gestion Intune Tenant dédié,MS365 Intune - Setup,PRD-MS365_INTUNE,override | SF from fuzzy MEDIUM 71% → MS365 Intune - Setup
 HMS UC,HMS use case,PRD-HMS,HMS use-case billing
+HMS UC,HMS - Use Case,PRD-HMS,HMS use-case billing
 Implementation and Setup 365,MS365 Implementation and Setup,PRD-MS365_ONBOARDING,REVIEW: onboarding vs generic MS365 | SF from fuzzy HIGH 90% → MS365 Implementation and Setup
 Intranet 365,MS365 Intranet - Setup,PRD-MS365_ASSISTANCE_365,"token ""365"" in MS365/Assistance 365 | SF fuzzy MEDIUM 77% → MS365 Intranet - Setup"
 Intranet 365_Déploiement,MS365 Intranet - Setup,PRD-MS365_ASSISTANCE_365,"token ""365"" in MS365/Assistance 365 | SF fuzzy MEDIUM 74% → MS365 Intranet - Setup"
@@ -99,7 +100,7 @@ vDC - annule 6000000653 du 25.09.2025,vDC,PRD-VDC,Cancellation; same product | S
 vDC Add-on Consume,vDC,PRD-VDC,vDC add-on | SF from fuzzy MEDIUM 72% → vDC
 VPN,VPN - Connect,PRD-VPN,exact name match: VPN | SF fuzzy HIGH 86% → VPN - Connect
 VPN MFA Set-up,VPN - xFA Set-up,PRD-VPN,fuzzy contains: VPN | SF fuzzy HIGH 90% → VPN - xFA Set-up
-VPN non-managed,VPN - Managed,PRD-VPN,fuzzy contains: VPN | SF fuzzy HIGH 90% → VPN - Managed
+VPN non-managed,VPN - Unmanaged,PRD-VPN,fuzzy contains: VPN | SF fuzzy HIGH 90% → VPN - Managed
 VPN unmanaged,VPN - Unmanaged,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - Unmanaged
 VPN xFA Set-up,VPN - xFA Set-up,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - xFA Set-up
 VPN_Connect,VPN - Connect,PRD-VPN,override | SF from fuzzy HIGH 99% → VPN - Connect
@@ -112,3 +113,5 @@ Workplace licence MS,Workplace FrontLine,PRD-MS365_LICENCES,"token ""licence"" i
 Workplace MS365/E3,MS365 Workplace Essential,PRD-MS365_ASSISTANCE_365,"token ""ms365"" in MS365/Assistance 365 | SF fuzzy HIGH 90% → MS365 Workplace Essential"
 Workplace MS365/F3,MS365 Workplace Essential,PRD-MS365_ASSISTANCE_365,"token ""ms365"" in MS365/Assistance 365 | SF fuzzy HIGH 90% → MS365 Workplace Essential"
 Workplace O365/E3,Workplace FrontLine,PRD-MS365_LICENCES,REVIEW: O365 E3 licence line | SF from fuzzy MEDIUM 78% → Workplace FrontLine
+service bodyshopping(EUR)-Livré,IT Cells,RI-2324,Manual 
+dienst bodyshopping(EUR)-Gedeliv.,IT Cells,RI-2324,Manual 

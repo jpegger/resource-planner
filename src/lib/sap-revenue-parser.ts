@@ -18,6 +18,129 @@ function splitSemicolonLine(line: string): string[] {
   return line.split(";").map((c) => c.trim().replace(/^"|"$/g, ""));
 }
 
+/** Normalize CSV header for matching (diacritics stripped, lowercased). */
+function normalizeSapHeaderLabel(raw: string): string {
+  return raw
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+}
+
+/** SAP activity sector **12** = bodyshopping — col 40 external sales doc ref is often empty; AR link uses `Référence client`. */
+const ACTIVITY_SECTOR_BODYSHOPPING = "12";
+
+function findActivitySectorColumnIndex(headerParts: string[]): number | null {
+  for (let i = 0; i < headerParts.length; i++) {
+    const n = normalizeSapHeaderLabel(headerParts[i] ?? "");
+    if (!n) continue;
+    const hasSecteur = n.includes("secteur");
+    const hasActivite = n.includes("activit");
+    const activitySectorEn = n.includes("activity") && n.includes("sector");
+    if ((hasSecteur && hasActivite) || activitySectorEn) return i;
+  }
+  return null;
+}
+
+/**
+ * Column whose header is specifically **Référence client** (not generic “counterpart” labels).
+ * Used when `Secteurs d'activité` = 12 to populate `ext_doc_ref` for AR matching.
+ */
+function findReferenceClientColumnIndex(headerParts: string[]): number | null {
+  let bestIdx: number | null = null;
+  let bestScore = 0;
+  for (let i = 0; i < headerParts.length; i++) {
+    const n = normalizeSapHeaderLabel(headerParts[i] ?? "");
+    if (!n || !n.includes("reference") || !n.includes("client")) continue;
+    let score = 2;
+    if (n === "reference client") score = 5;
+    else if (n.startsWith("reference client") && n.length < 48) score = 4;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/**
+ * ZCOMM header row: find the column that carries the customer / counterpart reference
+ * (often "Référence client") when col 40 "Numéro externe de document de vente" is empty.
+ */
+function findClientReferenceColumnIndex(headerParts: string[]): number | null {
+  let bestIdx: number | null = null;
+  let bestScore = 0;
+  for (let i = 0; i < headerParts.length; i++) {
+    const n = normalizeSapHeaderLabel(headerParts[i] ?? "");
+    if (!n) continue;
+    const hasReferenceWord = n.includes("reference");
+    const looksLikeRefAbbrev =
+      /\bref\b/.test(n) || n.includes("ref.") || n.includes("ref ");
+    if (!hasReferenceWord && !looksLikeRefAbbrev) continue;
+
+    let score = 1;
+    if (n.includes("client")) score = 3;
+    else if (n.includes("contrepartie") || n.includes("counterpart")) score = 2;
+    else if (hasReferenceWord) score = 2;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/** Salesforce AR-style counterpart reference (subset — fast filter before DB match). */
+const AR_COUNTERPART_PATTERN = /^AR-\d+/i;
+
+/**
+ * Primary: col 40 (Numéro externe de document de vente).
+ * **Bodyshopping (secteurs d'activité = 12):** col 40 is usually empty — use **Référence client**
+ * first for AR `counterpart_reference` matching, then col 40, then generic client-ref / scan.
+ */
+function resolveExtDocRef(
+  parts: string[],
+  clientRefCol: number | null,
+  activitySectorCol: number | null,
+  referenceClientCol: number | null
+): string | null {
+  const sectorRaw =
+    activitySectorCol != null ? (parts[activitySectorCol] ?? "").trim() : "";
+  const bodyshopping = sectorRaw === ACTIVITY_SECTOR_BODYSHOPPING;
+
+  const from40 = (parts[40] ?? "").trim();
+  const fromRefClientCol =
+    referenceClientCol != null ? (parts[referenceClientCol] ?? "").trim() : "";
+
+  if (bodyshopping) {
+    if (fromRefClientCol) return fromRefClientCol;
+    if (from40) return from40;
+    if (clientRefCol != null) {
+      const fromGenericClient = (parts[clientRefCol] ?? "").trim();
+      if (fromGenericClient) return fromGenericClient;
+    }
+    for (const idx of [39, 38, 37, 36, 35, 34, 33]) {
+      const t = (parts[idx] ?? "").trim();
+      if (t && AR_COUNTERPART_PATTERN.test(t)) return t;
+    }
+    return null;
+  }
+
+  if (from40) return from40;
+
+  if (clientRefCol != null) {
+    const fromClient = (parts[clientRefCol] ?? "").trim();
+    if (fromClient) return fromClient;
+  }
+
+  for (const idx of [39, 38, 37, 36, 35, 34, 33]) {
+    const t = (parts[idx] ?? "").trim();
+    if (t && AR_COUNTERPART_PATTERN.test(t)) return t;
+  }
+  return null;
+}
+
 function parseDdMmYyyy(raw: string): { year: number; month: number; day: number } | null {
   const s = raw.trim();
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
@@ -67,12 +190,18 @@ export function parseSapClientInvoiceCsv(text: string): {
   if (lines.length === 0) return { rows: [], totalLines: 0, skipped: 0 };
 
   let start = 0;
+  let clientRefCol: number | null = null;
+  let activitySectorCol: number | null = null;
+  let referenceClientCol: number | null = null;
   const probe = splitSemicolonLine(lines[0] ?? "");
   if (
     probe.length > 41 &&
     (probe[41]?.toLowerCase().includes("facture") || probe[4]?.toLowerCase().includes("vente"))
   ) {
     start = 1;
+    clientRefCol = findClientReferenceColumnIndex(probe);
+    activitySectorCol = findActivitySectorColumnIndex(probe);
+    referenceClientCol = findReferenceClientColumnIndex(probe);
   }
 
   const rows: SapClientInvoiceRow[] = [];
@@ -133,7 +262,7 @@ export function parseSapClientInvoiceCsv(text: string): {
       sapInvoiceNr,
       sapInvoiceItem,
       sapSalesOrder: (parts[4] ?? "").trim() || null,
-      extDocRef: (parts[40] ?? "").trim() || null,
+      extDocRef: resolveExtDocRef(parts, clientRefCol, activitySectorCol, referenceClientCol),
       clientName: (parts[6] ?? "").trim() || null,
       sapArticleCode: (parts[20] ?? "").trim() || null,
       productLabel: (parts[23] ?? "").trim() || null,

@@ -19,7 +19,10 @@ export type RevenueResolution = {
  *     (same query as step 1: counterpart_reference + sf_product_name). If an AR line
  *     exists → same outcome as step 1 (`arEntryId`, allocation from AR, no warning).
  *     Otherwise → `allocationEntityId` from mapping only (if any) — warning.
- *  3. ext_doc_ref empty → extract root EOTP from `eotp_full`
+ *  2b. ext_doc_ref empty, designation set → `sap_designation_mapping` by designation only.
+ *     If the row has an `allocation_entity_id`, apply it (`arEntryId` stays null; no AR tie).
+ *     (Many internal SAP lines omit counterpart ref; step 2 above would never run.)
+ *  3. ext_doc_ref empty (and 2b did not apply) → extract root EOTP from `eotp_full`
  *     → look up `eotp_definition.sap_eotp_code` → `allocation_entity` — no warning
  *  4. Nothing resolves → NULL + warning
  */
@@ -94,6 +97,22 @@ export async function resolveRevenueEntry(input: {
       importWarning: `STEP 2: AR not matched, designation not mapped: ${designation ?? "(empty)"}`,
       step: 2,
     };
+  }
+
+  // STEP 2b — Designation map without ext_doc_ref (no AR match possible; allocation only)
+  if (!extDocRef && designation) {
+    const mapOnly = await prisma.sapDesignationMapping.findUnique({
+      where: { sapDesignation: designation },
+      select: { allocationEntityId: true },
+    });
+    if (mapOnly?.allocationEntityId) {
+      return {
+        arEntryId: null,
+        allocationEntityId: mapOnly.allocationEntityId,
+        importWarning: null,
+        step: 2,
+      };
+    }
   }
 
   // STEP 3 — EOTP fallback (pre-SF contracts, expected — no warning)
