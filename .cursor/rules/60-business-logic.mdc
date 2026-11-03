@@ -23,6 +23,27 @@ Every resource belongs to one of three types. The type determines the entire cos
 
 ---
 
+## Run vs Build (reporting bucket)
+
+Jira stores a free-form **`(RI) Type`** on each initiative (`initiative.initiativeType`:
+Run, Rollout, Evolution, Projet, Analyse, …). For reporting, Paradigm collapses that to two
+buckets:
+
+```
+Run vs Build =
+  if (RI) Type = "Run" then "Run"
+  else "Build"
+```
+
+- **Run** — only when `(RI) Type` is exactly `"Run"`.
+- **Build** — every other type (Rollout, Evolution, Projet, Analyse, empty, …), including
+  initiatives whose **summary** says “Build Clients” / “Build Plateform”.
+- “Build” is **not** a Jira `(RI) Type` value; it is this derived classification only.
+- The app stores the raw `(RI) Type` string; apply this mapping at report/filter time when a
+  Run/Build split is needed.
+
+---
+
 ## manDays vs. quantity — Precedence
 
 - If `manDays > 0`, it takes **precedence** over `quantity` for both cost and FTE calculations.

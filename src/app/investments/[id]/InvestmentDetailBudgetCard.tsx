@@ -9,6 +9,7 @@ import {
   TABLE_HEAD_ROW_BG,
   TABLE_HEAD_TOTAL_CLASS,
 } from "@/app/investments/[id]/investment-detail-layout";
+import { InitiativeRunBuildPill } from "@/app/investments/[id]/InitiativeRunBuildPill";
 import { formatK, statusClass } from "@/app/investments/[id]/investment-detail-helpers";
 import type { BudgetInitiative } from "@/app/investments/[id]/investment-detail-types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -152,6 +153,12 @@ export function InvestmentDetailBudgetCard({
                               <span className="text-muted-foreground text-xs tabular-nums">
                                 {ini.initiative_year}
                               </span>
+                              {ini.initiative_type?.trim() ? (
+                                <span className="text-muted-foreground text-xs">
+                                  {ini.initiative_type.trim()}
+                                </span>
+                              ) : null}
+                              <InitiativeRunBuildPill initiativeType={ini.initiative_type} />
                               <span
                                 className={cn(
                                   "shrink-0 rounded px-1.5 py-0.5 text-[10px]",

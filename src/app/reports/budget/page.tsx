@@ -28,6 +28,10 @@ type RollupRow = {
   external: number;
   direct: number;
   total: number;
+  buildInternal: number;
+  buildExternal: number;
+  buildDirect: number;
+  totalBuild: number;
   revenue: number;
 };
 
@@ -48,6 +52,21 @@ function yearOptions(): number[] {
   return [y - 1, y, y + 1];
 }
 
+/** Exact Jira `(RI) Type` labels stored on initiatives / `v_allocation_costs.initiative_type`. */
+const INITIATIVE_TYPE_OPTIONS = [
+  "Run",
+  "Rollout",
+  "Evolution",
+  "Projet",
+  "Nouveau Service",
+  "Analyse",
+  "Evolution Technique",
+  "Product Activation",
+  "Legal",
+  "Décommissionnement",
+  "Unassigned",
+] as const;
+
 function nextLevel(level: Level): Level | null {
   if (level === "division") return "team";
   if (level === "team") return "product";
@@ -65,6 +84,14 @@ function formatEuro(n: number): string {
   } catch {
     return `${Math.round(n)} €`;
   }
+}
+
+function formatPct(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return "—";
+  return `${(n * 100).toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+  })}%`;
 }
 
 function CustomTooltip(props: TooltipProps<number, string>) {
@@ -118,6 +145,8 @@ export default function BudgetRechartsPage() {
   const [includeInternal, setIncludeInternal] = useState(true);
   const [includeExternal, setIncludeExternal] = useState(true);
   const [includeDirect, setIncludeDirect] = useState(true);
+  const [includeRun, setIncludeRun] = useState(true);
+  const [includeBuild, setIncludeBuild] = useState(true);
 
   const [rows, setRows] = useState<RollupRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -217,17 +246,35 @@ export default function BudgetRechartsPage() {
   }
 
   const stackedRows = useMemo(() => {
-    return rows.map((r) => ({
-      ...r,
-      internalShown: includeInternal ? r.internal : 0,
-      externalShown: includeExternal ? r.external : 0,
-      directShown: includeDirect ? r.direct : 0,
-      totalShown:
-        (includeInternal ? r.internal : 0) +
-        (includeExternal ? r.external : 0) +
-        (includeDirect ? r.direct : 0),
-    }));
-  }, [rows, includeInternal, includeExternal, includeDirect]);
+    return rows.map((r) => {
+      const runInternal = r.internal - r.buildInternal;
+      const runExternal = r.external - r.buildExternal;
+      const runDirect = r.direct - r.buildDirect;
+
+      const pick = (runAmt: number, buildAmt: number) =>
+        (includeRun ? runAmt : 0) + (includeBuild ? buildAmt : 0);
+
+      const internalShown = includeInternal ? pick(runInternal, r.buildInternal) : 0;
+      const externalShown = includeExternal ? pick(runExternal, r.buildExternal) : 0;
+      const directShown = includeDirect ? pick(runDirect, r.buildDirect) : 0;
+      const totalShown = internalShown + externalShown + directShown;
+
+      const buildShown =
+        (includeBuild ? (includeInternal ? r.buildInternal : 0) : 0) +
+        (includeBuild ? (includeExternal ? r.buildExternal : 0) : 0) +
+        (includeBuild ? (includeDirect ? r.buildDirect : 0) : 0);
+
+      return {
+        ...r,
+        internalShown,
+        externalShown,
+        directShown,
+        totalShown,
+        buildShown,
+        buildPct: totalShown > 0 ? buildShown / totalShown : null,
+      };
+    });
+  }, [rows, includeInternal, includeExternal, includeDirect, includeRun, includeBuild]);
 
   const handleChartClick = useCallback(
     (e: unknown) => {
@@ -255,8 +302,8 @@ export default function BudgetRechartsPage() {
           </Button>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-            <div className="md:col-span-3">
+          <div className="flex flex-col gap-4">
+            <div className="w-full max-w-xs">
               <Label>Year</Label>
               <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
                 <SelectTrigger className="mt-1">
@@ -272,76 +319,114 @@ export default function BudgetRechartsPage() {
               </Select>
             </div>
 
-            <div className="md:col-span-4">
-              <Label>Initiative type</Label>
-              <Select
-                value={initiativeType}
-                onValueChange={(v) => {
-                  if (v !== null) setInitiativeType(v);
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__ALL__">All types</SelectItem>
-                  <SelectItem value="RUN">RUN</SelectItem>
-                  <SelectItem value="EVOLUTION">EVOLUTION</SelectItem>
-                  <SelectItem value="ROLLOUT">ROLLOUT</SelectItem>
-                  <SelectItem value="PROJET">PROJET</SelectItem>
-                  <SelectItem value="NOUVEAU_SERVICE">NOUVEAU_SERVICE</SelectItem>
-                  <SelectItem value="ANALYSE">ANALYSE</SelectItem>
-                  <SelectItem value="EVOLUTION_TECHNIQUE">EVOLUTION_TECHNIQUE</SelectItem>
-                  <SelectItem value="PRODUCT_ACTIVATION">PRODUCT_ACTIVATION</SelectItem>
-                  <SelectItem value="DECOMMISSIONNEMENT">DECOMMISSIONNEMENT</SelectItem>
-                  <SelectItem value="LEGAL">LEGAL</SelectItem>
-                  <SelectItem value="Unassigned">Unassigned</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="flex w-full max-w-xl flex-col gap-4">
+              <div>
+                <Label>Cost components</Label>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="text-sm">Internal</div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs font-medium",
+                        includeInternal
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                      onClick={() => setIncludeInternal((v) => !v)}
+                    >
+                      {includeInternal ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="text-sm">External</div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs font-medium",
+                        includeExternal
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                      onClick={() => setIncludeExternal((v) => !v)}
+                    >
+                      {includeExternal ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="text-sm">Direct</div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs font-medium",
+                        includeDirect
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                      onClick={() => setIncludeDirect((v) => !v)}
+                    >
+                      {includeDirect ? "On" : "Off"}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-            <div className="md:col-span-5">
-              <Label>Cost components</Label>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div className="text-sm">Internal</div>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2 py-1 text-xs font-medium",
-                      includeInternal ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
-                    )}
-                    onClick={() => setIncludeInternal((v) => !v)}
-                  >
-                    {includeInternal ? "On" : "Off"}
-                  </button>
+              <div>
+                <Label>Run / Build</Label>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="text-sm">Run</div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs font-medium",
+                        includeRun
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                      onClick={() => setIncludeRun((v) => !v)}
+                    >
+                      {includeRun ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="text-sm">Build</div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs font-medium",
+                        includeBuild
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                      onClick={() => setIncludeBuild((v) => !v)}
+                    >
+                      {includeBuild ? "On" : "Off"}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div className="text-sm">External</div>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2 py-1 text-xs font-medium",
-                      includeExternal ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
-                    )}
-                    onClick={() => setIncludeExternal((v) => !v)}
-                  >
-                    {includeExternal ? "On" : "Off"}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div className="text-sm">Direct</div>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2 py-1 text-xs font-medium",
-                      includeDirect ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
-                    )}
-                    onClick={() => setIncludeDirect((v) => !v)}
-                  >
-                    {includeDirect ? "On" : "Off"}
-                  </button>
-                </div>
+              </div>
+
+              <div>
+                <Label>Initiative type</Label>
+                <Select
+                  value={initiativeType}
+                  onValueChange={(v) => {
+                    if (v !== null) setInitiativeType(v);
+                  }}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__ALL__">All types</SelectItem>
+                    {INITIATIVE_TYPE_OPTIONS.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -400,13 +485,15 @@ export default function BudgetRechartsPage() {
                   <th className="px-3 py-2">External</th>
                   <th className="px-3 py-2">Direct</th>
                   <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Total build</th>
+                  <th className="px-3 py-2">Build %</th>
                   <th className="px-3 py-2">Est. revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-3 py-3 text-muted-foreground" colSpan={6}>
+                    <td className="px-3 py-3 text-muted-foreground" colSpan={8}>
                       Loading…
                     </td>
                   </tr>
@@ -422,12 +509,14 @@ export default function BudgetRechartsPage() {
                       <td className="px-3 py-2">{formatEuro(r.externalShown)}</td>
                       <td className="px-3 py-2">{formatEuro(r.directShown)}</td>
                       <td className="px-3 py-2 font-medium">{formatEuro(r.totalShown)}</td>
+                      <td className="px-3 py-2">{formatEuro(r.buildShown)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatPct(r.buildPct)}</td>
                       <td className="px-3 py-2">{formatEuro(r.revenue)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-3 text-muted-foreground" colSpan={6}>
+                    <td className="px-3 py-3 text-muted-foreground" colSpan={8}>
                       No data
                     </td>
                   </tr>

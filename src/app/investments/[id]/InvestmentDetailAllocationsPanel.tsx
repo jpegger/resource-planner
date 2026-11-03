@@ -11,6 +11,7 @@ import {
 } from "@/app/investments/[id]/InvestmentDetailAllocationEditor";
 import { InvestmentDetailAllocationPendingRow } from "@/app/investments/[id]/InvestmentDetailAllocationPendingRow";
 import { InvestmentDetailPanelHeading } from "@/app/investments/[id]/InvestmentDetailPanelHeading";
+import { InitiativeRunBuildPill } from "@/app/investments/[id]/InitiativeRunBuildPill";
 import {
   ALLOCATION_ASSIGNMENT_COL,
   FINANCIALS_4COL,
@@ -130,6 +131,14 @@ export function InvestmentDetailAllocationsPanel({
                   {selectedInitiative.status}
                 </span>
                 <span className="text-muted-foreground text-sm">{selectedInitiative.initiative_year}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedInitiative.initiative_type?.trim() ? (
+                  <span className="text-muted-foreground text-xs">
+                    {selectedInitiative.initiative_type.trim()}
+                  </span>
+                ) : null}
+                <InitiativeRunBuildPill initiativeType={selectedInitiative.initiative_type} />
               </div>
             </div>
             <div className="flex min-w-0 flex-wrap items-end justify-end gap-2 sm:justify-end">

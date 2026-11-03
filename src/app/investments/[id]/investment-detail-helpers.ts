@@ -109,6 +109,14 @@ export function statusClass(status: string): string {
   return "bg-muted text-muted-foreground";
 }
 
+/**
+ * Reporting bucket from Jira `(RI) Type` / `initiativeType`:
+ * Run if exactly "Run", otherwise Build.
+ */
+export function runBuildBucket(initiativeType: string | null | undefined): "Run" | "Build" {
+  return initiativeType?.trim() === "Run" ? "Run" : "Build";
+}
+
 export function emptyDraft(defaultYear: number): RoutingDraft {
   return {
     year: String(defaultYear),
