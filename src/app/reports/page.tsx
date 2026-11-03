@@ -24,6 +24,15 @@ export default function ReportsHomePage() {
             </div>
           </Link>
           <Link
+            href="/reports/resource-assignments"
+            className="hover:bg-muted/30 rounded-md border p-4 transition-colors"
+          >
+            <div className="font-medium">Resource assignments</div>
+            <div className="text-muted-foreground mt-1 text-sm">
+              Resources → initiatives by product (EUR, man-days, assignment %)
+            </div>
+          </Link>
+          <Link
             href="/reports/revenu"
             className="hover:bg-muted/30 rounded-md border p-4 transition-colors"
           >
