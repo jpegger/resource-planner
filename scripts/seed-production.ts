@@ -9,6 +9,7 @@
  * deltas added (additive re-import).
  *
  * Full wipe + reload: `SEED_PROD_RESET=1 npm run db:seed:prod` (does not delete `allocation_entity` rows).
+ * Resources + rates only: `SEED_RESOURCES_RATES_ONLY=1 npm run db:seed:prod`
  * View only: `SEED_VIEW_ONLY=1 npm run db:seed:prod` (includes `v_revenues`)
  * v_eotp_costs only (after migrate dropped views): `npm run db:recreate:eotp-costs` (needs v_allocation_costs)
  *
@@ -1188,6 +1189,18 @@ async function main(): Promise<void> {
       `Missing: RateStandard.csv (looked in ${path.relative(process.cwd(), SEED_DATASET_DIR ?? PROD_IMPORT_DIR)})`
     );
     process.exit(1);
+  }
+
+  const resourcesRatesOnly =
+    process.env["SEED_RESOURCES_RATES_ONLY"] === "1" ||
+    process.env["SEED_RESOURCES_RATES_ONLY"] === "true";
+  if (resourcesRatesOnly) {
+    console.log("SEED_RESOURCES_RATES_ONLY: upserting resources + rates (no allocations)…\n");
+    await seedResources();
+    await seedRateStandard();
+    await seedRates();
+    console.log("Done.");
+    return;
   }
 
   const fullReset =
